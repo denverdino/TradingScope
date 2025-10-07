@@ -1,0 +1,79 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tradingscope"
+version = "0.1.0"
+description = "Multi-Agents trading framework with AgentScope"
+readme = "README.md"
+authors = [
+    {name = "Yi Li", email = "denverdino@gmail.com"}
+]
+license = {text = "MIT"}
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "agentscope>=1.0.0",
+    "openai>=1.0.0",
+    "yfinance>=0.2.0",
+    "pandas>=1.5.0",
+    "numpy>=1.20.0",
+    "tushare>=1.2.0",
+    "requests>=2.25.0",
+    "beautifulsoup4>=4.9.0",
+    "lxml>=4.6.0",
+    "feedparser>=6.0.0",
+    "praw>=7.0.0",
+    "newspaper3k>=0.2.8",
+    "stockstats>=0.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+    "pre-commit>=3.0.0",
+    "jupyter>=1.0.0",
+    "matplotlib>=3.5.0",
+    "seaborn>=0.11.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/denverdino/tradingscope"
+Repository = "https://github.com/denverdino/tradingscope"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["tradingscope*"]
+
+[tool.black]
+line-length = 160
+target-version = ['py38']
+
+[tool.ruff]
+line-length = 160
+target-version = "py38"
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "C",  # flake8-comprehensions
+    "B",  # flake8-bugbear
+]
+ignore = ["E501", "C901", "F841", "E722", "B007"]
