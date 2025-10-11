@@ -40,7 +40,7 @@ NOTE: This project can support DashScope Open API for Qwen model only at this ti
 
 2. Run the example script:
    ```bash
-   python -m main AAPL
+   python -m tradingscope.main AAPL
    ```
 
 See [agents documentation](tradingscope/agents/README.md) for more details.

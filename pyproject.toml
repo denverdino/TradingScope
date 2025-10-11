@@ -23,19 +23,25 @@ classifiers = [
 ]
 requires-python = ">=3.8"
 dependencies = [
-    "agentscope>=1.0.0",
-    "openai>=1.0.0",
-    "yfinance>=0.2.0",
-    "pandas>=1.5.0",
-    "numpy>=1.20.0",
-    "tushare>=1.2.0",
-    "requests>=2.25.0",
-    "beautifulsoup4>=4.9.0",
-    "lxml>=4.6.0",
-    "feedparser>=6.0.0",
-    "praw>=7.0.0",
+    "agentscope>=1.0.5",
+    "openai>=2.3.0",
+    "yfinance>=0.2.66",
+    "pandas>=2.3.3",
+    "numpy>=2.3.3",
+    "tushare>=1.4.24",
+    "requests>=2.32.5",
+    "beautifulsoup4>=4.14.2",
+    "lxml>=6.0.2",
+    "feedparser>=6.0.12",
+    "praw>=7.8.1",
     "newspaper3k>=0.2.8",
-    "stockstats>=0.5.0",
+    "stockstats>=0.6.5",
+    "finnhub-python>=2.4.25",
+    "tqdm>=4.67.1",
+    "toml>=0.10.2",
+    "cachetools>=5.3.2",
+    "tenacity>=8.2.3",
+    "pytdx>=1.8.6",
 ]
 
 [project.optional-dependencies]
@@ -55,9 +61,15 @@ dev = [
 Homepage = "https://github.com/denverdino/tradingscope"
 Repository = "https://github.com/denverdino/tradingscope"
 
+[project.scripts]
+tradingscope = "tradingscope.main:main"
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["tradingscope*"]
+
+[tool.setuptools.package-data]
+tradingscope = ["config/*.yaml", "dataflows/*.yaml"]
 
 [tool.black]
 line-length = 160

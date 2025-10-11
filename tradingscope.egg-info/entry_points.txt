@@ -1,0 +1,2 @@
+[console_scripts]
+tradingscope = tradingscope.main:main
