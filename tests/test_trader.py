@@ -28,9 +28,6 @@ def test_trader_agent_creation(mock_model, sample_company_data):
 
     except Exception as e:
         print(f"❌ Error testing trader agent: {e}")
-        import traceback
-
-        traceback.print_exc()
         raise AssertionError(f"Error testing trader agent: {e}")
 
 
@@ -67,7 +64,4 @@ def test_trader_agent_with_china_stock(mock_get_market_info, mock_get_company_na
 
     except Exception as e:
         print(f"❌ Error testing trader agent with China stock: {e}")
-        import traceback
-
-        traceback.print_exc()
         raise AssertionError(f"Error testing trader agent with China stock: {e}")

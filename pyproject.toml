@@ -55,6 +55,7 @@ dev = [
     "jupyter>=1.0.0",
     "matplotlib>=3.5.0",
     "seaborn>=0.11.0",
+    "pytest-asyncio>=1.2.0",
 ]
 
 [project.urls]
@@ -88,4 +89,4 @@ select = [
     "C",  # flake8-comprehensions
     "B",  # flake8-bugbear
 ]
-ignore = ["E501", "C901", "F841", "E722", "B007"]
+ignore = ["E501", "C901", "F841", "E722", "B007", "B904", "F401"]

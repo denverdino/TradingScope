@@ -9,7 +9,8 @@ from agentscope.memory import InMemoryMemory
 from agentscope.model import OpenAIChatModel
 from agentscope.tool import Toolkit
 
-from tradingscope.agents.utils.agent_utils import get_company_name, get_stock_news_unified
+from tradingscope.agents.utils.agent_utils import get_company_name
+from tradingscope.agents.utils.news_data_tools import get_global_news, get_news
 
 # 导入统一日志系统
 from tradingscope.utils.logging_init import get_logger
@@ -54,9 +55,8 @@ def create_news_analyst_agent(
     toolkit = Toolkit()
 
     # 创建并注册统一新闻工具
-    toolkit.register_tool_function(get_stock_news_unified)
-
-    logger.info("[新闻分析师] 已注册工具: get_stock_news_unified")
+    toolkit.register_tool_function(get_news)
+    toolkit.register_tool_function(get_global_news)
 
     # 获取当前日期
     current_date = trade_date or datetime.now().strftime("%Y-%m-%d")
@@ -69,11 +69,6 @@ def create_news_analyst_agent(
 - 股票代码：{ticker}
 - 所属市场：{market_info['market_name']}
 - 计价货币：{market_info['currency_name']}（{market_info['currency_symbol']}）
-
-**工具调用指令：**
-你有一个工具叫做 get_stock_news_unified，你必须立即调用这个工具来获取{company_name}（{ticker}）的最新新闻数据。
-该工具会自动识别股票类型（A股、港股、美股）并获取相应新闻。
-不要说你将要调用工具，直接调用工具。
 
 **主要职责包括：**
 1. 获取和分析最新的实时新闻（优先15-30分钟内的新闻）
@@ -127,7 +122,7 @@ def create_news_analyst_agent(
 请使用中文，基于真实新闻数据进行详细分析。确保在分析中正确使用公司名称"{company_name}"和股票代码"{ticker}"。"""
 
     # 获取工具名称
-    tool_names = "get_stock_news_unified"
+    tool_names = "get_news, get_global_news"
 
     # 构建完整的系统提示词
     system_prompt = (
@@ -144,7 +139,7 @@ def create_news_analyst_agent(
         "\n- 绝对禁止跳过工具调用步骤"
         "\n- 绝对禁止说'我无法获取实时数据'等借口"
         "\n\n✅ 强制执行步骤："
-        "\n1. 您的第一个动作必须是调用 get_stock_news_unified 工具"
+        "\n1. 您的第一个动作必须是调用 {tool_names} 工具"
         "\n2. 该工具会自动识别股票类型并获取相应新闻"
         "\n3. 只有在成功获取新闻数据后，才能开始分析"
         "\n4. 您的回答必须基于工具返回的真实数据"

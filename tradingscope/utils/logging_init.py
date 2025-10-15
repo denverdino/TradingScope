@@ -4,14 +4,10 @@
 在应用启动时初始化统一日志系统
 """
 
+import logging
 import os
 import sys
-from pathlib import Path
 from typing import Optional
-
-# 添加项目根目录到路径
-project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
 
 from .logging_manager import get_logger, setup_logging
 
@@ -44,7 +40,7 @@ def init_logging(config_override: Optional[dict] = None) -> None:
     logger.debug(f"🌍 环境变量: DOCKER_CONTAINER={os.getenv('DOCKER_CONTAINER', 'false')}")
 
 
-def get_session_logger(session_id: str, module_name: str = "session") -> "logging.Logger":
+def get_session_logger(session_id: str, module_name: str = "session") -> logging.Logger:
     """
     获取会话专用日志器
 
@@ -83,6 +79,7 @@ def get_session_logger(session_id: str, module_name: str = "session") -> "loggin
             kwargs.setdefault("extra", {})["session_id"] = self.session_id
             return self.logger.critical(msg, *args, **kwargs)
 
+    logger = get_logger(logger_name)
     return SessionAdapter(logger, session_id)
 
 
@@ -91,7 +88,7 @@ def log_startup_info():
     logger = get_logger("tradingscope.startup")
 
     logger.info("=" * 60)
-    logger.info("🎯 tradingscope-CN 启动")
+    logger.info("🎯 tradingscope 启动")
     logger.info("=" * 60)
 
     # 系统信息

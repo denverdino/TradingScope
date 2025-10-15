@@ -7,15 +7,7 @@ import pandas as pd
 import yfinance as yf
 from pandas import DataFrame
 
-# 导入日志模块
-from tradingscope.utils.logging_manager import get_logger
-
 from .utils import SavePathType, decorate_all_methods
-
-logger = get_logger("agents")
-
-# 导入缓存管理器
-CACHE_AVAILABLE = True
 
 
 def init_ticker(func: Callable) -> Callable:
@@ -34,8 +26,12 @@ class YFinanceUtils:
 
     def get_stock_data(
         symbol: Annotated[str, "ticker symbol"],
-        start_date: Annotated[str, "start date for retrieving stock price data, YYYY-mm-dd"],
-        end_date: Annotated[str, "end date for retrieving stock price data, YYYY-mm-dd"],
+        start_date: Annotated[
+            str, "start date for retrieving stock price data, YYYY-mm-dd"
+        ],
+        end_date: Annotated[
+            str, "end date for retrieving stock price data, YYYY-mm-dd"
+        ],
         save_path: SavePathType = None,
     ) -> DataFrame:
         """retrieve stock price data for designated ticker symbol"""
@@ -72,7 +68,7 @@ class YFinanceUtils:
         company_info_df = DataFrame([company_info])
         if save_path:
             company_info_df.to_csv(save_path)
-            logger.info(f"Company info for {ticker.ticker} saved to {save_path}")
+            print(f"Company info for {ticker.ticker} saved to {save_path}")
         return company_info_df
 
     def get_stock_dividends(
@@ -84,7 +80,7 @@ class YFinanceUtils:
         dividends = ticker.dividends
         if save_path:
             dividends.to_csv(save_path)
-            logger.info(f"Dividends for {ticker.ticker} saved to {save_path}")
+            print(f"Dividends for {ticker.ticker} saved to {save_path}")
         return dividends
 
     def get_income_stmt(symbol: Annotated[str, "ticker symbol"]) -> DataFrame:

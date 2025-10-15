@@ -11,11 +11,8 @@ from agentscope.memory import InMemoryMemory
 from agentscope.model import OpenAIChatModel
 from agentscope.tool import Toolkit
 
-from tradingscope.agents.utils.agent_utils import (
-    get_chinese_social_sentiment,
-    get_company_name,
-    get_reddit_stock_info,
-)
+from tradingscope.agents.utils.agent_utils import get_company_name
+from tradingscope.agents.utils.news_data_tools import get_news
 from tradingscope.utils.logging_init import get_logger
 from tradingscope.utils.stock_utils import StockUtils
 
@@ -52,14 +49,11 @@ def create_social_media_analyst_agent(
     toolkit = Toolkit()
 
     # 注册社交媒体相关工具（优先中国社媒，备选 Reddit）
-    toolkit.register_tool_function(get_chinese_social_sentiment)
-    toolkit.register_tool_function(get_reddit_stock_info)
-    logger.info("[社交媒体分析师] 已注册工具: get_chinese_social_sentiment, get_reddit_stock_info")
+    toolkit.register_tool_function(get_news)
 
     # 当前日期
     current_date = trade_date or datetime.now().strftime("%Y-%m-%d")
 
-    # 系统提示词（强制先调中国社媒工具，失败/为空再调 Reddit，可同时并行调用）
     system_message = f"""您是一位专业的中国市场社交媒体与投资情绪分析师，负责分析投资者对特定股票的讨论与情绪变化，并评估其对股价的潜在影响。
 
 **股票信息：**
@@ -68,11 +62,6 @@ def create_social_media_analyst_agent(
 - 所属市场：{market_info['market_name']}
 - 计价货币：{market_info['currency_name']}（{market_info['currency_symbol']}）
 
-**工具调用指令（必须遵循）：**
-- 你有两个工具：get_chinese_social_sentiment、get_reddit_stock_info。
-- **第一个动作必须调用 `get_chinese_social_sentiment`**，获取{company_name}（{ticker}）最近 2–24 小时的舆情数据（雪球、东方财富股吧、微博等）。
-- 若该工具不可用、调用失败或返回为空/噪声数据，**立即调用 `get_reddit_stock_info`** 作为补充与对照，也可两者同时/依次调用以增强覆盖。
-- 不要说你“将要”调用工具，**直接调用工具**。
 
 **主要职责包括：**
 1. 分析中国主要财经平台的投资者情绪（雪球、东方财富股吧、同花顺等）
@@ -118,7 +107,7 @@ def create_social_media_analyst_agent(
 ## ℹ️ 数据来源与时效性说明
 """
 
-    tool_names = "get_chinese_social_sentiment, get_reddit_stock_info"
+    tool_names = "get_news"
 
     system_prompt = (
         "您是一位专业的中国市场社交媒体与投资情绪分析师，与其他分析师协作。"
@@ -128,7 +117,7 @@ def create_social_media_analyst_agent(
         "\n\n🚨 CRITICAL REQUIREMENT - 绝对强制要求："
         "\n❌ 禁止：不调用工具就直接回答；基于臆测输出；跳过工具调用；以“无法获取实时数据”为由规避。"
         "\n✅ 强制步骤："
-        "\n1) 第一个动作必须调用 get_chinese_social_sentiment；"
+        "\n1) 第一个动作必须调用 {tool_names} 工具；"
         "\n2) 若失败/为空/噪声或需要对照，立即调用 get_reddit_stock_info；必要时两个都调用；"
         "\n3) 仅在成功获取工具数据后开始分析；所有结论须基于工具返回的真实数据。"
         f"\n\n你可以使用以下工具：{tool_names}。"

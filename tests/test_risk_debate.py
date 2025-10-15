@@ -37,7 +37,4 @@ def test_debate_orchestrator_creation(mock_model):
         assert orchestrator is not None
     except Exception as e:
         print(f"❌ Error creating debate orchestrator: {e}")
-        import traceback
-
-        traceback.print_exc()
         raise AssertionError(f"Error creating debate orchestrator: {e}")

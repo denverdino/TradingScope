@@ -38,7 +38,4 @@ def test_react_agent_creation(mock_model):
         assert True
     except Exception as e:
         print(f"❌ Error testing ReAct pattern: {e}")
-        import traceback
-
-        traceback.print_exc()
         raise AssertionError(f"Error testing ReAct pattern: {e}")

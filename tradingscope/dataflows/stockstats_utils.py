@@ -5,24 +5,25 @@ import pandas as pd
 import yfinance as yf
 from stockstats import wrap
 
-from .config import get_config
+from .config import DATA_DIR, get_config
 
 
 class StockstatsUtils:
     @staticmethod
     def get_stock_stats(
         symbol: Annotated[str, "ticker symbol for the company"],
-        indicator: Annotated[str, "quantitative indicators based off of the stock data for the company"],
-        curr_date: Annotated[str, "curr date for retrieving stock price data, YYYY-mm-dd"],
-        data_dir: Annotated[
-            str,
-            "directory where the stock data is stored.",
+        indicator: Annotated[
+            str, "quantitative indicators based off of the stock data for the company"
         ],
-        online: Annotated[
-            bool,
-            "whether to use online tools to fetch data or offline tools. If True, will use online tools.",
-        ] = False,
+        curr_date: Annotated[
+            str, "curr date for retrieving stock price data, YYYY-mm-dd"
+        ],
     ):
+        # Get config and set up data directory path
+        config = get_config()
+        online = config["data_vendors"]["technical_indicators"] != "local"
+        print(f"Data cache dir: {config.get('data_cache_dir')}")
+        print(online)
         df = None
         data = None
 
@@ -30,7 +31,7 @@ class StockstatsUtils:
             try:
                 data = pd.read_csv(
                     os.path.join(
-                        data_dir,
+                        DATA_DIR,
                         f"{symbol}-YFin-data-2015-01-01-2025-03-25.csv",
                     )
                 )
@@ -48,7 +49,6 @@ class StockstatsUtils:
             end_date = end_date.strftime("%Y-%m-%d")
 
             # Get config and ensure cache directory exists
-            config = get_config()
             os.makedirs(config["data_cache_dir"], exist_ok=True)
 
             data_file = os.path.join(

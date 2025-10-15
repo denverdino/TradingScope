@@ -47,7 +47,9 @@ ticker_to_company = {
 
 
 def fetch_top_from_category(
-    category: Annotated[str, "Category to fetch top post from. Collection of subreddits."],
+    category: Annotated[
+        str, "Category to fetch top post from. Collection of subreddits."
+    ],
     date: Annotated[str, "Date to fetch top posts from."],
     max_limit: Annotated[int, "Maximum number of posts to fetch."],
     query: Annotated[str, "Optional query to search for in the subreddit."] = None,
@@ -60,18 +62,16 @@ def fetch_top_from_category(
 
     all_content = []
 
-    files = os.listdir(os.path.join(base_path, category))
-    num_files = len(files)
+    if max_limit < len(os.listdir(os.path.join(base_path, category))):
+        raise ValueError(
+            "REDDIT FETCHING ERROR: max limit is less than the number of files in the category. Will not be able to fetch any posts"
+        )
 
-    if max_limit < num_files:
-        raise ValueError("REDDIT FETCHING ERROR: max limit is less than the number of files in the category. Will not be able to fetch any posts")
+    limit_per_subreddit = max_limit // len(
+        os.listdir(os.path.join(base_path, category))
+    )
 
-    if num_files == 0:
-        limit_per_subreddit = max_limit
-    else:
-        limit_per_subreddit = max_limit // num_files
-
-    for data_file in files:
+    for data_file in os.listdir(os.path.join(base_path, category)):
         # check if data_file is a .jsonl file
         if not data_file.endswith(".jsonl"):
             continue
@@ -79,7 +79,7 @@ def fetch_top_from_category(
         all_content_curr_subreddit = []
 
         with open(os.path.join(base_path, category, data_file), "rb") as f:
-            for _i, line in enumerate(f):
+            for i, line in enumerate(f):
                 # skip empty lines
                 if not line.strip():
                     continue
@@ -87,7 +87,9 @@ def fetch_top_from_category(
                 parsed_line = json.loads(line)
 
                 # select only lines that are from the date
-                post_date = datetime.utcfromtimestamp(parsed_line["created_utc"]).strftime("%Y-%m-%d")
+                post_date = datetime.utcfromtimestamp(
+                    parsed_line["created_utc"]
+                ).strftime("%Y-%m-%d")
                 if post_date != date:
                     continue
 
@@ -103,7 +105,9 @@ def fetch_top_from_category(
 
                     found = False
                     for term in search_terms:
-                        if re.search(term, parsed_line["title"], re.IGNORECASE) or re.search(term, parsed_line["selftext"], re.IGNORECASE):
+                        if re.search(
+                            term, parsed_line["title"], re.IGNORECASE
+                        ) or re.search(term, parsed_line["selftext"], re.IGNORECASE):
                             found = True
                             break
 

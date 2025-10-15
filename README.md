@@ -34,6 +34,7 @@ To run the fundamentals analyst agent example:
    export DASHSCOPE_API_KEY='your-api-key-here'
    export OPENAI_API_KEY='your-api-key-here'
    export OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+   export ALPHA_VANTAGE_API_KEY='your-api-key-here'
    ```
 
 NOTE: This project can support DashScope Open API for Qwen model only at this time.

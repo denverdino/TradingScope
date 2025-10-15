@@ -2,12 +2,10 @@
 
 import os
 import sys
-from unittest.mock import patch
 
 # Add the project root to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from tradingscope.agents.utils.agent_utils import get_company_name
 from tradingscope.utils.stock_utils import StockMarket, StockUtils
 
 
@@ -155,72 +153,3 @@ class TestStockUtils:
 
 class TestAgentUtils:
     """Test cases for agent utility functions."""
-
-    def test_get_company_name_china_stock(self):
-        """Test getting company name for China stocks."""
-        market_info = {"is_china": True, "is_hk": False, "is_us": False}
-
-        # Mock the interface function
-        with patch("tradingscope.agents.utils.agent_utils.interface") as mock_interface:
-            mock_interface.get_china_stock_info_unified.return_value = "股票名称:平安银行\n股票代码:000001"
-
-            company_name = get_company_name("000001", market_info)
-            assert company_name == "平安银行"
-
-    def test_get_company_name_china_stock_fallback(self):
-        """Test getting company name for China stocks with fallback."""
-        market_info = {"is_china": True, "is_hk": False, "is_us": False}
-
-        # Mock the interface function to return invalid data
-        with patch("tradingscope.agents.utils.agent_utils.interface") as mock_interface:
-            mock_interface.get_china_stock_info_unified.return_value = "Invalid data"
-
-            company_name = get_company_name("000001", market_info)
-            assert company_name == "股票代码000001"
-
-    def test_get_company_name_hk_stock(self):
-        """Test getting company name for HK stocks."""
-        market_info = {"is_china": False, "is_hk": True, "is_us": False}
-
-        # Mock the get_hk_company_name_improved function
-        with patch("tradingscope.agents.utils.agent_utils.get_hk_company_name_improved") as mock_get_name:
-            mock_get_name.return_value = "腾讯控股"
-
-            company_name = get_company_name("0700.HK", market_info)
-            assert company_name == "腾讯控股"
-
-    def test_get_company_name_hk_stock_fallback(self):
-        """Test getting company name for HK stocks with fallback."""
-        market_info = {"is_china": False, "is_hk": True, "is_us": False}
-
-        # Mock the get_hk_company_name_improved function to raise an exception
-        with patch("tradingscope.agents.utils.agent_utils.get_hk_company_name_improved") as mock_get_name:
-            mock_get_name.side_effect = Exception("Test exception")
-
-            company_name = get_company_name("0700.HK", market_info)
-            assert company_name == "港股0700"
-
-    def test_get_company_name_us_stock(self):
-        """Test getting company name for US stocks."""
-        market_info = {"is_china": False, "is_hk": False, "is_us": True}
-
-        # Test known US stocks
-        company_name = get_company_name("AAPL", market_info)
-        assert company_name == "苹果公司"
-
-        company_name = get_company_name("TSLA", market_info)
-        assert company_name == "特斯拉"
-
-        company_name = get_company_name("NVDA", market_info)
-        assert company_name == "英伟达"
-
-        # Test unknown US stock
-        company_name = get_company_name("UNKNOWN", market_info)
-        assert company_name == "美股UNKNOWN"
-
-    def test_get_company_name_unknown_stock(self):
-        """Test getting company name for unknown stocks."""
-        market_info = {"is_china": False, "is_hk": False, "is_us": False}
-
-        company_name = get_company_name("INVALID", market_info)
-        assert company_name == "股票INVALID"

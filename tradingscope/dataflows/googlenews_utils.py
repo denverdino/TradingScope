@@ -6,16 +6,10 @@ import requests
 from bs4 import BeautifulSoup
 from tenacity import (
     retry,
-    retry_if_exception_type,
     retry_if_result,
     stop_after_attempt,
     wait_exponential,
 )
-
-# 导入日志模块
-from tradingscope.utils.logging_manager import get_logger
-
-logger = get_logger("agents")
 
 
 def is_rate_limited(response):
@@ -24,18 +18,15 @@ def is_rate_limited(response):
 
 
 @retry(
-    retry=(
-        retry_if_result(is_rate_limited) | retry_if_exception_type(requests.exceptions.ConnectionError) | retry_if_exception_type(requests.exceptions.Timeout)
-    ),
+    retry=(retry_if_result(is_rate_limited)),
     wait=wait_exponential(multiplier=1, min=4, max=60),
     stop=stop_after_attempt(5),
 )
 def make_request(url, headers):
-    """Make a request with retry logic for rate limiting and connection issues"""
+    """Make a request with retry logic for rate limiting"""
     # Random delay before each request to avoid detection
     time.sleep(random.uniform(2, 6))
-    # 添加超时参数，设置连接超时和读取超时
-    response = requests.get(url, headers=headers, timeout=(10, 30))  # 连接超时10秒，读取超时30秒
+    response = requests.get(url, headers=headers)
     return response
 
 
@@ -53,13 +44,23 @@ def getNewsData(query, start_date, end_date):
         end_date = datetime.strptime(end_date, "%Y-%m-%d")
         end_date = end_date.strftime("%m/%d/%Y")
 
-    headers = {"User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) " "AppleWebKit/537.36 (KHTML, like Gecko) " "Chrome/101.0.4951.54 Safari/537.36")}
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/101.0.4951.54 Safari/537.36"
+        )
+    }
 
     news_results = []
     page = 0
     while True:
         offset = page * 10
-        url = f"https://www.google.com/search?q={query}" f"&tbs=cdr:1,cd_min:{start_date},cd_max:{end_date}" f"&tbm=nws&start={offset}"
+        url = (
+            f"https://www.google.com/search?q={query}"
+            f"&tbs=cdr:1,cd_min:{start_date},cd_max:{end_date}"
+            f"&tbm=nws&start={offset}"
+        )
 
         try:
             response = make_request(url, headers)
@@ -86,7 +87,7 @@ def getNewsData(query, start_date, end_date):
                         }
                     )
                 except Exception as e:
-                    logger.error(f"Error processing result: {e}")
+                    print(f"Error processing result: {e}")
                     # If one of the fields is not found, skip this result
                     continue
 
@@ -99,24 +100,8 @@ def getNewsData(query, start_date, end_date):
 
             page += 1
 
-        except requests.exceptions.Timeout as e:
-            logger.error(f"连接超时: {e}")
-            # 不立即中断，记录错误后继续尝试下一页
-            page += 1
-            if page > 3:  # 如果连续多页都超时，则退出循环
-                logger.error("多次连接超时，停止获取Google新闻")
-                break
-            continue
-        except requests.exceptions.ConnectionError as e:
-            logger.error(f"连接错误: {e}")
-            # 不立即中断，记录错误后继续尝试下一页
-            page += 1
-            if page > 3:  # 如果连续多页都连接错误，则退出循环
-                logger.error("多次连接错误，停止获取Google新闻")
-                break
-            continue
         except Exception as e:
-            logger.error(f"获取Google新闻失败: {e}")
+            print(f"Failed after multiple retries: {e}")
             break
 
     return news_results

@@ -87,7 +87,6 @@ class EnhancedNewsFilter(NewsRelevanceFilter):
 
             # 尝试使用transformers库的中文分类模型
             try:
-                import torch
                 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
                 # 使用轻量级中文文本分类模型

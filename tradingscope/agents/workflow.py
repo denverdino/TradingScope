@@ -7,7 +7,6 @@ from agentscope.model import OpenAIChatModel
 
 from tradingscope.agents.managers.risk_manager import create_risk_manager_agent
 
-from .analysts.china_market_analyst import create_china_market_analyst_agent
 from .analysts.fundamentals_analyst import create_fundamentals_analyst_agent
 from .analysts.market_analyst import create_market_analyst_agent
 from .analysts.news_analyst import create_news_analyst_agent
@@ -38,7 +37,7 @@ from .trader.trader import create_trader_agent
 async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> None:
     """运行并发智能体并执行多轮辩论。"""
     # 创建分析师代理
-    china_market_analyst = create_china_market_analyst_agent(model=model)
+    #china_market_analyst = create_china_market_analyst_agent(model=model)
     fundamentals_analyst = create_fundamentals_analyst_agent(model=model, ticker=ticker, current_date=trade_date)
     market_analyst = create_market_analyst_agent(model=model, ticker=ticker, trade_date=trade_date)
     news_analyst = create_news_analyst_agent(model=model, ticker=ticker, trade_date=trade_date)
@@ -49,20 +48,21 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> None:
 
     # 并发运行分析师代理并获取结果
     analyst_results = await asyncio.gather(
-        china_market_analyst(user_message),
-        market_analyst(user_message),
-        fundamentals_analyst(user_message),
-        news_analyst(user_message),
-        social_media_analyst(user_message),
+        market_analyst(None),
+        fundamentals_analyst(None),
+        news_analyst(None),
+        social_media_analyst(None),
+        #china_market_analyst(None),
         return_exceptions=True,
     )
 
     # 提取分析师报告内容
-    china_market_report = getattr(analyst_results[0], "content", "") if not isinstance(analyst_results[0], Exception) else ""
-    market_research_report = getattr(analyst_results[1], "content", "") if not isinstance(analyst_results[1], Exception) else ""
-    fundamentals_report = getattr(analyst_results[2], "content", "") if not isinstance(analyst_results[2], Exception) else ""
-    news_report = getattr(analyst_results[3], "content", "") if not isinstance(analyst_results[3], Exception) else ""
-    sentiment_report = getattr(analyst_results[4], "content", "") if not isinstance(analyst_results[4], Exception) else ""
+    market_research_report = getattr(analyst_results[0], "content", "") if not isinstance(analyst_results[0], Exception) else ""
+    fundamentals_report = getattr(analyst_results[1], "content", "") if not isinstance(analyst_results[1], Exception) else ""
+    news_report = getattr(analyst_results[2], "content", "") if not isinstance(analyst_results[2], Exception) else ""
+    sentiment_report = getattr(analyst_results[3], "content", "") if not isinstance(analyst_results[3], Exception) else ""
+    #china_market_report = getattr(analyst_results[4], "content", "") if not isinstance(analyst_results[4], Exception) else ""
+
 
     # 创建研究员代理
     bear_researcher = create_bear_researcher_agent(
@@ -90,7 +90,7 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> None:
 
     # 创建研究辩论协调器
     research_orchestrator = create_research_debate_orchestrator(
-        bull_researcher=bull_researcher, bear_researcher=bear_researcher, research_manager=research_manager, max_rounds=3
+        bull_researcher=bull_researcher, bear_researcher=bear_researcher, research_manager=research_manager, max_rounds=1
     )
 
     # 运行研究辩论
@@ -136,7 +136,7 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> None:
     risk_manager = create_risk_manager_agent(model)
 
     # 创建风险辩论协调器
-    risk_orchestrator = create_debate_orchestrator(aggressive_agent, conservative_agent, neutral_agent, risk_manager, max_rounds=3)
+    risk_orchestrator = create_debate_orchestrator(aggressive_agent, conservative_agent, neutral_agent, risk_manager, max_rounds=1)
 
     # 运行风险辩论
     risk_decision = await risk_orchestrator.run_debate(

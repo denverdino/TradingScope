@@ -1,5 +1,5 @@
 __pycache__
 .env
 logs/
-tradingscope/dataflows/data_cache
+tradingscope/dataflows/data_cache/
 .coverage

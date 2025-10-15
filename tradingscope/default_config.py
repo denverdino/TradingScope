@@ -17,10 +17,15 @@ DEFAULT_CONFIG = {
     "max_debate_rounds": 1,
     "max_risk_discuss_rounds": 1,
     "max_recur_limit": 100,
-    # Tool settings - 从环境变量读取，提供默认值
-    "online_tools": os.getenv("ONLINE_TOOLS_ENABLED", "false").lower() == "true",
-    "online_news": os.getenv("ONLINE_NEWS_ENABLED", "true").lower() == "true",
-    "realtime_data": os.getenv("REALTIME_DATA_ENABLED", "false").lower() == "true",
-    # Note: Database and cache configuration is now managed by .env file and config.database_manager
-    # No database/cache settings in default config to avoid configuration conflicts
+    "data_vendors": {
+        "core_stock_apis": "yfinance",       # Options: yfinance, alpha_vantage, local
+        "fundamental_data": "yfinance", # Options: openai, alpha_vantage, local
+        "news_data": "alpha_vantage",        # Options: openai, alpha_vantage, google, local
+        "technical_indicators": "yfinance",
+    },
+    # Tool-level configuration (takes precedence over category-level)
+    "tool_vendors": {
+        # Example: "get_stock_data": "alpha_vantage",  # Override category default
+        # Example: "get_news": "openai",               # Override category default
+    },
 }

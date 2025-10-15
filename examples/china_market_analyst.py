@@ -6,7 +6,6 @@ import datetime
 import os
 
 from agentscope.model import OpenAIChatModel
-
 from tradingscope.agents.analysts.china_market_analyst import (
     create_china_market_analyst_agent,
     create_china_stock_screener_agent,

@@ -2,7 +2,6 @@
 """Example script demonstrating how to use the Market Analyst Agent."""
 
 import asyncio
-import datetime
 import os
 
 from agentscope.model import OpenAIChatModel
@@ -17,9 +16,10 @@ async def main():
         stream=True,
     )
 
-    trade_date = datetime.now().strftime("%Y-%m-%d")
+    #trade_date = datetime.now().strftime("%Y-%m-%d")
+    trade_date = "2025-10-14"
 
-    agent = create_market_analyst_agent(model=model, ticker="AAPL", trade_date=trade_date)
+    agent = create_market_analyst_agent(model=model, ticker="BABA", trade_date=trade_date)
     await agent(None)
 
 
