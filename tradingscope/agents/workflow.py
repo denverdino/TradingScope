@@ -34,8 +34,8 @@ from .trader.trader import create_trader_agent
 #         on_disk=False,
 #     )
 
-async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> None:
-    """运行并发智能体并执行多轮辩论。"""
+async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
+    """运行并发智能体并执行多轮辩论，返回综合报告。"""
     # 创建分析师代理
     #china_market_analyst = create_china_market_analyst_agent(model=model)
     fundamentals_analyst = create_fundamentals_analyst_agent(model=model, ticker=ticker, current_date=trade_date)
@@ -147,3 +147,29 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> None:
     # Extract manager content
     risk_content = getattr(risk_decision, "content", "") if not isinstance(risk_decision, Exception) else ""
     print(f"风险管理决策:\n{risk_content}")
+
+    # Concatenate all reports into a single string for the markdown file
+    full_report = f"""# 股票分析报告: {ticker} ({trade_date})
+
+## 市场研究报告
+{market_research_report}
+
+## 基本面报告
+{fundamentals_report}
+
+## 新闻报告
+{news_report}
+
+## 情绪分析报告
+{sentiment_report}
+
+## 投资计划
+{investment_plan}
+
+## 交易计划
+{trader_plan}
+
+## 风险管理内容
+{risk_content}"""
+
+    return full_report

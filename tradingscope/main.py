@@ -34,7 +34,9 @@ def main():
     ticker = args.ticker
 
     trade_date = datetime.now().strftime("%Y-%m-%d")
-    asyncio.run(analyze(model, ticker, trade_date))
+    final_report = asyncio.run(analyze(model, ticker, trade_date))
+    print("******************************* Final Report *******************************")
+    print(final_report)
 
 if __name__ == "__main__":
     main()
