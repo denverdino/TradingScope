@@ -33,8 +33,19 @@ class TestRiskManagerAgent:
 
     def test_create_risk_manager_agent_success(self):
         """Test that risk manager agent can be created successfully."""
+        # Create AgentContext
+        from tradingscope.agents.utils.context import AgentContext
+        context = AgentContext()
+        context.company_of_interest = "AAPL"
+        context.market_report = "Market data"
+        context.sentiment_report = "Sentiment data"
+        context.news_report = "News data"
+        context.fundamentals_report = "Fundamentals data"
+        context.trader_investment_plan = "Trader plan"
+
         agent = create_risk_manager_agent(
             model=self.mock_model,
+            context=context,
             name=self.agent_name,
         )
 
@@ -46,8 +57,19 @@ class TestRiskManagerAgent:
 
     def test_risk_manager_agent_system_prompt_content(self):
         """Test that the risk manager agent has the correct system prompt content."""
+        # Create AgentContext
+        from tradingscope.agents.utils.context import AgentContext
+        context = AgentContext()
+        context.company_of_interest = "AAPL"
+        context.market_report = "Market data"
+        context.sentiment_report = "Sentiment data"
+        context.news_report = "News data"
+        context.fundamentals_report = "Fundamentals data"
+        context.trader_investment_plan = "Trader plan"
+
         agent = create_risk_manager_agent(
             model=self.mock_model,
+            context=context,
             name=self.agent_name,
         )
 
@@ -60,8 +82,19 @@ class TestRiskManagerAgent:
 
     def test_risk_manager_agent_configuration(self):
         """Test that the risk manager agent has the correct configuration."""
+        # Create AgentContext
+        from tradingscope.agents.utils.context import AgentContext
+        context = AgentContext()
+        context.company_of_interest = "AAPL"
+        context.market_report = "Market data"
+        context.sentiment_report = "Sentiment data"
+        context.news_report = "News data"
+        context.fundamentals_report = "Fundamentals data"
+        context.trader_investment_plan = "Trader plan"
+
         agent = create_risk_manager_agent(
             model=self.mock_model,
+            context=context,
             name=self.agent_name,
         )
 

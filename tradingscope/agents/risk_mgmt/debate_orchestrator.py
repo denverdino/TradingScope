@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
+# Local imports
+from agentscope import logger
+
 # AgentScope imports
 from agentscope.message import Msg
 from agentscope.pipeline import MsgHub
-
-# Local imports
-from tradingscope.utils.logging_init import get_logger
-
-logger = get_logger("default")
 
 
 class RiskDebateOrchestrator:
@@ -44,7 +42,6 @@ class RiskDebateOrchestrator:
     async def run_debate(
         self,
         company_name: str,
-        trader_plan: str,
     ) -> Msg:
         """Run the complete multi-agent debate and return the final decision.
 
@@ -95,12 +92,12 @@ class RiskDebateOrchestrator:
         risk_manager_prompt = Msg(
             name="DebateOrchestrator",
             role="user",
-            content=f"""作为风险管理委员会主席和辩论主持人，您的目标是评估三位风险分析师——激进、中性和安全/保守——之间的辩论，并确定交易员的最佳行动方案。您的决策必须产生明确的建议：买入、卖出或持有。只有在有具体论据强烈支持时才选择持有，而不是在所有方面都似乎有效时作为后备选择。力求清晰和果断。
+            content="""作为风险管理委员会主席，您的目标是评估三位风险分析师——激进、中性和安全/保守——之间的辩论，并确定交易员的最佳行动方案。您的决策必须产生明确的建议：买入、卖出或持有。只有在有具体论据强烈支持时才选择持有，而不是在所有方面都似乎有效时作为后备选择。力求清晰和果断。
 
 决策指导原则：
 1. **总结关键论点**：提取每位分析师的最强观点，重点关注与背景的相关性。
 2. **提供理由**：用辩论中的直接引用和反驳论点支持您的建议。
-3. **完善交易员计划**：从交易员的原始计划**{trader_plan}**开始，根据分析师的见解进行调整。
+3. **完善交易员计划**：从交易员的交易计划开始，根据分析师的见解进行调整。
 4. **从过去的错误中学习**：使用过去的经验教训来解决先前的误判，改进您现在做出的决策，确保您不会做出错误的买入/卖出/持有决定而亏损。
 
 交付成果：
@@ -108,7 +105,8 @@ class RiskDebateOrchestrator:
 - 基于辩论和过去反思的详细推理。
 
 
-专注于可操作的见解和持续改进。建立在过去经验教训的基础上，批判性地评估所有观点，确保每个决策都能带来更好的结果。请用中文撰写所有分析内容和建议。""",
+专注于可操作的见解和持续改进。建立在过去经验教训的基础上，批判性地评估所有观点，确保每个决策都能带来更好的结果。请用中文撰写所有分析内容和建议。
+""",
         )
 
         final_decision = await self.risk_manager(risk_manager_prompt)

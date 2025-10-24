@@ -6,7 +6,7 @@ import sys
 # Add the project root to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from tradingscope.utils.stock_utils import StockMarket, StockUtils
+from tradingscope.agents.utils.stock_utils import StockMarket, StockUtils
 
 
 class TestStockUtils:

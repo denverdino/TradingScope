@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
+# Local imports
+from agentscope import logger
+
 # AgentScope imports
 from agentscope.message import Msg
 from agentscope.pipeline import MsgHub
-
-# Local imports
-from tradingscope.utils.logging_init import get_logger
-
-logger = get_logger("default")
 
 
 class ResearchDebateOrchestrator:
@@ -100,7 +98,7 @@ class ResearchDebateOrchestrator:
             content="""作为投资决策经理，请基于以下辩论历史做出最终的投资决策：
 
 请给出明确的买入、卖出或持有建议，并说明理由。
-请用中文撰写所有分析内容和建议。
+请用中文撰写所有分析内容和建议，必须使用真实数据和事实提供决策支撑。
 """,
         )
 

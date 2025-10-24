@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
+from agentscope import logger
 from agentscope.agent import ReActAgent
 from agentscope.formatter import OpenAIChatFormatter
 from agentscope.memory import InMemoryMemory
@@ -10,28 +11,23 @@ from agentscope.model import OpenAIChatModel
 from agentscope.tool import Toolkit
 
 from tradingscope.agents.utils.agent_utils import get_company_name
+from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.core_stock_tools import get_stock_data
+from tradingscope.agents.utils.stock_utils import StockUtils
 from tradingscope.agents.utils.technical_indicators_tools import get_indicators
-
-# 导入统一日志系统
-from tradingscope.utils.logging_init import get_logger
-from tradingscope.utils.stock_utils import StockUtils
-
-# 导入分析模块日志装饰器
-
-logger = get_logger("default")
-
 
 
 def create_market_analyst_agent(
     model: OpenAIChatModel,
-    ticker: str,
-    trade_date: Optional[str],
+    context: AgentContext,
     name: str = "MarketAnalyst",
 ) -> ReActAgent:
     """
     创建用于技术面分析的市场分析师 ReActAgent。
     """
+    # Extract values from context
+    ticker = context.company_of_interest
+    trade_date = context.trade_date
 
     # 计算市场信息与公司名（与原代码一致）
     market_info = StockUtils.get_market_info(ticker)
@@ -89,6 +85,7 @@ Make sure to append a Markdown table at the end of the report to organize key po
 - 股票代码：{ticker}
 - 所属市场：{market_info['market_name']}
 - 计价货币：{market_info['currency_name']}（{market_info['currency_symbol']}）
+- 股票价格：**注意**使用真实数据输出
 
 ## 📈 技术指标分析
 ## 📉 价格趋势分析

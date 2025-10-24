@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
+from agentscope import logger
 from agentscope.agent import ReActAgent
 from agentscope.formatter import OpenAIChatFormatter
 from agentscope.memory import InMemoryMemory
@@ -9,39 +10,34 @@ from agentscope.model import OpenAIChatModel
 from agentscope.tool import Toolkit
 
 from tradingscope.agents.utils.agent_utils import get_company_name
+from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.fundamental_data_tools import (
     get_balance_sheet,
     get_cashflow,
     get_fundamentals,
     get_income_statement,
 )
-from tradingscope.utils.logging_init import get_logger
-from tradingscope.utils.stock_utils import StockUtils
-from tradingscope.utils.tool_logging import log_analyst_module
-
-logger = get_logger("default")
+from tradingscope.agents.utils.stock_utils import StockUtils
 
 
-@log_analyst_module("fundamentals")
 def create_fundamentals_analyst_agent(
     model: OpenAIChatModel,
-    ticker: str,
-    current_date: Optional[str],
-    start_date: str = "2025-05-28",
+    context: AgentContext,
     name: str = "FundamentalsAnalyst",
 ) -> ReActAgent:
     """创建 AgentScope 版本的基本面分析师。
 
     参数：
         model: AgentScope 模型实例（如 DashScopeChatModel / OpenAIChatModel）。
-        current_date: 当前日期 格式为 "YYYY-MM-DD"。
-        ticker: 股票代码
-        start_date: 统一工具的开始日期（默认与原实现一致）。
+        context: AgentContext实例包含所有必要的上下文信息
         name: Agent 名称（默认“基本面分析师”）。
 
     返回：
         一个配置好的 ReActAgent，可直接以 `await agent(Msg(...))` 运行。
     """
+    # Extract values from context
+    ticker = context.company_of_interest
+    current_date = context.trade_date
     logger.debug("📊 [DEBUG] ===== 基本面分析师 Agent 创建开始 =====")
 
     logger.info(f"📊 [基本面分析师] 正在分析股票: {ticker}")
@@ -66,7 +62,7 @@ def create_fundamentals_analyst_agent(
         f"⚠️ 绝对强制要求：你必须调用工具获取真实数据！不允许任何假设或编造！"
         f"任务：分析{company_name}（股票代码：{ticker}，{market_name}）"
         f"🔴 立即调用 {tool_names} 工具"
-        f"参数：ticker='{ticker}', start_date='{start_date}', end_date='{current_date}', curr_date='{current_date}'"
+        f"参数：ticker='{ticker}', curr_date='{current_date}'"
         "📊 分析要求："
         "- 基于真实数据进行深度基本面分析"
         f"- 计算并提供合理价位区间（使用{currency_name}{currency_symbol}）"
@@ -106,7 +102,7 @@ def create_fundamentals_analyst_agent(
         "请基于真实数据完成一次完整的基本面分析，并给出：\n"
         "1) 公司基本信息；2) 财务状况；3) 盈利能力；4) 估值（含PE/PB/PEG）；\n"
         "5) 合理价位区间与目标价；6) 中文投资建议（买入/持有/卖出）。\n"
-        f"参数：ticker={ticker}, start_date={start_date}, end_date={current_date}, curr_date={current_date}"
+        f"参数：ticker={ticker}, curr_date={current_date}"
     )
 
     formatter = OpenAIChatFormatter()

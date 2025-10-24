@@ -9,23 +9,25 @@ def test_react_agent_creation(mock_model):
 
         from tradingscope.agents.managers.risk_manager import create_risk_manager_agent
 
+        # Create AgentContext
+        from tradingscope.agents.utils.context import AgentContext
+        context = AgentContext()
+        context.company_of_interest = "AAPL"
+        context.market_report = "Market data"
+        context.sentiment_report = "Sentiment data"
+        context.news_report = "News data"
+        context.fundamentals_report = "Fundamentals data"
+        context.trader_investment_plan = "Trader plan"
+
         # Test creating risk manager agent with model (ReAct pattern)
-        risk_manager = create_risk_manager_agent(mock_model, "TestRiskManager")
+        risk_manager = create_risk_manager_agent(mock_model, context, "TestRiskManager")
         print("✅ Risk manager agent with ReAct pattern created successfully")
 
         # Test calling the risk manager agent
         test_msg = Msg(
             name="test",
             role="user",
-            content={
-                "company_name": "AAPL",
-                "history": "Test history",
-                "market_research_report": "Market data",
-                "sentiment_report": "Sentiment data",
-                "news_report": "News data",
-                "fundamentals_report": "Fundamentals data",
-                "trader_plan": "Trader plan",
-            },
+            content="Test message for risk manager",
         )
 
         # Since the ReActAgent is async, we need to handle it properly

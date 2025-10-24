@@ -7,12 +7,8 @@ import re
 from enum import Enum
 from typing import Dict, Tuple
 
+
 # 导入统一日志系统
-from .logging_init import get_logger
-
-logger = get_logger("default")
-
-
 class StockMarket(Enum):
     """股票市场枚举"""
 

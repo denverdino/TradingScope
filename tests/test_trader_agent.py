@@ -39,14 +39,19 @@ class TestTraderAgent:
 
     def test_create_trader_agent_success(self):
         """Test that trader agent can be created successfully."""
+        # Create AgentContext
+        from tradingscope.agents.utils.context import AgentContext
+        context = AgentContext()
+        context.company_of_interest = self.company_of_interest
+        context.investment_plan = self.investment_plan
+        context.market_report = self.market_research_report
+        context.sentiment_report = self.sentiment_report
+        context.news_report = self.news_report
+        context.fundamentals_report = self.fundamentals_report
+
         agent = create_trader_agent(
             model=self.mock_model,
-            company_of_interest=self.company_of_interest,
-            investment_plan=self.investment_plan,
-            market_research_report=self.market_research_report,
-            sentiment_report=self.sentiment_report,
-            news_report=self.news_report,
-            fundamentals_report=self.fundamentals_report,
+            context=context,
         )
 
         # Verify the agent was created
@@ -55,7 +60,7 @@ class TestTraderAgent:
         assert hasattr(agent, "memory")
 
     @patch("tradingscope.agents.utils.agent_utils.get_company_name")
-    @patch("tradingscope.utils.stock_utils.StockUtils.get_market_info")
+    @patch("tradingscope.agents.utils.stock_utils.StockUtils.get_market_info")
     def test_create_trader_agent_with_optional_params(self, mock_get_market_info, mock_get_company_name):
         """Test that trader agent can be created with optional parameters."""
         # Setup mocks
@@ -67,36 +72,46 @@ class TestTraderAgent:
             def get_memories(self, *args, **kwargs):
                 return []
 
+        # Create AgentContext
+        from tradingscope.agents.utils.context import AgentContext
+        context = AgentContext()
+        context.company_of_interest = self.company_of_interest
+        context.investment_plan = self.investment_plan
+        context.market_report = self.market_research_report
+        context.sentiment_report = self.sentiment_report
+        context.news_report = self.news_report
+        context.fundamentals_report = self.fundamentals_report
+        context.trade_date = "2025-01-01"
+
         agent = create_trader_agent(
             model=self.mock_model,
-            company_of_interest=self.company_of_interest,
-            investment_plan=self.investment_plan,
-            market_research_report=self.market_research_report,
-            sentiment_report=self.sentiment_report,
-            news_report=self.news_report,
-            fundamentals_report=self.fundamentals_report,
-            trade_date="2025-01-01",
+            context=context,
         )
 
         # Verify the agent was created
         assert agent is not None
 
     @patch("tradingscope.agents.utils.agent_utils.get_company_name")
-    @patch("tradingscope.utils.stock_utils.StockUtils.get_market_info")
+    @patch("tradingscope.agents.utils.stock_utils.StockUtils.get_market_info")
     def test_trader_agent_system_prompt_includes_currency(self, mock_get_market_info, mock_get_company_name):
         """Test that the trader agent's system prompt includes currency information."""
         # Setup mocks
         mock_get_market_info.return_value = {"market_name": "NASDAQ", "currency_name": "US Dollar", "currency_symbol": "$"}
         mock_get_company_name.return_value = "Apple Inc."
 
+        # Create AgentContext
+        from tradingscope.agents.utils.context import AgentContext
+        context = AgentContext()
+        context.company_of_interest = self.company_of_interest
+        context.investment_plan = self.investment_plan
+        context.market_report = self.market_research_report
+        context.sentiment_report = self.sentiment_report
+        context.news_report = self.news_report
+        context.fundamentals_report = self.fundamentals_report
+
         agent = create_trader_agent(
             model=self.mock_model,
-            company_of_interest=self.company_of_interest,
-            investment_plan=self.investment_plan,
-            market_research_report=self.market_research_report,
-            sentiment_report=self.sentiment_report,
-            news_report=self.news_report,
-            fundamentals_report=self.fundamentals_report,
+            context=context,
         )
 
         # Verify the agent was created with proper system prompt
@@ -107,14 +122,19 @@ class TestTraderAgent:
 
     def test_trader_agent_has_user_message_in_memory(self):
         """Test that the trader agent has the user message pre-loaded in memory."""
+        # Create AgentContext
+        from tradingscope.agents.utils.context import AgentContext
+        context = AgentContext()
+        context.company_of_interest = self.company_of_interest
+        context.investment_plan = self.investment_plan
+        context.market_report = self.market_research_report
+        context.sentiment_report = self.sentiment_report
+        context.news_report = self.news_report
+        context.fundamentals_report = self.fundamentals_report
+
         agent = create_trader_agent(
             model=self.mock_model,
-            company_of_interest=self.company_of_interest,
-            investment_plan=self.investment_plan,
-            market_research_report=self.market_research_report,
-            sentiment_report=self.sentiment_report,
-            news_report=self.news_report,
-            fundamentals_report=self.fundamentals_report,
+            context=context,
         )
 
         # Check that memory has content (we can't directly test this due to async nature)

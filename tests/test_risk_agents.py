@@ -14,18 +14,28 @@ def test_agent_creation(mock_model):
         from tradingscope.agents.risk_mgmt.conservative_debator import create_conservative_debator_agent
         from tradingscope.agents.risk_mgmt.neutral_debator import create_neutral_debator_agent
 
+        # Create AgentContext
+        from tradingscope.agents.utils.context import AgentContext
+        context = AgentContext()
+        context.company_of_interest = "AAPL"
+        context.market_report = "Market data"
+        context.sentiment_report = "Sentiment data"
+        context.news_report = "News data"
+        context.fundamentals_report = "Fundamentals data"
+        context.trader_investment_plan = "Trader plan"
+
         # Test creating each debator agent
-        create_aggressive_debator_agent(mock_model, "TestAggressive")
+        create_aggressive_debator_agent(mock_model, context, "TestAggressive")
         print("✅ Aggressive debator agent created successfully")
 
-        create_conservative_debator_agent(mock_model, "TestConservative")
+        create_conservative_debator_agent(mock_model, context, "TestConservative")
         print("✅ Conservative debator agent created successfully")
 
-        create_neutral_debator_agent(mock_model, "TestNeutral")
+        create_neutral_debator_agent(mock_model, context, "TestNeutral")
         print("✅ Neutral debator agent created successfully")
 
         # Test creating risk manager agent
-        risk_manager = create_risk_manager_agent(mock_model, "TestRiskManager")
+        risk_manager = create_risk_manager_agent(mock_model, context, "TestRiskManager")
         print("✅ Risk manager agent created successfully")
 
         # Test calling the risk manager agent

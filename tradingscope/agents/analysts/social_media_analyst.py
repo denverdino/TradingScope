@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
+from agentscope import logger
 from agentscope.agent import ReActAgent
 from agentscope.formatter import OpenAIChatFormatter
 from agentscope.memory import InMemoryMemory
@@ -12,17 +13,14 @@ from agentscope.model import OpenAIChatModel
 from agentscope.tool import Toolkit
 
 from tradingscope.agents.utils.agent_utils import get_company_name
+from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.news_data_tools import get_news
-from tradingscope.utils.logging_init import get_logger
-from tradingscope.utils.stock_utils import StockUtils
-
-logger = get_logger("analysts.social_media")
+from tradingscope.agents.utils.stock_utils import StockUtils
 
 
 def create_social_media_analyst_agent(
     model: OpenAIChatModel,
-    ticker: str,
-    trade_date: Optional[str],
+    context: AgentContext,
     name: str = "SocialMediaAnalyst",
 ) -> ReActAgent:
     """
@@ -32,12 +30,15 @@ def create_social_media_analyst_agent(
 
     Args:
         model: OpenAIChatModel 实例
-        ticker: 股票代码
-        trade_date: 交易日期，可选
+        context: AgentContext实例包含所有必要的上下文信息
+        name: 代理名称
 
     Returns:
         ReActAgent: 配置好的社交媒体情绪分析师 Agent
     """
+    # Extract values from context
+    ticker = context.company_of_interest
+    trade_date = context.trade_date
 
     # 市场 & 公司信息
     market_info = StockUtils.get_market_info(ticker)

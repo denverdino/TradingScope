@@ -55,32 +55,33 @@ async def main():
 - 研发投入占比稳定
 - 市场份额在电动车领域领先"""
 
+    # Create AgentContext
+    from tradingscope.agents.utils.context import AgentContext
+    context = AgentContext()
+    context.company_of_interest = company_name
+    context.market_report = market_research_report
+    context.sentiment_report = sentiment_report
+    context.news_report = news_report
+    context.fundamentals_report = fundamentals_report
+    context.trader_investment_plan = trader_plan
+
     # Create the risk management agents
     aggressive_agent = create_aggressive_debator_agent(
         model=model,
-        market_research_report=market_research_report,
-        sentiment_report=sentiment_report,
-        news_report=news_report,
-        fundamentals_report=fundamentals_report,
-        trader_plan=trader_plan
+        context=context
     )
     conservative_agent = create_conservative_debator_agent(
         model=model,
-        market_research_report=market_research_report,
-        sentiment_report=sentiment_report,
-        news_report=news_report,
-        fundamentals_report=fundamentals_report,
-        trader_plan=trader_plan
+        context=context
     )
     neutral_agent = create_neutral_debator_agent(
         model=model,
-        market_research_report=market_research_report,
-        sentiment_report=sentiment_report,
-        news_report=news_report,
-        fundamentals_report=fundamentals_report,
-        trader_plan=trader_plan
+        context=context
     )
-    risk_manager = create_risk_manager_agent(model=model)
+    risk_manager = create_risk_manager_agent(
+        model=model,
+        context=context
+    )
 
     # Create the debate orchestrator
     orchestrator = create_debate_orchestrator(
@@ -97,7 +98,6 @@ async def main():
         # Run the debate
         final_decision = await orchestrator.run_debate(
             company_name=company_name,
-            trader_plan=trader_plan,
         )
 
         print("=" * 60)

@@ -19,7 +19,13 @@ async def main():
     #trade_date = datetime.now().strftime("%Y-%m-%d")
     trade_date = "2025-10-14"
 
-    agent = create_market_analyst_agent(model=model, ticker="BABA", trade_date=trade_date)
+    # Create AgentContext
+    from tradingscope.agents.utils.context import AgentContext
+    context = AgentContext()
+    context.company_of_interest = "BABA"
+    context.trade_date = trade_date
+
+    agent = create_market_analyst_agent(model=model, context=context)
     await agent(None)
 
 

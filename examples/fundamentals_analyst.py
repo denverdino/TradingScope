@@ -19,7 +19,13 @@ async def main():
 
     current_date = datetime.now().strftime("%Y-%m-%d")
 
-    agent = create_fundamentals_analyst_agent(model=model, current_date=current_date, ticker="AAPL")
+    # Create AgentContext
+    from tradingscope.agents.utils.context import AgentContext
+    context = AgentContext()
+    context.company_of_interest = "AAPL"
+    context.trade_date = current_date
+
+    agent = create_fundamentals_analyst_agent(model=model, context=context)
     await agent(None)
 
 

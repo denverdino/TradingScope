@@ -9,15 +9,20 @@ def test_trader_agent_creation(mock_model, sample_company_data):
         # Import our agent
         from tradingscope.agents.trader.trader import create_trader_agent
 
+        # Create AgentContext
+        from tradingscope.agents.utils.context import AgentContext
+        context = AgentContext()
+        context.company_of_interest = sample_company_data["company_of_interest"]
+        context.investment_plan = sample_company_data["investment_plan"]
+        context.market_report = sample_company_data["market_research_report"]
+        context.sentiment_report = sample_company_data["sentiment_report"]
+        context.news_report = sample_company_data["news_report"]
+        context.fundamentals_report = sample_company_data["fundamentals_report"]
+
         # Test creating the trader agent
         agent = create_trader_agent(
             model=mock_model,
-            company_of_interest=sample_company_data["company_of_interest"],
-            investment_plan=sample_company_data["investment_plan"],
-            market_research_report=sample_company_data["market_research_report"],
-            sentiment_report=sample_company_data["sentiment_report"],
-            news_report=sample_company_data["news_report"],
-            fundamentals_report=sample_company_data["fundamentals_report"],
+            context=context,
         )
 
         assert agent is not None
@@ -32,7 +37,7 @@ def test_trader_agent_creation(mock_model, sample_company_data):
 
 
 @patch("tradingscope.agents.utils.agent_utils.get_company_name")
-@patch("tradingscope.utils.stock_utils.StockUtils.get_market_info")
+@patch("tradingscope.agents.utils.stock_utils.StockUtils.get_market_info")
 def test_trader_agent_with_china_stock(mock_get_market_info, mock_get_company_name, mock_model, sample_company_data):
     """Test that the trader agent works with China stocks."""
     # Setup mocks for China stock
@@ -43,15 +48,20 @@ def test_trader_agent_with_china_stock(mock_get_market_info, mock_get_company_na
         # Import our agent
         from tradingscope.agents.trader.trader import create_trader_agent
 
+        # Create AgentContext
+        from tradingscope.agents.utils.context import AgentContext
+        context = AgentContext()
+        context.company_of_interest = "600000"  # China stock code
+        context.investment_plan = sample_company_data["investment_plan"]
+        context.market_report = sample_company_data["market_research_report"]
+        context.sentiment_report = sample_company_data["sentiment_report"]
+        context.news_report = sample_company_data["news_report"]
+        context.fundamentals_report = sample_company_data["fundamentals_report"]
+
         # Test creating the trader agent with China stock
         agent = create_trader_agent(
             model=mock_model,
-            company_of_interest="600000",  # China stock code
-            investment_plan=sample_company_data["investment_plan"],
-            market_research_report=sample_company_data["market_research_report"],
-            sentiment_report=sample_company_data["sentiment_report"],
-            news_report=sample_company_data["news_report"],
-            fundamentals_report=sample_company_data["fundamentals_report"],
+            context=context,
         )
 
         assert agent is not None

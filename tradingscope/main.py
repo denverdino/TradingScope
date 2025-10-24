@@ -3,14 +3,12 @@ import asyncio
 import os
 from datetime import datetime
 
+# 导入日志模块
+from agentscope import logger
 from agentscope.model import OpenAIChatModel
 
 from tradingscope.agents.workflow import analyze
 
-# 导入日志模块
-from tradingscope.utils.logging_manager import get_logger
-
-logger = get_logger('default')
 
 def main():
     """Main entry point for the TradingScope application."""

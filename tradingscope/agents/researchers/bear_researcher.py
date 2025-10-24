@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
+from agentscope import logger
 from agentscope.agent import ReActAgent
 from agentscope.formatter import OpenAIMultiAgentFormatter
 from agentscope.memory import InMemoryMemory
@@ -10,20 +11,13 @@ from agentscope.model import OpenAIChatModel
 from agentscope.tool import Toolkit
 
 # 导入统一日志系统
-from tradingscope.utils.logging_init import get_logger
-from tradingscope.utils.stock_utils import StockUtils
-
-logger = get_logger("default")
+from tradingscope.agents.utils.context import AgentContext
+from tradingscope.agents.utils.stock_utils import StockUtils
 
 
 def create_bear_researcher_agent(
     model: OpenAIChatModel,
-    company_of_interest: str = "Unknow",
-    market_research_report: str = "",
-    sentiment_report: str = "",
-    news_report: str = "",
-    fundamentals_report: str = "",
-    trade_date: Optional[str] = None,
+    context: AgentContext,
     name: str = "BearResearcher",
 ) -> ReActAgent:
     """
@@ -31,16 +25,19 @@ def create_bear_researcher_agent(
 
     Args:
         model: AgentScope 模型实例
-        company_name: 公司名称
-        market_research_report: 市场研究报告
-        sentiment_report: 情绪报告
-        news_report: 新闻报告
-        fundamentals_report: 基本面报告
-        trade_date: 交易日期
+        context: AgentContext实例包含所有必要的上下文信息
+        name: 代理名称
 
     Returns:
         ReActAgent: 配置好的看跌研究员代理
     """
+    # Extract values from context
+    company_of_interest = context.company_of_interest
+    market_research_report = context.market_report
+    sentiment_report = context.sentiment_report
+    news_report = context.news_report
+    fundamentals_report = context.fundamentals_report
+    trade_date = context.trade_date
 
     # 获取市场信息
     company_name = company_of_interest

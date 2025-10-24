@@ -34,28 +34,31 @@ async def main():
     fundamentals_report = "The company has strong fundamentals with a P/E ratio of 25 and consistent revenue growth."
     trade_date = "2025-10-05"
 
+    # Create AgentContext
+    from tradingscope.agents.utils.context import AgentContext
+    context = AgentContext()
+    context.company_of_interest = company_of_interest
+    context.market_report = market_research_report
+    context.sentiment_report = sentiment_report
+    context.news_report = news_report
+    context.fundamentals_report = fundamentals_report
+    context.trade_date = trade_date
+
     # Create the research agents
     bull_researcher = create_bull_researcher_agent(
         model=model,
-        company_of_interest=company_of_interest,
-        market_research_report=market_research_report,
-        sentiment_report=sentiment_report,
-        news_report=news_report,
-        fundamentals_report=fundamentals_report,
-        trade_date=trade_date,
+        context=context,
     )
 
     bear_researcher = create_bear_researcher_agent(
         model=model,
-        company_of_interest=company_of_interest,
-        market_research_report=market_research_report,
-        sentiment_report=sentiment_report,
-        news_report=news_report,
-        fundamentals_report=fundamentals_report,
-        trade_date=trade_date,
+        context=context,
     )
 
-    research_manager = create_research_manager_agent(model=model)
+    research_manager = create_research_manager_agent(
+        model=model,
+        context=context,
+    )
 
     # Create the debate orchestrator
     orchestrator = create_research_debate_orchestrator(

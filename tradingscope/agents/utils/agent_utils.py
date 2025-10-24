@@ -1,8 +1,6 @@
 # Import tools from separate utility files
 
-from tradingscope.utils.logging_manager import get_logger
-
-logger = get_logger("agents")
+from agentscope import logger
 
 ticker_to_company = {
     "AAPL": "Apple",

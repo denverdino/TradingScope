@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
+# 导入统一日志系统
+from agentscope import logger
 from agentscope.agent import ReActAgent
 from agentscope.formatter import OpenAIChatFormatter
 from agentscope.memory import InMemoryMemory
@@ -10,22 +12,17 @@ from agentscope.model import OpenAIChatModel
 from agentscope.tool import Toolkit
 
 from tradingscope.agents.utils.agent_utils import get_company_name
+from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.news_data_tools import get_global_news, get_news
-
-# 导入统一日志系统
-from tradingscope.utils.logging_init import get_logger
 
 # 导入统一新闻工具
 # 导入股票工具类
-from tradingscope.utils.stock_utils import StockUtils
-
-logger = get_logger("analysts.news")
+from tradingscope.agents.utils.stock_utils import StockUtils
 
 
 def create_news_analyst_agent(
     model: OpenAIChatModel,
-    ticker: str,
-    trade_date: Optional[str],
+    context: AgentContext,
     name: str = "NewsAnalyst",
 ) -> ReActAgent:
     """
@@ -35,12 +32,15 @@ def create_news_analyst_agent(
 
     Args:
         model: OpenAIChatModel 实例
-        ticker: 股票代码
-        trade_date: 交易日期，可选
+        context: AgentContext实例包含所有必要的上下文信息
+        name: 代理名称
 
     Returns:
         ReActAgent: 配置好的新闻分析师 Agent
     """
+    # Extract values from context
+    ticker = context.company_of_interest
+    trade_date = context.trade_date
 
     # 获取市场信息
     market_info = StockUtils.get_market_info(ticker)

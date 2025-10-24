@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 from typing import Optional
 
+# 导入统一日志系统
+from agentscope import logger
 from agentscope.agent import ReActAgent
 from agentscope.formatter import OpenAIChatFormatter
 from agentscope.memory import InMemoryMemory
@@ -11,23 +14,13 @@ from agentscope.model import OpenAIChatModel
 from agentscope.tool import Toolkit
 
 from tradingscope.agents.utils.agent_utils import get_company_name
-
-# 导入统一日志系统
-from tradingscope.utils.logging_init import get_logger
-from tradingscope.utils.stock_utils import StockUtils
-
-logger = get_logger("default")
+from tradingscope.agents.utils.context import AgentContext
+from tradingscope.agents.utils.stock_utils import StockUtils
 
 
 def create_trader_agent(
     model: OpenAIChatModel,
-    company_of_interest: str,
-    investment_plan: str,
-    market_research_report: str,
-    sentiment_report: str,
-    news_report: str,
-    fundamentals_report: str,
-    trade_date: Optional[str] = None,
+    context: AgentContext,
     name: str = "Trader",
 ) -> ReActAgent:
     """
@@ -35,18 +28,20 @@ def create_trader_agent(
 
     参数:
         model: AgentScope模型实例
-        company_of_interest: 感兴趣的公司/股票代码
-        investment_plan: 投资计划
-        market_research_report: 市场研究报告
-        sentiment_report: 情绪报告
-        news_report: 新闻报告
-        fundamentals_report: 基本面报告
-        memory: 内存实例（可选）
-        trade_date: 交易日期（可选）
+        context: AgentContext实例包含所有必要的上下文信息
+        name: 代理名称
 
     返回:
         配置好的ReActAgent实例
     """
+    # Extract values from context
+    company_of_interest = context.company_of_interest
+    investment_plan = context.investment_plan
+    market_research_report = context.market_report
+    sentiment_report = context.sentiment_report
+    news_report = context.news_report
+    fundamentals_report = context.fundamentals_report
+    trade_date = context.trade_date
     # 使用统一的股票类型检测
     market_info = StockUtils.get_market_info(company_of_interest)
     company_name = get_company_name(company_of_interest, market_info)
@@ -99,7 +94,17 @@ def create_trader_agent(
 
 请用中文撰写分析内容，并始终以'最终交易建议: **买入/持有/卖出**'结束您的回应以确认您的建议。
 
-请不要忘记利用过去决策的经验教训来避免重复错误。"""
+请不要忘记利用过去决策的经验教训来避免重复错误。
+
+可用资源：
+
+市场研究报告：{market_research_report}
+社交媒体情绪报告：{sentiment_report}
+最新世界事务新闻：{news_report}
+公司基本面报告：{fundamentals_report}
+
+
+"""
 
     # 获取当前日期
     current_date = trade_date or datetime.now().strftime("%Y-%m-%d")
@@ -132,12 +137,10 @@ def create_trader_agent(
     )
 
     # 预加载用户消息到内存中
-    user_content = f"Based on a comprehensive analysis by a team of analysts, here is an investment plan tailored for {company_of_interest}. This plan incorporates insights from current technical market trends, macroeconomic indicators, and social media sentiment. Use this plan as a foundation for evaluating your next trading decision.\n\nProposed Investment Plan: {investment_plan}\n\nLeverage these insights to make an informed and strategic decision."
-
     user_message = Msg(
         name="user",
         role="user",
-        content=user_content,
+        content=f"作为交易员，请基于研究经理的投资决策和所有研究报告，做出最终的交易决策：\n\n研究经理决策：\n{investment_plan}\n\n请给出明确的买入、卖出或持有建议，并提供具体的目标价位和风险评估。",
     )
 
     # 将初始消息添加到代理的内存中

@@ -27,16 +27,21 @@ async def main():
     fundamentals_report = "The company has strong fundamentals with a P/E ratio of 25 and consistent revenue growth."
     trade_date = datetime.now().strftime("%Y-%m-%d")
 
+    # Create AgentContext
+    from tradingscope.agents.utils.context import AgentContext
+    context = AgentContext()
+    context.company_of_interest = company_of_interest
+    context.investment_plan = investment_plan
+    context.market_report = market_research_report
+    context.sentiment_report = sentiment_report
+    context.news_report = news_report
+    context.fundamentals_report = fundamentals_report
+    context.trade_date = trade_date
+
     # Create the trader agent
     agent = create_trader_agent(
         model=model,
-        company_of_interest=company_of_interest,
-        investment_plan=investment_plan,
-        market_research_report=market_research_report,
-        sentiment_report=sentiment_report,
-        news_report=news_report,
-        fundamentals_report=fundamentals_report,
-        trade_date=trade_date,
+        context=context,
     )
 
     # Run the agent
