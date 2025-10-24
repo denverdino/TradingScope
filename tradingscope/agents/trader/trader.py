@@ -96,13 +96,15 @@ def create_trader_agent(
 
 请不要忘记利用过去决策的经验教训来避免重复错误。
 
+
+研究经理决策：{investment_plan}
+
 可用资源：
 
 市场研究报告：{market_research_report}
 社交媒体情绪报告：{sentiment_report}
 最新世界事务新闻：{news_report}
 公司基本面报告：{fundamentals_report}
-
 
 """
 
@@ -112,12 +114,13 @@ def create_trader_agent(
     # 构建完整的系统提示
     system_prompt = (
         "你是一位专业的交易员，与其他分析师协作。"
-        "基于所有分析师提供的研究报告进行综合分析并做出投资决策。"
+        "请基于研究经理的投资决策，做出最终的交易决策。"
         "执行你能做的分析工作来取得进展。"
         f"{system_message}"
         f"供你参考，当前日期是{current_date}。"
         f"我们要分析的是{company_name}（股票代码：{company_of_interest}）。"
         "请确保所有分析都使用中文，并在分析中正确区分公司名称和股票代码。"
+        "请给出明确的买入、卖出或持有建议，并提供具体的目标价位和风险评估。"
     )
 
     formatter = OpenAIChatFormatter()
@@ -135,16 +138,6 @@ def create_trader_agent(
         enable_meta_tool=False,  # 禁用元工具以保持可控
         max_iters=6,  # 限制迭代次数
     )
-
-    # 预加载用户消息到内存中
-    user_message = Msg(
-        name="user",
-        role="user",
-        content=f"作为交易员，请基于研究经理的投资决策和所有研究报告，做出最终的交易决策：\n\n研究经理决策：\n{investment_plan}\n\n请给出明确的买入、卖出或持有建议，并提供具体的目标价位和风险评估。",
-    )
-
-    # 将初始消息添加到代理的内存中
-    agent.memory.add(user_message)
 
     logger.debug(f"💰 [DEBUG] 准备调用LLM，系统提示包含货币: {currency}")
     logger.debug(f"💰 [DEBUG] 系统提示中的关键部分: 目标价格({currency})")

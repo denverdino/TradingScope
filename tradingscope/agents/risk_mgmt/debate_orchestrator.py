@@ -58,19 +58,19 @@ class RiskDebateOrchestrator:
         aggressive_prompt = Msg(
             name="DebateOrchestrator",
             role="user",
-            content="""作为激进风险分析师，您的职责是积极倡导高回报、高风险的投资机会，强调大胆策略和竞争优势。在评估交易员的决策或计划时，请重点关注潜在的上涨空间、增长潜力和创新收益——即使这些伴随着较高的风险。使用提供的市场数据和情绪分析来加强您的论点，并挑战对立观点。具体来说，请直接回应保守和中性分析师提出的每个观点，用数据驱动的反驳和有说服力的推理进行反击。突出他们的谨慎态度可能错过的关键机会，或者他们的假设可能过于保守的地方。""",
+            content="""请激进风险分析师发表您的观点""",
         )
 
         conservative_prompt = Msg(
             name="DebateOrchestrator",
             role="user",
-            content="""作为安全/保守风险分析师，您的主要目标是保护资产、最小化波动性，并确保稳定、可靠的增长。您优先考虑稳定性、安全性和风险缓解，仔细评估潜在损失、经济衰退和市场波动。在评估交易员的决策或计划时，请批判性地审查高风险要素，指出决策可能使公司面临不当风险的地方，以及更谨慎的替代方案如何能够确保长期收益。""",
+            content="""请安全/保守风险分析师发表您的观点""",
         )
 
         neutral_prompt = Msg(
             name="DebateOrchestrator",
             role="user",
-            content="""作为中性风险分析师，您的角色是提供平衡的视角，权衡交易员决策或计划的潜在收益和风险。您优先考虑全面的方法，评估上行和下行风险，同时考虑更广泛的市场趋势、潜在的经济变化和多元化策略。""",
+            content="""请中性风险分析师发表您的观点""",
         )
 
         # Use MsgHub for message broadcasting between debators

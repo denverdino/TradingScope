@@ -53,27 +53,13 @@ class ResearchDebateOrchestrator:
         bull_prompt = Msg(
             name="DebateModerator",
             role="user",
-            content="""你作为看涨研究员，请基于所有研究报告和当前辩论历史，提出你的观点和论据。
-
-请用中文回答，重点关注增长潜力、竞争优势和积极的市场指标。你需要：
-1. 表达清晰的看涨观点
-2. 使用数据和事实支撑你的论点
-3. 直接回应和反驳看跌分析师的观点
-4. 在多轮辩论中逐步深化你的论点
-""",
+            content="""请看涨研究员发表您的观点""",
         )
 
         bear_prompt = Msg(
             name="DebateModerator",
             role="user",
-            content="""你作为看跌研究员，请基于所有研究报告、当前辩论历史和看涨研究员的最新观点，提出你的反驳观点和论据。
-
-请用中文回答，重点关注风险和挑战、竞争劣势和负面指标。你需要：
-1. 表达清晰的看跌观点
-2. 使用数据和事实支撑你的论点
-3. 直接回应和反驳看涨分析师的观点
-4. 在多轮辩论中逐步深化你的论点
-""",
+            content="""请看跌研究员发表您的观点""",
         )
 
         # Use MsgHub for message broadcasting between researchers
