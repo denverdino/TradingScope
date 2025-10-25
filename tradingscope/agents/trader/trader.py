@@ -53,20 +53,22 @@ def create_trader_agent(
     logger.debug("💰 [DEBUG] ===== 交易员节点开始 =====")
     logger.debug(f"💰 [DEBUG] 交易员检测股票类型: {company_of_interest} -> {market_info['market_name']}, 货币: {currency}")
     logger.debug(f"💰 [DEBUG] 货币符号: {currency_symbol}")
-    logger.debug(f"💰 [DEBUG] 基本面报告长度: {len(fundamentals_report)}")
-    logger.debug(f"💰 [DEBUG] 基本面报告前200字符: {fundamentals_report[:200]}...")
 
 
     # 构建系统提示词
-    system_message = f"""您是一位专业的交易员，负责分析市场数据并做出投资决策。基于您的分析，请提供具体的买入、卖出或持有建议。
+    # 获取当前日期
+    current_date = trade_date or datetime.now().strftime("%Y-%m-%d")
 
-⚠️ 重要提醒：当前分析的股票代码是 {company_of_interest}，请使用正确的货币单位：{currency}（{currency_symbol}）
+    # 构建完整的系统提示
+    system_prompt = f"""
+你是一位专业的交易员，负责分析市场数据并做出投资决策。请基于研究经理的投资决策和您的分析，做出最终的交易决策。请给出明确的买入、卖出或持有的操作建议，并提供具体的目标价位和风险评估。
+
+⚠️ 重要提醒：请确保所有分析都使用中文。当前日期是{current_date}，分析的股票代码是 {company_of_interest}，请使用正确的货币单位：{currency}（{currency_symbol}）
 
 🔴 严格要求：
-- 股票代码 {company_of_interest} 的公司名称必须严格按照基本面报告中的真实数据
-- 绝对禁止使用错误的公司名称或混淆不同的股票
-- 所有分析必须基于提供的真实数据，不允许假设或编造
-- **必须提供具体的目标价位，不允许设置为null或空值**
+- **必须**严格按照基本面报告中的真实数据进行分析，不允许假设或编造
+- 绝对**禁止**使用错误的公司名称或混淆不同的股票
+- **必须**提供具体的目标价位，不允许设置为null或空值
 
 请在您的分析中包含以下关键信息：
 1. **投资建议**: 明确的买入/持有/卖出决策
@@ -96,32 +98,21 @@ def create_trader_agent(
 
 请不要忘记利用过去决策的经验教训来避免重复错误。
 
+## 研究经理决策
+{investment_plan}
 
-研究经理决策：{investment_plan}
+## 市场研究报告
+{market_research_report}
 
-可用资源：
+## 社交媒体情绪报告
+{sentiment_report}
 
-市场研究报告：{market_research_report}
-社交媒体情绪报告：{sentiment_report}
-最新世界事务新闻：{news_report}
-公司基本面报告：{fundamentals_report}
+## 最新世界事务新闻
+{news_report}
 
+## 公司基本面报告
+{fundamentals_report}
 """
-
-    # 获取当前日期
-    current_date = trade_date or datetime.now().strftime("%Y-%m-%d")
-
-    # 构建完整的系统提示
-    system_prompt = (
-        "你是一位专业的交易员，与其他分析师协作。"
-        "请基于研究经理的投资决策，做出最终的交易决策。"
-        "执行你能做的分析工作来取得进展。"
-        f"{system_message}"
-        f"供你参考，当前日期是{current_date}。"
-        f"我们要分析的是{company_name}（股票代码：{company_of_interest}）。"
-        "请确保所有分析都使用中文，并在分析中正确区分公司名称和股票代码。"
-        "请给出明确的买入、卖出或持有建议，并提供具体的目标价位和风险评估。"
-    )
 
     formatter = OpenAIChatFormatter()
     toolkit = Toolkit()

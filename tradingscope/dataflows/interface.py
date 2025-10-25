@@ -78,13 +78,11 @@ VENDOR_METHODS = {
     "get_stock_data": {
         "alpha_vantage": get_alpha_vantage_stock,
         "yfinance": get_YFin_data_online,
-        "local": get_YFin_data,
     },
     # technical_indicators
     "get_indicators": {
         "yfinance": get_stock_stats_indicators_window,
         "alpha_vantage": get_alpha_vantage_indicator,
-        "local": get_stock_stats_indicators_window
     },
     # fundamental_data
     "get_fundamentals": {
@@ -94,17 +92,14 @@ VENDOR_METHODS = {
     "get_balance_sheet": {
         "alpha_vantage": get_alpha_vantage_balance_sheet,
         "yfinance": get_yfinance_balance_sheet,
-        "local": get_simfin_balance_sheet,
     },
     "get_cashflow": {
         "alpha_vantage": get_alpha_vantage_cashflow,
         "yfinance": get_yfinance_cashflow,
-        "local": get_simfin_cashflow,
     },
     "get_income_statement": {
         "alpha_vantage": get_alpha_vantage_income_statement,
         "yfinance": get_yfinance_income_statement,
-        "local": get_simfin_income_statements,
     },
     # news_data
     "get_news": {
@@ -121,7 +116,6 @@ VENDOR_METHODS = {
     "get_insider_transactions": {
         "alpha_vantage": get_alpha_vantage_insider_transactions,
         "yfinance": get_yfinance_insider_transactions,
-        "local": get_finnhub_company_insider_transactions,
     },
 }
 

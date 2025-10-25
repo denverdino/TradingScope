@@ -37,6 +37,12 @@ from .utils.context import AgentContext
 #         on_disk=False,
 #     )
 
+def get_content(result: Msg | Exception) -> str:
+    """从消息或异常中提取内容。"""
+    if isinstance(result, Msg):
+        return result.content
+    return str(result)
+
 async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
     """运行并发智能体并执行多轮辩论，返回综合报告。"""
     # 创建AgentContext
@@ -58,16 +64,14 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
         fundamentals_analyst(None),
         news_analyst(None),
         social_media_analyst(None),
-        #china_market_analyst(None),
         return_exceptions=True,
     )
 
     # 提取分析师报告内容
-    market_research_report = getattr(analyst_results[0], "content", "") if not isinstance(analyst_results[0], Exception) else ""
-    fundamentals_report = getattr(analyst_results[1], "content", "") if not isinstance(analyst_results[1], Exception) else ""
-    news_report = getattr(analyst_results[2], "content", "") if not isinstance(analyst_results[2], Exception) else ""
-    sentiment_report = getattr(analyst_results[3], "content", "") if not isinstance(analyst_results[3], Exception) else ""
-    #china_market_report = getattr(analyst_results[4], "content", "") if not isinstance(analyst_results[4], Exception) else ""
+    market_research_report = get_content(analyst_results[0])
+    fundamentals_report = get_content(analyst_results[1])
+    news_report = get_content(analyst_results[2])
+    sentiment_report = get_content(analyst_results[3])
 
     # 更新context中的报告内容
     context.market_report = market_research_report
@@ -103,7 +107,7 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
     )
 
     # Extract manager content
-    investment_plan = getattr(manager_response, "content", "") if not isinstance(manager_response, Exception) else ""
+    investment_plan = get_content(manager_response)
     print(f"投资决策:\n{investment_plan}")
 
     # 更新context中的投资计划
@@ -119,7 +123,7 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
 
     # 交易员做出交易决策
     trader_response = await trader(None)
-    trader_plan = getattr(trader_response, "content", "") if not isinstance(trader_response, Exception) else ""
+    trader_plan = get_content(trader_response)
     print(f"交易决策:\n{trader_plan}")
 
     # 更新context中的交易员计划
@@ -151,7 +155,7 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
     )
 
     # Extract manager content
-    final_trade_decision = getattr(risk_decision, "content", "") if not isinstance(risk_decision, Exception) else ""
+    final_trade_decision = get_content(risk_decision)
     print(f"风险管理决策:\n{final_trade_decision}")
 
     # 更新context中的最终决策

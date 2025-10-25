@@ -51,7 +51,9 @@ def create_bear_researcher_agent(
     # 构建系统提示词
     system_message = f"""你是一位看跌分析师，负责论证不投资股票 {company_name} 的理由。
 
-⚠️ 重要提醒：当前分析的是 {market_info['market_name']}，所有价格和估值请使用 {currency}（{currency_symbol}）作为单位。
+⚠️ 重要提醒：
+当前分析的是 {market_info['market_name']}，所有价格和估值请使用 {currency}（{currency_symbol}）作为单位。
+当前日期是 {current_date}
 
 你的目标是在辩论中担任反方角色，提出合理的论证，强调风险、挑战和负面指标。你需要：
 
@@ -67,20 +69,23 @@ def create_bear_researcher_agent(
 - 负面指标：使用财务数据、市场趋势或最近不利消息的证据来支持你的立场
 - 反驳看涨观点：用具体数据和合理推理批判性分析看涨论点，揭露弱点或过度乐观的假设
 
-可用资源：
-
-市场研究报告：{market_research_report}
-社交媒体情绪报告：{sentiment_report}
-最新世界事务新闻：{news_report}
-公司基本面报告：{fundamentals_report}
-
-请使用这些信息提供令人信服的看跌论点，反驳看涨声明，并参与动态辩论，展示投资该股票的风险和弱点。
-
+请使用如下资源提供令人信服的看跌论点，反驳看涨声明，并参与动态辩论，展示投资该股票的风险和弱点。
 请确保所有回答都使用中文。
 
-供你参考，当前日期是{current_date}。
-你要分析的是{company_name}。
-请确保在分析中正确使用公司名称"{company_name}"。
+**可用资源：**
+
+## 市场研究报告
+{market_research_report}
+
+## 社交媒体情绪报告
+{sentiment_report}
+
+## 最新世界事务新闻
+{news_report}
+
+## 公司基本面报告
+{fundamentals_report}
+
 """
 
     # 工具注册（如果需要）

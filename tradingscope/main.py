@@ -22,7 +22,7 @@ def main():
 
     # Initialize model
     model = OpenAIChatModel(
-        model_name="qwen-max",
+        model_name="qwen3-max",
         api_key=os.environ.get("DASHSCOPE_API_KEY"),
         stream=True,
         generate_kwargs={"temperature": 0.1}

@@ -32,11 +32,12 @@ def create_neutral_debator_agent(
     """
     # Extract values from context
     company_of_interest = context.company_of_interest
-    market_research_report = context.market_report if hasattr(context, 'market_report') else ""
-    sentiment_report = context.sentiment_report if hasattr(context, 'sentiment_report') else ""
-    news_report = context.news_report if hasattr(context, 'news_report') else ""
-    fundamentals_report = context.fundamentals_report if hasattr(context, 'fundamentals_report') else ""
-    trader_plan = context.trader_investment_plan if hasattr(context, 'trader_investment_plan') else ""
+    market_research_report = context.market_report
+    sentiment_report = context.sentiment_report
+    news_report = context.news_report 
+    fundamentals_report = context.fundamentals_report 
+    trader_plan = context.trader_investment_plan 
+    investment_plan = context.investment_plan
     formatter = OpenAIMultiAgentFormatter()
     toolkit = Toolkit()
 
@@ -47,14 +48,26 @@ def create_neutral_debator_agent(
 通过批判性地分析双方来积极参与，解决激进和保守论点中的弱点，倡导更平衡的方法。挑战他们的每个观点，说明为什么适度风险策略可能提供两全其美的效果，既提供增长潜力又防范极端波动。专注于辩论而不是简单地呈现数据，旨在表明平衡的观点可以带来最可靠的结果。请用中文以对话方式输出，就像您在说话一样，不使用任何特殊格式。
 
 ## 可用资源：
-
 公司名称：{company_of_interest}
-市场研究报告：{market_research_report}
-社交媒体情绪报告：{sentiment_report}
-最新世界事务新闻：{news_report}
-公司基本面报告：{fundamentals_report}
-交易员计划：{trader_plan}
-"""
+
+## 研究经理决策
+{investment_plan}
+
+## 市场研究报告
+{market_research_report}
+
+## 社交媒体情绪报告
+{sentiment_report}
+
+## 最新世界事务新闻
+{news_report}
+
+## 公司基本面报告
+{fundamentals_report}
+
+## 交易员计划
+{trader_plan}"""
+
 
     # Create the agent
     agent = ReActAgent(

@@ -3,7 +3,7 @@
 
 import asyncio
 import os
-
+from datetime import datetime
 from agentscope.model import OpenAIChatModel
 
 from tradingscope.agents.analysts.market_analyst import create_market_analyst_agent
@@ -16,8 +16,7 @@ async def main():
         stream=True,
     )
 
-    #trade_date = datetime.now().strftime("%Y-%m-%d")
-    trade_date = "2025-10-14"
+    trade_date = datetime.now().strftime("%Y-%m-%d")
 
     # Create AgentContext
     from tradingscope.agents.utils.context import AgentContext

@@ -32,11 +32,12 @@ def create_conservative_debator_agent(
     """
     # Extract values from context
     company_of_interest = context.company_of_interest
-    market_research_report = context.market_report if hasattr(context, 'market_report') else ""
-    sentiment_report = context.sentiment_report if hasattr(context, 'sentiment_report') else ""
-    news_report = context.news_report if hasattr(context, 'news_report') else ""
-    fundamentals_report = context.fundamentals_report if hasattr(context, 'fundamentals_report') else ""
-    trader_plan = context.trader_investment_plan if hasattr(context, 'trader_investment_plan') else ""
+    market_research_report = context.market_report
+    sentiment_report = context.sentiment_report
+    news_report = context.news_report
+    fundamentals_report = context.fundamentals_report
+    trader_plan = context.trader_investment_plan
+    investment_plan = context.investment_plan
     formatter = OpenAIMultiAgentFormatter()
     toolkit = Toolkit()
 
@@ -46,15 +47,25 @@ def create_conservative_debator_agent(
 通过质疑他们的乐观态度并强调他们可能忽视的潜在下行风险来参与讨论。解决他们的每个反驳点，展示为什么保守立场最终是公司资产最安全的道路。专注于辩论和批评他们的论点，证明低风险策略相对于他们方法的优势。请用中文以对话方式输出，就像您在说话一样，不使用任何特殊格式。
 
 ## 可用资源：
-
 公司名称：{company_of_interest}
-市场研究报告：{market_research_report}
-社交媒体情绪报告：{sentiment_report}
-最新世界事务新闻：{news_report}
-公司基本面报告：{fundamentals_report}
-交易员计划：{trader_plan}
 
-"""
+## 研究经理决策
+{investment_plan}
+
+## 市场研究报告
+{market_research_report}
+
+## 社交媒体情绪报告
+{sentiment_report}
+
+## 最新世界事务新闻
+{news_report}
+
+## 公司基本面报告
+{fundamentals_report}
+
+## 交易员计划
+{trader_plan}"""
 
     # Create the agent
     agent = ReActAgent(
