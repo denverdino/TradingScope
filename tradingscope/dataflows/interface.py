@@ -107,7 +107,6 @@ VENDOR_METHODS = {
         "openai": get_stock_news_openai,
     },
     "get_global_news": {
-        "google": get_google_news,
         "openai": get_global_news_openai,
     },
     "get_insider_sentiment": {
