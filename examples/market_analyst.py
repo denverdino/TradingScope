@@ -4,6 +4,7 @@
 import asyncio
 import os
 from datetime import datetime
+
 from agentscope.model import OpenAIChatModel
 
 from tradingscope.agents.analysts.market_analyst import create_market_analyst_agent

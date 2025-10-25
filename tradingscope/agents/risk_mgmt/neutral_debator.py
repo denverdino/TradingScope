@@ -34,9 +34,9 @@ def create_neutral_debator_agent(
     company_of_interest = context.company_of_interest
     market_research_report = context.market_report
     sentiment_report = context.sentiment_report
-    news_report = context.news_report 
-    fundamentals_report = context.fundamentals_report 
-    trader_plan = context.trader_investment_plan 
+    news_report = context.news_report
+    fundamentals_report = context.fundamentals_report
+    trader_plan = context.trader_investment_plan
     investment_plan = context.investment_plan
     formatter = OpenAIMultiAgentFormatter()
     toolkit = Toolkit()
