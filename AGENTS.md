@@ -6,7 +6,6 @@ This project aims to create a Multi-Agents trading framework using [AgentScope](
 
 References:
 
-* https://github.com/hsliuping/tradingscope-CN
 * https://github.com/TauricResearch/TradingAgents
 
 
