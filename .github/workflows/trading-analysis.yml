@@ -2,10 +2,10 @@ name: Trading Analysis
 
 on:
   schedule:
-    # 9 AM Beijing time (1 AM UTC)
-    - cron: '0 1 * * *'
-    # 7 PM Beijing time (11 AM UTC)
-    - cron: '0 11 * * *'
+    # 8 AM Beijing time (0 AM UTC)
+    - cron: '0 0 * * *'
+    # 6 PM Beijing time (10 AM UTC)
+    - cron: '0 10 * * *'
   workflow_dispatch: # Allows manual triggering
 
 jobs:
@@ -26,9 +26,20 @@ jobs:
           pip install -e .
 
       - name: Run stock analysis
-        run: python -m tradingscope.main NVDA
+        run: |
+          python -m tradingscope.main MSFT --email_to ${{ secrets.EMAIL_TO }}
+          python -m tradingscope.main AAPL --email_to ${{ secrets.EMAIL_TO }}
+          python -m tradingscope.main TSLA --email_to ${{ secrets.EMAIL_TO }}
+          python -m tradingscope.main AMZN --email_to ${{ secrets.EMAIL_TO }}
+          python -m tradingscope.main META --email_to ${{ secrets.EMAIL_TO }}
+          python -m tradingscope.main NVDA --email_to ${{ secrets.EMAIL_TO }}
+          python -m tradingscope.main GOOGL --email_to ${{ secrets.EMAIL_TO }}
+          python -m tradingscope.main BABA --email_to ${{ secrets.EMAIL_TO }}
+          
         env:
           DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_BASE_URL: https://dashscope.aliyuncs.com/compatible-mode/v1
           ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}

@@ -17,6 +17,7 @@ toml>=0.10.2
 cachetools>=5.3.2
 tenacity>=8.2.3
 pytdx>=1.8.6
+markdown>=3.4.0
 
 [dev]
 pytest>=7.0

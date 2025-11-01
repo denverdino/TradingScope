@@ -3,3 +3,4 @@ __pycache__
 logs/
 tradingscope/dataflows/data_cache/
 .coverage
+/*.html
