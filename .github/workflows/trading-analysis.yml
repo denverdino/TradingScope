@@ -35,7 +35,7 @@ jobs:
           python -m tradingscope.main NVDA --email_to ${{ secrets.EMAIL_TO }}
           python -m tradingscope.main GOOGL --email_to ${{ secrets.EMAIL_TO }}
           python -m tradingscope.main BABA --email_to ${{ secrets.EMAIL_TO }}
-          
+          python -m tradingscope.main TSM --email_to ${{ secrets.EMAIL_TO }}
         env:
           DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
