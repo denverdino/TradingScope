@@ -2,7 +2,7 @@
 """Test script for the Bull Researcher Agent."""
 
 import asyncio
-import datetime
+from datetime import datetime
 import os
 
 from agentscope.model import OpenAIChatModel
@@ -44,8 +44,7 @@ async def main():
     print("🐂 Bull Researcher Agent created successfully!")
     print(f"Agent name: {agent.name}")
 
-    # Note: We're not actually running the agent here to avoid API calls during testing
-    # In a real test, you would run: await agent(None)
+    await agent(None)
 
 
 if __name__ == "__main__":

@@ -40,7 +40,7 @@ from .utils.context import AgentContext
 def get_content(result: Msg | Exception) -> str:
     """从消息或异常中提取内容。"""
     if isinstance(result, Msg):
-        return result.content
+        return result.content[0].get("text", "")
     return str(result)
 
 async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:

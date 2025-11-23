@@ -9,7 +9,6 @@ from agentscope.model import OpenAIChatModel
 
 from tradingscope.agents.researchers.bear_researcher import create_bear_researcher_agent
 
-
 async def main():
     # Initialize the model (using a mock for testing)
     model = OpenAIChatModel(
@@ -44,9 +43,7 @@ async def main():
     print("🐻 Bear Researcher Agent created successfully!")
     print(f"Agent name: {agent.name}")
 
-    # Note: We're not actually running the agent here to avoid API calls during testing
-    # In a real test, you would run: await agent(None)
-
+    await agent(None)
 
 if __name__ == "__main__":
     asyncio.run(main())
