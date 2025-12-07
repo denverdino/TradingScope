@@ -30,14 +30,7 @@ def create_aggressive_debator_agent(
     Returns:
         A configured ReActAgent instance
     """
-    # Extract values from context
     company_of_interest = context.company_of_interest
-    market_research_report = context.market_report
-    sentiment_report = context.sentiment_report
-    news_report = context.news_report
-    fundamentals_report = context.fundamentals_report
-    trader_plan = context.trader_investment_plan
-    investment_plan = context.investment_plan
 
     prompt = f"""作为激进风险分析师，您的职责是积极倡导高回报、高风险的投资机会，强调大胆策略和竞争优势。在评估交易员的决策或计划时，请重点关注潜在的上涨空间、增长潜力和创新收益——即使这些伴随着较高的风险。使用提供的市场数据和情绪分析来加强您的论点，并挑战对立观点。具体来说，请直接回应保守和中性分析师提出的每个观点，用数据驱动的反驳和有说服力的推理进行反击。突出他们的谨慎态度可能错过的关键机会，或者他们的假设可能过于保守的地方。
 
@@ -48,23 +41,10 @@ def create_aggressive_debator_agent(
 ## 可用资源：
 公司名称：{company_of_interest}
 
-## 研究经理决策
-{investment_plan}
-
-## 市场研究报告
-{market_research_report}
-
-## 社交媒体情绪报告
-{sentiment_report}
-
-## 最新世界事务新闻
-{news_report}
-
-## 公司基本面报告
-{fundamentals_report}
+{context.generate_all_reports_md()}
 
 ## 交易员计划
-{trader_plan}
+{context.trader_investment_plan}
 """
 
     formatter = OpenAIMultiAgentFormatter()

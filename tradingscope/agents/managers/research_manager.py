@@ -53,12 +53,7 @@ def create_research_manager_agent(
     Returns:
         ReActAgent: 配置好的投资决策经理代理
     """
-    # Extract values from context
     company_of_interest = context.company_of_interest
-    market_research_report = context.market_report
-    sentiment_report = context.sentiment_report
-    news_report = context.news_report
-    fundamentals_report = context.fundamentals_report
     trade_date = context.trade_date
 
     # 构建系统提示词，鼓励结构化输出
@@ -90,17 +85,8 @@ def create_research_manager_agent(
 ## 可用资源：
 公司名称：{company_of_interest}
 
-## 市场研究报告
-{market_research_report}
+{context.generate_research_reports_md()}
 
-## 社交媒体情绪报告
-{sentiment_report}
-
-## 最新世界事务新闻
-{news_report}
-
-## 公司基本面报告
-{fundamentals_report}
 """
 
     # 工具注册（如果需要）

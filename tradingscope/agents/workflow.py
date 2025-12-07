@@ -7,10 +7,14 @@ from agentscope.model import OpenAIChatModel
 
 from tradingscope.agents.managers.risk_manager import create_risk_manager_agent
 
+# Analyst imports
+from .analysts.equity_analyst import create_equity_analyst_agent
 from .analysts.fundamentals_analyst import create_fundamentals_analyst_agent
 from .analysts.market_analyst import create_market_analyst_agent
 from .analysts.news_analyst import create_news_analyst_agent
 from .analysts.social_media_analyst import create_social_media_analyst_agent
+
+# Researcher imports
 from .managers.research_manager import create_research_manager_agent
 from .researchers.bear_researcher import create_bear_researcher_agent
 from .researchers.bull_researcher import create_bull_researcher_agent
@@ -21,6 +25,8 @@ from .risk_mgmt.conservative_debator import create_conservative_debator_agent
 # Risk management imports
 from .risk_mgmt.debate_orchestrator import create_debate_orchestrator
 from .risk_mgmt.neutral_debator import create_neutral_debator_agent
+
+# Trader imports
 from .trader.trader import create_trader_agent
 
 # Import AgentContext
@@ -40,7 +46,10 @@ from .utils.context import AgentContext
 def get_content(result: Msg | Exception) -> str:
     """从消息或异常中提取内容。"""
     if isinstance(result, Msg):
-        return result.content[0].get("text", "")
+        if isinstance(result.content, str):
+            return result.content
+        else:
+            return result.content[0].get("text", "")
     return str(result)
 
 async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
@@ -56,6 +65,8 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
     market_analyst = create_market_analyst_agent(model=model, context=context)
     news_analyst = create_news_analyst_agent(model=model, context=context)
     social_media_analyst = create_social_media_analyst_agent(model=model, context=context)
+    equity_analyst = create_equity_analyst_agent(context=context)
+
 
 
     # 并发运行分析师代理并获取结果
@@ -64,6 +75,7 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
         fundamentals_analyst(None),
         news_analyst(None),
         social_media_analyst(None),
+        equity_analyst.analyze(),
         return_exceptions=True,
     )
 
@@ -72,12 +84,14 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
     fundamentals_report = get_content(analyst_results[1])
     news_report = get_content(analyst_results[2])
     sentiment_report = get_content(analyst_results[3])
+    equity_report = get_content(analyst_results[4])
 
     # 更新context中的报告内容
     context.market_report = market_research_report
     context.fundamentals_report = fundamentals_report
     context.news_report = news_report
     context.sentiment_report = sentiment_report
+    context.equity_report = equity_report
 
     # 创建研究员代理
     bear_researcher = create_bear_researcher_agent(
@@ -169,6 +183,9 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
 
 ## 基本面报告
 {fundamentals_report}
+
+## 股票估值报告
+{equity_report}
 
 ## 新闻报告
 {news_report}

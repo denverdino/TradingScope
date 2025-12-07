@@ -34,14 +34,9 @@ def create_trader_agent(
     返回:
         配置好的ReActAgent实例
     """
-    # Extract values from context
     company_of_interest = context.company_of_interest
-    investment_plan = context.investment_plan
-    market_research_report = context.market_report
-    sentiment_report = context.sentiment_report
-    news_report = context.news_report
-    fundamentals_report = context.fundamentals_report
     trade_date = context.trade_date
+
     # 使用统一的股票类型检测
     market_info = StockUtils.get_market_info(company_of_interest)
     company_name = get_company_name(company_of_interest, market_info)
@@ -98,20 +93,7 @@ def create_trader_agent(
 
 请不要忘记利用过去决策的经验教训来避免重复错误。
 
-## 研究经理决策
-{investment_plan}
-
-## 市场研究报告
-{market_research_report}
-
-## 社交媒体情绪报告
-{sentiment_report}
-
-## 最新世界事务新闻
-{news_report}
-
-## 公司基本面报告
-{fundamentals_report}
+{context.generate_all_reports_md()}
 """
 
     formatter = OpenAIChatFormatter()

@@ -24,14 +24,8 @@ def create_risk_manager_agent(
     name: str = "RiskManager",
 ) -> ReActAgent:
     """Create Risk Manager Agent that evaluates risk analysis debates and makes final decisions."""
-    # Extract values from context
     company_of_interest = context.company_of_interest
-    market_research_report = context.market_report
-    sentiment_report = context.sentiment_report
-    news_report = context.news_report
-    fundamentals_report = context.fundamentals_report
     trader_plan = context.trader_investment_plan
-    investment_plan = context.investment_plan
 
     system_message = f"""作为风险管理委员会主席和辩论主持人，您的目标是评估三位风险分析师——激进、中性和安全/保守——之间的辩论，并确定交易员的最佳行动方案。您的决策必须产生明确的建议：买入、卖出或持有。只有在有具体论据强烈支持时才选择持有，而不是在所有方面都似乎有效时作为后备选择。力求清晰和果断。
 
@@ -51,20 +45,7 @@ def create_risk_manager_agent(
 ## 可用资源：
 公司名称：{company_of_interest}
 
-## 研究经理决策
-{investment_plan}
-
-## 市场研究报告
-{market_research_report}
-
-## 社交媒体情绪报告
-{sentiment_report}
-
-## 最新世界事务新闻
-{news_report}
-
-## 公司基本面报告
-{fundamentals_report}
+{context.generate_all_reports_md()}
 
 ## 交易员计划
 {trader_plan}

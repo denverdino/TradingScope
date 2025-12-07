@@ -74,7 +74,7 @@ def create_social_media_analyst_agent(
 - 计价货币：{market_info['currency_name']}（{market_info['currency_symbol']}）
 
 **主要职责包括：**
-1. 分析中国主要财经平台的投资者情绪（雪球、东方财富股吧、同花顺等）
+1. 分析主要财经平台的投资者情绪
 2. 监控财经媒体/自媒体的报道与倾向
 3. 识别影响股价的热点事件与市场传言
 4. 评估散户与机构观点差异及其影响

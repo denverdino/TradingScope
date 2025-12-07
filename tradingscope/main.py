@@ -1,11 +1,12 @@
 import argparse
 import asyncio
 import os
-from datetime import datetime
-import markdown
 import smtplib
+from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+
+import markdown
 
 # 导入日志模块
 from agentscope import logger
@@ -61,10 +62,10 @@ def main():
 
     trade_date = datetime.now().strftime("%Y-%m-%d")
     final_report = asyncio.run(analyze(model, ticker, trade_date))
-    
+
     # Generate HTML output from Markdown with table extension
     html_output = markdown.markdown(final_report, extensions=['tables'])
-    
+
     # Add CSS styling for tables with grid lines
     html_with_style = f"""
 <!DOCTYPE html>
@@ -105,21 +106,21 @@ def main():
 </body>
 </html>
 """
-    
+
     print("******************************* Final Report *******************************")
     print(final_report)
-    
+
     # Save HTML output to a file
     html_filename = f"{ticker}_report_{trade_date}.html"
     with open(html_filename, "w", encoding="utf-8") as f:
         f.write(html_with_style)
     print(f"\nHTML report saved to: {html_filename}")
-    
+
     # Send email if email address is provided
     if args.email_to:
         sender_email = os.getenv("EMAIL_FROM")
         sender_password = os.getenv("EMAIL_PASSWORD")
-        
+
         if not sender_email or not sender_password:
             print("Error: EMAIL_FROM and EMAIL_PASSWORD environment variables must be set to send email.")
         else:

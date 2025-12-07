@@ -9,6 +9,7 @@ from agentscope.model import OpenAIChatModel
 
 from tradingscope.agents.researchers.bear_researcher import create_bear_researcher_agent
 
+
 async def main():
     # Initialize the model (using a mock for testing)
     model = OpenAIChatModel(

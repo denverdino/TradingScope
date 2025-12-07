@@ -18,10 +18,11 @@ The trading system consists of five main agent modules:
 
 The analyst agents perform specialized data analysis on stocks:
 
-- **Fundamentals Analyst** (`analysts/fundamentals_analyst.py`) - Analyzes company financial statements, balance sheets, cash flows, and income statements
 - **Market Analyst** (`analysts/market_analyst.py`) - Performs technical analysis using market data and indicators
+- **Fundamentals Analyst** (`analysts/fundamentals_analyst.py`) - Analyzes company financial statements, balance sheets, cash flows, and income statements
 - **News Analyst** (`analysts/news_analyst.py`) - Analyzes recent news related to the company and market
 - **Social Media Analyst** (`analysts/social_media_analyst.py`) - Analyzes social media sentiment and public perception
+- **Equity Analyst** (`analysts/equity_analyst.py`) - Performs comprehensive equity valuation analysis using various models
 
 ### 2. Researchers
 
@@ -30,7 +31,6 @@ The researcher agents debate market outlooks:
 - **Bull Researcher** (`researchers/bull_researcher.py`) - Advocates for bullish market positions
 - **Bear Researcher** (`researchers/bear_researcher.py`) - Advocates for bearish market positions
 - **Research Debate Orchestrator** (`researchers/debate_orchestrator.py`) - Coordinates debates between bull and bear researchers
-- **Research Manager** (`managers/research_manager.py`) - Synthesizes the debate results into investment recommendations
 
 ### 3. Risk Management
 
@@ -42,7 +42,14 @@ The risk management system implements a multi-agent debate pattern where differe
 - **Risk Manager** (`managers/risk_manager.py`) - Evaluates the debate and makes the final risk assessment
 - **Risk Debate Orchestrator** (`risk_mgmt/debate_orchestrator.py`) - Coordinates the risk management debate
 
-### 4. Trader
+### 4. Managers
+
+The manager agents coordinate different phases and synthesize results:
+
+- **Research Manager** (`managers/research_manager.py`) - Synthesizes the research debate results into investment recommendations
+- **Risk Manager** (`managers/risk_manager.py`) - Evaluates the risk debate and makes the final risk-adjusted trading decision
+
+### 5. Trader
 
 The trader agent makes final trading decisions:
 
@@ -58,12 +65,13 @@ The system follows a comprehensive multi-stage workflow defined in `workflow.py`
 
 ## Workflow Stages
 
-1. **Analysis Phase**: All analyst agents run concurrently to gather comprehensive data about the stock
-2. **Research Debate Phase**: Bull and bear researchers debate based on analyst reports to form market outlooks
+1. **Analysis Phase**: All analyst agents (Market, Fundamentals, News, Social Media, Equity) run concurrently to gather comprehensive data about the stock
+2. **Research Debate Phase**: Bull and bear researchers debate based on analyst reports, coordinated by Research Debate Orchestrator
 3. **Research Management**: Research manager synthesizes the debate into investment recommendations
-4. **Trading Decision**: Trader makes final trading decisions based on research findings
-5. **Risk Assessment**: Risk management team debates and evaluates the trading decision from multiple risk perspectives
-6. **Final Report**: All findings are compiled into a comprehensive report
+4. **Trading Decision**: Trader makes trading decisions based on all analysis and research findings
+5. **Risk Assessment Debate**: Risk management team (Aggressive, Conservative, Neutral debators) debates the trading decision, coordinated by Risk Debate Orchestrator
+6. **Risk Management**: Risk manager evaluates the debate and makes the final risk-adjusted trading decision
+7. **Final Report**: All findings are compiled into a comprehensive report
 
 ## Usage
 

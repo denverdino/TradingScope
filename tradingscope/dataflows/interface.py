@@ -25,6 +25,7 @@ from .local import (
     get_YFin_data,
 )
 from .openai import get_fundamentals_openai, get_global_news_openai, get_stock_news_openai
+from .perplexity import get_fundamentals_perplexity, get_global_news_perplexity, get_stock_news_perplexity
 from .y_finance import get_balance_sheet as get_yfinance_balance_sheet
 from .y_finance import get_cashflow as get_yfinance_cashflow
 from .y_finance import get_income_statement as get_yfinance_income_statement
@@ -87,7 +88,8 @@ VENDOR_METHODS = {
     # fundamental_data
     "get_fundamentals": {
         "alpha_vantage": get_alpha_vantage_fundamentals,
-        "openai": get_fundamentals_openai,
+        #"openai": get_fundamentals_openai,
+        "perplexity": get_fundamentals_perplexity,
     },
     "get_balance_sheet": {
         "alpha_vantage": get_alpha_vantage_balance_sheet,
@@ -104,10 +106,12 @@ VENDOR_METHODS = {
     # news_data
     "get_news": {
         "alpha_vantage": get_alpha_vantage_news,
-        "openai": get_stock_news_openai,
+        "perplexity": get_stock_news_perplexity,
+        #"openai": get_stock_news_openai,
     },
     "get_global_news": {
-        "openai": get_global_news_openai,
+        "perplexity": get_global_news_perplexity,
+        #"openai": get_global_news_openai,
     },
     "get_insider_sentiment": {
         "local": get_finnhub_company_insider_sentiment

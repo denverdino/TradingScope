@@ -35,14 +35,8 @@ def create_bull_researcher_agent(
     Returns:
         ReActAgent: 配置好的看涨研究员代理
     """
-    # Extract values from context
     company_of_interest = context.company_of_interest
-    market_research_report = context.market_report
-    sentiment_report = context.sentiment_report
-    news_report = context.news_report
-    fundamentals_report = context.fundamentals_report
     trade_date = context.trade_date
-
     company_name = company_of_interest
 
     # 获取市场信息
@@ -80,17 +74,7 @@ def create_bull_researcher_agent(
 
 **可用资源：**
 
-## 市场研究报告
-{market_research_report}
-
-## 社交媒体情绪报告
-{sentiment_report}
-
-## 最新世界事务新闻
-{news_report}
-
-## 公司基本面报告
-{fundamentals_report}
+{context.generate_research_reports_md()}
 
 """
 
