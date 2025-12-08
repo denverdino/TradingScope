@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 from .alpha_vantage_common import _make_api_request, format_datetime_for_api
 
 
@@ -18,10 +20,18 @@ def get_news(ticker, start_date, end_date) -> dict[str, str] | str:
     params = {
         "tickers": ticker,
         "time_from": format_datetime_for_api(start_date),
-        "time_to": format_datetime_for_api(end_date),
         "sort": "LATEST",
         "limit": "50",
     }
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    
+    if start_date == today:
+        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        params["time_from"] = yesterday
+
+    if end_date != today:
+        params["time_to"] = format_datetime_for_api(end_date)
 
     return _make_api_request("NEWS_SENTIMENT", params)
 
