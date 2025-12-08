@@ -2,6 +2,7 @@ import os
 
 from openai import OpenAI
 
+perplexity_mode = "sonar" #"sonar-pro"
 
 def get_stock_news_perplexity(query, start_date, end_date):
     client = OpenAI(
@@ -10,7 +11,7 @@ def get_stock_news_perplexity(query, start_date, end_date):
     )
 
     response = client.chat.completions.create(
-        model="sonar-pro",
+        model=perplexity_mode,
         messages=[
             {
                 "role": "user",
@@ -29,7 +30,7 @@ def get_global_news_perplexity(curr_date, look_back_days=7, limit=5):
     )
 
     response = client.chat.completions.create(
-        model="sonar-pro",
+        model=perplexity_mode,
         messages=[
             {
                 "role": "user",
@@ -47,7 +48,7 @@ def get_fundamentals_perplexity(ticker, curr_date):
     )
 
     response = client.chat.completions.create(
-        model="sonar-pro",
+        model=perplexity_mode,
         messages=[
             {
                 "role": "user",

@@ -19,7 +19,6 @@ def get_news(ticker, start_date, end_date) -> dict[str, str] | str:
 
     params = {
         "tickers": ticker,
-        "time_from": format_datetime_for_api(start_date),
         "sort": "LATEST",
         "limit": "50",
     }
@@ -28,7 +27,9 @@ def get_news(ticker, start_date, end_date) -> dict[str, str] | str:
     
     if start_date == today:
         yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
-        params["time_from"] = yesterday
+        params["time_from"] = format_datetime_for_api(yesterday)
+    else:
+        params["time_from"] = format_datetime_for_api(start_date)
 
     if end_date != today:
         params["time_to"] = format_datetime_for_api(end_date)
