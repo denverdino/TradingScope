@@ -11,6 +11,7 @@ help:
 	@echo "Usage:"
 	@echo "  make install     - Install dependencies"
 	@echo "  make lint        - Run linting with ruff"
+	@echo "  make lint-fix    - Run linting and resolve violations with ruff"
 	@echo "  make format      - Format code with black"
 	@echo "  make format-check - Check formatting with black"
 	@echo "  make imports     - Order imports with ruff"

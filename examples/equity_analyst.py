@@ -8,6 +8,7 @@ from datetime import datetime
 from agentscope.model import OpenAIChatModel
 
 from tradingscope.agents.analysts.equity_analyst import create_equity_analyst_agent
+from tradingscope.agents.workflow import get_content, get_markdown
 
 
 async def main():
@@ -23,8 +24,7 @@ async def main():
     result = await agent.analyze()
 
     print("📈 Equity Analyst Report:")
-    print(result.content)
-
+    print(get_markdown(get_content(result), 2))
 
 if __name__ == "__main__":
     asyncio.run(main())

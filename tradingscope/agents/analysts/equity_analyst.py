@@ -211,6 +211,7 @@ class EquityAnalyst(QwenDeepResearchAgent):
 
    - 表格下方用 2–3 条 bullet，总结对比中最重要的异同点和投资启示。
 
+
 ---
 
 ## 三、回答策略

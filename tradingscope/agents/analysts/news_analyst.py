@@ -13,6 +13,7 @@ from agentscope.tool import Toolkit
 
 from tradingscope.agents.utils.agent_utils import get_company_name
 from tradingscope.agents.utils.context import AgentContext
+from tradingscope.agents.utils.core_stock_tools import get_stock_data
 from tradingscope.agents.utils.news_data_tools import get_global_news, get_news
 
 # 导入统一新闻工具
@@ -55,6 +56,7 @@ def create_news_analyst_agent(
     toolkit = Toolkit()
 
     # 创建并注册统一新闻工具
+    toolkit.register_tool_function(get_stock_data)
     toolkit.register_tool_function(get_news)
     toolkit.register_tool_function(get_global_news)
 
@@ -62,7 +64,7 @@ def create_news_analyst_agent(
     current_date = trade_date or datetime.now().strftime("%Y-%m-%d")
 
     # 获取工具名称
-    tool_names = "get_news, get_global_news"
+    tool_names = "get_stock_data, get_news, get_global_news"
 
     # 构建完整的系统提示词
     system_prompt = f"""

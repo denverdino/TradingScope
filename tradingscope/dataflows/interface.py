@@ -105,6 +105,7 @@ VENDOR_METHODS = {
     },
     # news_data
     "get_news": {
+        "google": get_google_news,
         "alpha_vantage": get_alpha_vantage_news,
         "perplexity": get_stock_news_perplexity,
         #"openai": get_stock_news_openai,

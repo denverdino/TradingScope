@@ -14,6 +14,7 @@ from agentscope.tool import Toolkit
 
 from tradingscope.agents.utils.agent_utils import get_company_name
 from tradingscope.agents.utils.context import AgentContext
+from tradingscope.agents.utils.core_stock_tools import get_stock_data
 from tradingscope.agents.utils.news_data_tools import get_news
 from tradingscope.agents.utils.stock_utils import StockUtils
 
@@ -50,12 +51,13 @@ def create_social_media_analyst_agent(
     toolkit = Toolkit()
 
     # 注册社交媒体相关工具（优先中国社媒，备选 Reddit）
+    toolkit.register_tool_function(get_stock_data)
     toolkit.register_tool_function(get_news)
 
     # 当前日期
     current_date = trade_date or datetime.now().strftime("%Y-%m-%d")
 
-    tool_names = "get_news"
+    tool_names = "get_stock_data, get_news"
 
     system_prompt = f"""
 您是一位专业的中国市场社交媒体与投资情绪分析师，与其他分析师协作，负责分析投资者对特定股票的讨论与情绪变化，并评估其对股价的潜在影响。

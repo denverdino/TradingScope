@@ -52,6 +52,18 @@ def get_content(result: Msg | Exception) -> str:
             return result.content[0].get("text", "")
     return str(result)
 
+def get_markdown(content: str, header_level: int) -> str:
+    # Split the content into lines
+    lines = content.split('\n')
+    markdown_lines = []
+    for line in lines:
+        if line.startswith('#'):
+            # If the line already starts with a header, keep it as is
+            markdown_lines.append(f"{'#' * header_level}{line}")
+        else:
+            markdown_lines.append(line)
+    return '\n'.join(markdown_lines)
+
 async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
     """运行并发智能体并执行多轮辩论，返回综合报告。"""
     # 创建AgentContext
@@ -84,7 +96,7 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
     fundamentals_report = get_content(analyst_results[1])
     news_report = get_content(analyst_results[2])
     sentiment_report = get_content(analyst_results[3])
-    equity_report = get_content(analyst_results[4])
+    equity_report = get_markdown(get_content(analyst_results[4]),2)
 
     # 更新context中的报告内容
     context.market_report = market_research_report
