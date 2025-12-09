@@ -24,7 +24,7 @@ def get_news(ticker, start_date, end_date) -> dict[str, str] | str:
     }
 
     today = datetime.now().strftime("%Y-%m-%d")
-    
+
     if start_date == today:
         yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
         params["time_from"] = format_datetime_for_api(yesterday)

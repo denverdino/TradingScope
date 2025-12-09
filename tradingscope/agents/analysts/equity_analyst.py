@@ -8,6 +8,7 @@ from agentscope import logger
 from agentscope.agent import ReActAgent
 from agentscope.message import Msg
 
+from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.qwen_deep_research_agent import QwenDeepResearchAgent
 
@@ -42,7 +43,9 @@ class EquityAnalyst(QwenDeepResearchAgent):
     async def analyze(self) -> Msg:
         user_msg = Msg(
             name="User",
-            content="""你是我的 AI 金融研究分析师。
+            content=f"""{COMPLIANCE_PROMPT}
+
+你是一个 AI 金融研究分析师。
 
 【角色设定】
 你的定位 = Bloomberg terminal + McKinsey consultant 的混合体。
@@ -259,7 +262,4 @@ def create_equity_analyst_agent(
     )
 
     return agent
-
-
-
 

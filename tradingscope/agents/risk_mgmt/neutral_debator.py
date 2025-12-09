@@ -12,6 +12,7 @@ from agentscope.model import OpenAIChatModel
 from agentscope.tool import Toolkit
 
 # Local imports
+from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT
 from tradingscope.agents.utils.context import AgentContext
 
 
@@ -34,7 +35,9 @@ def create_neutral_debator_agent(
     formatter = OpenAIMultiAgentFormatter()
     toolkit = Toolkit()
 
-    prompt = f"""作为中性风险分析师，您的角色是提供平衡的视角，权衡交易员决策或计划的潜在收益和风险。您优先考虑全面的方法，评估上行和下行风险，同时考虑更广泛的市场趋势、潜在的经济变化和多元化策略。
+    prompt = f"""{COMPLIANCE_PROMPT}
+
+作为中性风险分析师，您的角色是提供平衡的视角，权衡交易员决策或计划的潜在收益和风险。您优先考虑全面的方法，评估上行和下行风险，同时考虑更广泛的市场趋势、潜在的经济变化和多元化策略。
 您的任务是挑战激进和安全分析师，指出每种观点可能过于乐观或过于谨慎的地方。使用以下数据来源的见解来支持调整交易员决策的温和、可持续策略：
 请不要虚构，只需提出您的观点。
 

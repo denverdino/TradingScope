@@ -9,7 +9,7 @@ from agentscope.memory import InMemoryMemory
 from agentscope.model import OpenAIChatModel
 from agentscope.tool import Toolkit
 
-from tradingscope.agents.utils.agent_utils import get_company_name
+from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT, get_company_name
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.fundamental_data_tools import (
     get_balance_sheet,
@@ -58,6 +58,8 @@ def create_fundamentals_analyst_agent(
 
     # 与原实现保持一致的强提示（中文 & 禁止英文买卖建议）
     system_prompt = f"""
+{COMPLIANCE_PROMPT}
+
 你是一名专业的股票基本面分析师，依据**工具返回的真实股票数据**进行分析与计算。
 
 分析对象：

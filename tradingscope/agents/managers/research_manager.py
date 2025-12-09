@@ -13,6 +13,7 @@ from agentscope.tool import Toolkit
 from pydantic import BaseModel, Field
 
 # Import unified logging system
+from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT
 from tradingscope.agents.utils.context import AgentContext
 
 
@@ -57,7 +58,9 @@ def create_research_manager_agent(
     trade_date = context.trade_date
 
     # 构建系统提示词，鼓励结构化输出
-    system_message = f"""作为投资组合经理和辩论主持人，您的职责是批判性地评估这轮辩论并做出明确决策：支持看跌分析师、看涨分析师，或者仅在基于所提出论点有强有力理由时选择持有。
+    system_message = f"""{COMPLIANCE_PROMPT}
+
+作为投资组合经理和辩论主持人，您的职责是批判性地评估这轮辩论并做出明确决策：支持看跌分析师、看涨分析师，或者仅在基于所提出论点有强有力理由时选择持有。
 简洁地总结双方的关键观点，重点关注最有说服力的证据或推理。您的建议——买入、卖出或持有——必须明确且可操作。
 避免仅仅因为双方都有有效观点就默认选择持有；要基于辩论中最强有力的论点做出承诺。
 

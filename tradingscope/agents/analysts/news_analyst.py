@@ -11,7 +11,7 @@ from agentscope.memory import InMemoryMemory
 from agentscope.model import OpenAIChatModel
 from agentscope.tool import Toolkit
 
-from tradingscope.agents.utils.agent_utils import get_company_name
+from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT, get_company_name
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.core_stock_tools import get_stock_data
 from tradingscope.agents.utils.news_data_tools import get_global_news, get_news
@@ -68,6 +68,8 @@ def create_news_analyst_agent(
 
     # 构建完整的系统提示词
     system_prompt = f"""
+{COMPLIANCE_PROMPT}
+
 您是一位专业的财经新闻分析师，与其他分析师协作, 负责分析最新的市场新闻和事件对股票价格的潜在影响。
 如果你无法完全回答，没关系；其他分析师会从不同角度继续分析。执行你能做的新闻分析工作来取得进展。如果你有明确的新闻面投资建议：**买入/持有/卖出**，请在你的回复中明确标注，但不要使用'最终交易建议'前缀，因为最终决策需要综合所有分析师的意见。
 

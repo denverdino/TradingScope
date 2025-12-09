@@ -2,6 +2,8 @@
 
 from agentscope import logger
 
+COMPLIANCE_PROMPT = "你必须严格遵守内容安全与合规要求，不得生成任何涉黄、涉暴、涉政、违法、仇恨、歧视等内容。"
+
 ticker_to_company = {
     "AAPL": "Apple",
     "MSFT": "Microsoft",

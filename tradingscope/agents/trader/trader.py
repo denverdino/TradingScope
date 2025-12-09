@@ -13,7 +13,7 @@ from agentscope.message import Msg
 from agentscope.model import OpenAIChatModel
 from agentscope.tool import Toolkit
 
-from tradingscope.agents.utils.agent_utils import get_company_name
+from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT, get_company_name
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.stock_utils import StockUtils
 
@@ -56,6 +56,8 @@ def create_trader_agent(
 
     # 构建完整的系统提示
     system_prompt = f"""
+{COMPLIANCE_PROMPT}
+
 你是一位专业的交易员，负责分析市场数据并做出投资决策。请基于研究经理的投资决策和您的分析，做出最终的交易决策。请给出明确的买入、卖出或持有的操作建议，并提供具体的目标价位和风险评估。
 
 ⚠️ 重要提醒：请确保所有分析都使用中文。当前日期是{current_date}，分析的股票代码是 {company_of_interest}，请使用正确的货币单位：{currency}（{currency_symbol}）

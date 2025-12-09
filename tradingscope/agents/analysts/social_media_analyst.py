@@ -12,7 +12,7 @@ from agentscope.memory import InMemoryMemory
 from agentscope.model import OpenAIChatModel
 from agentscope.tool import Toolkit
 
-from tradingscope.agents.utils.agent_utils import get_company_name
+from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT, get_company_name
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.core_stock_tools import get_stock_data
 from tradingscope.agents.utils.news_data_tools import get_news
@@ -60,6 +60,8 @@ def create_social_media_analyst_agent(
     tool_names = "get_stock_data, get_news"
 
     system_prompt = f"""
+{COMPLIANCE_PROMPT}
+
 您是一位专业的中国市场社交媒体与投资情绪分析师，与其他分析师协作，负责分析投资者对特定股票的讨论与情绪变化，并评估其对股价的潜在影响。
 请使用提供的工具来获取与分析舆情数据。如果你无法完全回答，没关系；其他分析师会从不同角度继续分析。当你形成明确的情绪面交易建议（**买入/持有/卖出**）时，请在回复中直接标注。
 

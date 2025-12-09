@@ -11,6 +11,7 @@ from agentscope.model import OpenAIChatModel
 from agentscope.tool import Toolkit
 
 # 导入统一日志系统
+from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT
 from tradingscope.agents.utils.context import AgentContext
 
 # 导入股票工具类
@@ -48,7 +49,9 @@ def create_bull_researcher_agent(
     current_date = trade_date or datetime.now().strftime("%Y-%m-%d")
 
     # 构建系统提示词
-    system_message = f"""你是一位看涨分析师，负责为股票 {company_name} 的投资建立强有力的论证。
+    system_message = f"""{COMPLIANCE_PROMPT}
+
+你是一位看涨分析师，负责为股票 {company_name} 的投资建立强有力的论证。
 
 ⚠️ 重要提醒：
 当前分析的是 {market_info['market_name']}，所有价格和估值请使用 {currency}（{currency_symbol}）作为单位。

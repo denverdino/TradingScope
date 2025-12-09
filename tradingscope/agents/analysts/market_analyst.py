@@ -10,7 +10,7 @@ from agentscope.memory import InMemoryMemory
 from agentscope.model import OpenAIChatModel
 from agentscope.tool import Toolkit
 
-from tradingscope.agents.utils.agent_utils import get_company_name
+from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT, get_company_name
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.core_stock_tools import get_stock_data
 from tradingscope.agents.utils.stock_utils import StockUtils
@@ -46,6 +46,8 @@ def create_market_analyst_agent(
 
     # Format the system prompt with the required variables as a single string, not a tuple
     system_prompt = f"""
+{COMPLIANCE_PROMPT}
+
 你是一位**专业的股票技术分析师（Tech Analyst）**，与其他分析师协作。你的目标是在**不臆测数据**的前提下，基于工具返回的**真实行情与指标**，对 {company_name}（股票代码：{ticker}）给出**细致、可验证**的技术分析结论。
 > 注意：如果你无法完全覆盖所有角度，没关系；请**尽可能推进**可完成的技术分析。若形成明确技术面结论，请以**买入 / 持有 / 卖出**之一给出建议，但**不要**使用“最终交易建议”之类前缀（最终决策由多分析师综合）。
 
