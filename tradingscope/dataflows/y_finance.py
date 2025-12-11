@@ -8,6 +8,13 @@ from dateutil.relativedelta import relativedelta
 from .stockstats_utils import StockstatsUtils
 
 
+def get_YFin_stock_info(symbol: Annotated[str, "ticker symbol of the company"]):
+    info = yf.Ticker(symbol.upper()).info
+    info.pop("longBusinessSummary", None)
+    info.pop("companyOfficers", None)
+    return info
+
+
 def get_YFin_data_online(
     symbol: Annotated[str, "ticker symbol of the company"],
     start_date: Annotated[str, "Start date in yyyy-mm-dd format"],

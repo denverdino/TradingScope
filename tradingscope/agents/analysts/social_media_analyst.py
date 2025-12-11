@@ -14,7 +14,7 @@ from agentscope.tool import Toolkit
 
 from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT, get_company_name
 from tradingscope.agents.utils.context import AgentContext
-from tradingscope.agents.utils.core_stock_tools import get_stock_data
+from tradingscope.agents.utils.core_stock_tools import get_stock_info
 from tradingscope.agents.utils.news_data_tools import get_news
 from tradingscope.agents.utils.stock_utils import StockUtils
 
@@ -51,13 +51,13 @@ def create_social_media_analyst_agent(
     toolkit = Toolkit()
 
     # 注册社交媒体相关工具（优先中国社媒，备选 Reddit）
-    toolkit.register_tool_function(get_stock_data)
+    toolkit.register_tool_function(get_stock_info)
     toolkit.register_tool_function(get_news)
 
     # 当前日期
     current_date = trade_date or datetime.now().strftime("%Y-%m-%d")
 
-    tool_names = "get_stock_data, get_news"
+    tool_names = "get_stock_info, get_news"
 
     system_prompt = f"""
 {COMPLIANCE_PROMPT}
@@ -91,7 +91,7 @@ def create_social_media_analyst_agent(
 - 情绪方向与强度（正/负/中性及其变化）
 - 关键意见领袖(KOL)观点与影响力
 - 热点话题与事件脉络（时间线）
-- 舆情与价格短线联动（相关性与滞后）
+- 舆情与价格短线联动（相关性与滞后），如果包含盘前/盘后价格数据，请一并分析
 - 数据来源可信度与代表性
 
 **📊 情绪价格影响分析要求（强制）：**
@@ -113,7 +113,8 @@ def create_social_media_analyst_agent(
 - 股票代码：{ticker}
 - 所属市场：{market_info['market_name']}
 - 当前日期：{current_date}。
-
+- 当前价格/收盘价格：：xxx
+- 盘前/盘后价格：xxx
 
 ### 🧭 社交媒体舆情概览（时间窗口、来源、热度概况）
 ### 🔍 平台分项分析（雪球/股吧/微博/Reddit 等，KOL & 观点要点）

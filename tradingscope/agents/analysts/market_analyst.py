@@ -12,7 +12,7 @@ from agentscope.tool import Toolkit
 
 from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT, get_company_name
 from tradingscope.agents.utils.context import AgentContext
-from tradingscope.agents.utils.core_stock_tools import get_stock_data
+from tradingscope.agents.utils.core_stock_tools import get_stock_data, get_stock_info
 from tradingscope.agents.utils.stock_utils import StockUtils
 from tradingscope.agents.utils.technical_indicators_tools import get_indicators
 
@@ -36,11 +36,12 @@ def create_market_analyst_agent(
     # 工具注册
     formatter = OpenAIChatFormatter()
     toolkit = Toolkit()
+    toolkit.register_tool_function(get_stock_info)
     toolkit.register_tool_function(get_stock_data)
     toolkit.register_tool_function(get_indicators)
 
     # Get tool names from the toolkit
-    tool_names = "get_stock_data, get_indicators"
+    tool_names = "get_stock_info, get_stock_data, get_indicators"
     # Get current date if trade_date is not provided
     current_date = trade_date or datetime.now().strftime("%Y-%m-%d")
 
@@ -48,7 +49,7 @@ def create_market_analyst_agent(
     system_prompt = f"""
 {COMPLIANCE_PROMPT}
 
-你是一位**专业的股票技术分析师（Tech Analyst）**，与其他分析师协作。你的目标是在**不臆测数据**的前提下，基于工具返回的**真实行情与指标**，对 {company_name}（股票代码：{ticker}）给出**细致、可验证**的技术分析结论。
+你是一位**专业的股票技术分析师（Tech Analyst）**，与其他分析师协作。你的目标是基于工具返回的**真实行情与指标**，对 {company_name}（股票代码：{ticker}）给出**细致、可验证**的技术分析结论。
 > 注意：如果你无法完全覆盖所有角度，没关系；请**尽可能推进**可完成的技术分析。若形成明确技术面结论，请以**买入 / 持有 / 卖出**之一给出建议，但**不要**使用“最终交易建议”之类前缀（最终决策由多分析师综合）。
 
 ——
@@ -63,10 +64,11 @@ def create_market_analyst_agent(
 {tool_names}
 
 【工具调用协议（必须遵循，否则视为失败）】
-1) **先调用 `get_stock_data`** 工具获取生成指标所需的股票数据，并获得当前日期的股票最新收盘价或现价。
-2) 随后**逐项调用 `get_indicators`**，并且**参数名必须与下表完全一致**（区分大小写）。一次仅调用一个指标；不要混合未定义的指标名。
-3) 任一调用失败：说明失败原因与影响范围，并继续完成可进行的分析部分；**不得**据此捏造结果。
-4) 对关键结论标注**来源窗口与时间粒度**（如：日线/周线）、**计算时点**与**指标取值**，便于复核。
+1) **先调用 `get_stock_info`** 工具获取股票当前信息数据，获得当前日期的股票最新收盘价或现价，已经盘前/盘后价格。
+2) **然后调用 `get_stock_data`** 工具获取生成指标所需的股票数据。
+3) 随后**逐项调用 `get_indicators`**，并且**参数名必须与下表完全一致**（区分大小写）。一次仅调用一个指标；不要混合未定义的指标名。
+4) 任一调用失败：说明失败原因与影响范围，并继续完成可进行的分析部分；**不得**据此捏造结果。
+5) 对关键结论标注**来源窗口与时间粒度**（如：日线/周线）、**计算时点**与**指标取值**，便于复核。
 
 ——
 【指标池与用途（最多择 8 个，避免冗余）】
@@ -118,6 +120,8 @@ MACD 系列：
 - 当前日期：{current_date}
 - 所属市场：{market_info['market_name']}
 - 计价货币：{market_info['currency_name']}（{market_info['currency_symbol']}）
+- 当前价格/收盘价格：：xxx
+- 盘前/盘后价格：xxx
 
 
 ### 股票价格

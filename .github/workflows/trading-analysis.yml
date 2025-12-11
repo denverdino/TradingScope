@@ -27,15 +27,10 @@ jobs:
 
       - name: Run stock analysis
         run: |
-          python -m tradingscope.main MSFT --email_to ${{ secrets.EMAIL_TO }}
-          python -m tradingscope.main AAPL --email_to ${{ secrets.EMAIL_TO }}
-          python -m tradingscope.main TSLA --email_to ${{ secrets.EMAIL_TO }}
-          python -m tradingscope.main AMZN --email_to ${{ secrets.EMAIL_TO }}
-          python -m tradingscope.main META --email_to ${{ secrets.EMAIL_TO }}
-          python -m tradingscope.main NVDA --email_to ${{ secrets.EMAIL_TO }}
-          python -m tradingscope.main GOOGL --email_to ${{ secrets.EMAIL_TO }}
-          python -m tradingscope.main BABA --email_to ${{ secrets.EMAIL_TO }}
-          python -m tradingscope.main TSM --email_to ${{ secrets.EMAIL_TO }}
+          tickers=(MSFT AAPL TSLA AMZN META NVDA GOOGL BABA TSM)
+          for ticker in "${tickers[@]}"; do
+            python -m tradingscope.main "$ticker" --email_to "${{ secrets.EMAIL_TO }}" || echo "Analyze stock $ticker failed, continuing..."
+          done
         env:
           DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

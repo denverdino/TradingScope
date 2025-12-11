@@ -13,7 +13,7 @@ from agentscope.tool import Toolkit
 
 from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT, get_company_name
 from tradingscope.agents.utils.context import AgentContext
-from tradingscope.agents.utils.core_stock_tools import get_stock_data
+from tradingscope.agents.utils.core_stock_tools import get_stock_info
 from tradingscope.agents.utils.news_data_tools import get_global_news, get_news
 
 # 导入统一新闻工具
@@ -56,7 +56,7 @@ def create_news_analyst_agent(
     toolkit = Toolkit()
 
     # 创建并注册统一新闻工具
-    toolkit.register_tool_function(get_stock_data)
+    toolkit.register_tool_function(get_stock_info)
     toolkit.register_tool_function(get_news)
     toolkit.register_tool_function(get_global_news)
 
@@ -64,7 +64,7 @@ def create_news_analyst_agent(
     current_date = trade_date or datetime.now().strftime("%Y-%m-%d")
 
     # 获取工具名称
-    tool_names = "get_stock_data, get_news, get_global_news"
+    tool_names = "get_stock_info, get_news, get_global_news"
 
     # 构建完整的系统提示词
     system_prompt = f"""
@@ -133,7 +133,7 @@ def create_news_analyst_agent(
 💵 所有价格数据使用{market_info['currency_name']}（{market_info['currency_symbol']}）表示
 ⚠️ 如果新闻数据存在滞后（超过2小时），请在分析中明确说明时效性限制
 ✅ 优先分析最新的、高相关性的新闻事件
-📊 提供新闻对股价影响的量化评估和具体价格预期
+📊 提供新闻对股价影响的量化评估和具体价格预期，如果包含盘前/盘后价格数据，请一并分析
 💰 必须包含基于新闻的价格影响分析和调整建议
 🌍 考虑{market_info['market_name']}市场特点进行分析
 
@@ -142,6 +142,8 @@ def create_news_analyst_agent(
 - 公司名称：{company_name}
 - 股票代码：{ticker}
 - 所属市场：{market_info['market_name']}
+- 当前价格/收盘价格：：xxx
+- 盘前/盘后价格：xxx
 
 ### 📊 新闻事件分析
 ### 💭 市场情绪评估
