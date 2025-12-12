@@ -121,7 +121,7 @@ def create_debate_orchestrator(
     conservative_agent,
     neutral_agent,
     risk_manager,
-    max_rounds: int = 1,
+    max_rounds: int = 3,
 ) -> RiskDebateOrchestrator:
     """Create a risk management debate orchestrator.
 

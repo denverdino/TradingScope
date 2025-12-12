@@ -124,7 +124,7 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
 
     # 创建研究辩论协调器
     research_orchestrator = create_research_debate_orchestrator(
-        bull_researcher=bull_researcher, bear_researcher=bear_researcher, research_manager=research_manager, max_rounds=1
+        bull_researcher=bull_researcher, bear_researcher=bear_researcher, research_manager=research_manager, max_rounds=2
     )
 
     # 运行研究辩论
@@ -173,7 +173,7 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
 
 
     # 创建风险辩论协调器
-    risk_orchestrator = create_debate_orchestrator(aggressive_agent, conservative_agent, neutral_agent, risk_manager, max_rounds=1)
+    risk_orchestrator = create_debate_orchestrator(aggressive_agent, conservative_agent, neutral_agent, risk_manager, max_rounds=2)
 
     # 运行风险辩论
     risk_decision = await risk_orchestrator.run_debate(
@@ -182,36 +182,16 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
 
     # Extract manager content
     final_trade_decision = get_content(risk_decision)
-    print(f"风险管理决策:\n{final_trade_decision}")
+    print(f"最终交易决策:\n{final_trade_decision}")
 
     # 更新context中的最终决策
     context.final_trade_decision = final_trade_decision
 
     # Concatenate all reports into a single string for the markdown file
     full_report = f"""# 股票分析报告: {ticker} ({trade_date})
+## 最终交易决策
+{final_trade_decision}
 
-## 市场研究报告
-{market_research_report}
-
-## 基本面报告
-{fundamentals_report}
-
-## 股票估值报告
-{equity_report}
-
-## 新闻报告
-{news_report}
-
-## 情绪分析报告
-{sentiment_report}
-
-## 投资计划
-{investment_plan}
-
-## 交易计划
-{trader_plan}
-
-## 最终交易内容
-{final_trade_decision}"""
-
+{context.generate_risk_evaluation_context_md()}
+"""
     return full_report

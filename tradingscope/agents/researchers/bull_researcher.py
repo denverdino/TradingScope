@@ -75,11 +75,9 @@ def create_bull_researcher_agent(
 请使用如下资源提供令人信服的看涨论点，反驳看跌担忧，并参与动态辩论，展示看涨立场的优势。
 请确保所有回答都使用中文。
 
-**可用资源：**
+# 可用资源：
 
-{context.generate_research_reports_md()}
-
-"""
+{context.generate_analyst_reports_md()}"""
 
     # 工具注册
     formatter = OpenAIMultiAgentFormatter()

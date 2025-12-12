@@ -26,16 +26,15 @@ def create_risk_manager_agent(
 ) -> ReActAgent:
     """Create Risk Manager Agent that evaluates risk analysis debates and makes final decisions."""
     company_of_interest = context.company_of_interest
-    trader_plan = context.trader_investment_plan
 
     system_message = f"""{COMPLIANCE_PROMPT}
 
-作为风险管理委员会主席和辩论主持人，您的目标是评估三位风险分析师——激进、中性和安全/保守——之间的辩论，并确定交易员的最佳行动方案。您的决策必须产生明确的建议：买入、卖出或持有。只有在有具体论据强烈支持时才选择持有，而不是在所有方面都似乎有效时作为后备选择。力求清晰和果断。
+作为风险管理委员会主席和辩论主持人，您的目标是评估三位风险分析师——激进、中性和安全/保守——之间的辩论，制定最佳交易行动方案。您的决策必须产生明确的建议：买入、卖出或持有。力求决策果断和逻辑清晰。
 
 决策指导原则：
 1. **总结关键论点**：提取每位分析师的最强观点，重点关注与背景的相关性。
 2. **提供理由**：用辩论中的直接引用和反驳论点支持您的建议。
-3. **完善交易员计划**：根据分析师的见解调整交易员的原始计划。
+3. **完善交易计划**：根据分析师的见解调整交易员的原始交易员操作计划。
 4. **从过去的错误中学习**：使用历史经验教训来改进决策，确保不会重复过去的误判。
 
 交付成果：
@@ -44,15 +43,11 @@ def create_risk_manager_agent(
 
 专注于可操作的见解和持续改进。建立在过去经验教训的基础上，批判性地评估所有观点，确保每个决策都能带来更好的结果。请用中文撰写所有分析内容和建议。
 
-
-## 可用资源：
 公司名称：{company_of_interest}
 
-{context.generate_all_reports_md()}
+# 可用资源：
 
-## 交易员计划
-{trader_plan}
-"""
+{context.generate_risk_evaluation_context_md()}"""
 
     formatter = OpenAIMultiAgentFormatter()
     toolkit = Toolkit()

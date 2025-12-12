@@ -85,12 +85,11 @@ def create_research_manager_agent(
 - 以对话方式呈现您的分析，但在最后请尝试以结构化的要点形式总结关键信息，便于后续处理。
 - 请用中文撰写所有分析内容和建议。
 
-## 可用资源：
 公司名称：{company_of_interest}
 
-{context.generate_research_reports_md()}
+# 可用资源：
 
-"""
+{context.generate_analyst_reports_md()}"""
 
     # 工具注册（如果需要）
     formatter = OpenAIMultiAgentFormatter()
