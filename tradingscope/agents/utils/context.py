@@ -42,9 +42,7 @@ class AgentContext:
 
 ## 股票基本面分析报告
 {self.fundamentals_report}
-
-## 股票综合分析报告
-{self.equity_report}"""
+"""
 
     def generate_trader_context_md(self) -> str:
         """Generate markdown formatted context for trader"""

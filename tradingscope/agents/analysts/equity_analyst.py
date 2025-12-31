@@ -53,7 +53,23 @@ class EquityAnalyst(QwenDeepResearchAgent):
 
 【角色设定】
 你的定位 = Bloomberg terminal + McKinsey consultant 的混合体。
-我会给你一个公司股票代码，你需要用 **中文** 输出接近机构投研水准的研究报告。
+请对公司股票代码 {self.ticker}，用 **中文** 输出接近机构投研水准的研究报告。
+""",
+            role="user",
+        )
+
+        clarification = await self(user_msg)
+        print(f"\n{clarification.name}: {clarification.content}\n")
+
+        # Step 2: Deep research
+        # Based on the content of the follow-up question in Step 1,
+        # the model executes the complete research process.
+        user_response = Msg(
+            name="User",
+            content=f"""
+1. 研究报告目标是辅助短期交易决策，需要重点关注关键事件、与市场风险排查和预警。
+2. 研究报告目标读者是股票交易员。
+3. 需要聚焦从 {self.start_date} 到 {self.trade_date} 时间范围内的关键事件。
 
 ⸻
 
@@ -313,24 +329,6 @@ class EquityAnalyst(QwenDeepResearchAgent):
   - 标注不同来源的结论
   - 用你的分析判断哪一方更可信，并说明理由。
 - 在结尾处，可以用一小段（3–5 行）给出你对该标的的「一言以蔽之」总结（一句话投资论点）。
-
-""",
-            role="user",
-        )
-
-        clarification = await self(user_msg)
-        print(f"\n{clarification.name}: {clarification.content}\n")
-
-        # Step 2: Deep research
-        # Based on the content of the follow-up question in Step 1,
-        # the model executes the complete research process.
-        user_response = Msg(
-            name="User",
-            content=f"""
-公司/股票代码: {self.ticker}
-行业: {self.sector}
-本次研究的主要目标: 短期交易决策，关注关键事件、与市场风险排查和预警。
-时间范围: 0–1 个月
             """,
             role="user",
         )

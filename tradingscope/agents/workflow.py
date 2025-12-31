@@ -77,7 +77,7 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
     market_analyst = create_market_analyst_agent(model=model, context=context)
     news_analyst = create_news_analyst_agent(model=model, context=context)
     social_media_analyst = create_social_media_analyst_agent(model=model, context=context)
-    equity_analyst = create_equity_analyst_agent(context=context)
+    #equity_analyst = create_equity_analyst_agent(context=context)
 
 
 
@@ -87,7 +87,7 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
         fundamentals_analyst(None),
         news_analyst(None),
         social_media_analyst(None),
-        equity_analyst.analyze(),
+        #equity_analyst.analyze(),
         return_exceptions=True,
     )
 
@@ -96,14 +96,14 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
     fundamentals_report = get_content(analyst_results[1])
     news_report = get_content(analyst_results[2])
     sentiment_report = get_content(analyst_results[3])
-    equity_report = get_markdown(get_content(analyst_results[4]),2)
+    #equity_report = get_markdown(get_content(analyst_results[4]),2)
 
     # 更新context中的报告内容
     context.market_report = market_research_report
     context.fundamentals_report = fundamentals_report
     context.news_report = news_report
     context.sentiment_report = sentiment_report
-    context.equity_report = equity_report
+    #context.equity_report = equity_report
 
     # 创建研究员代理
     bear_researcher = create_bear_researcher_agent(
