@@ -32,6 +32,36 @@ def get_stock_info(
     Args:
         symbol (str): Ticker symbol of the company, e.g. AAPL, TSM
     Returns:
-        str: A formatted json string containing the latest stock info for the specified ticker symbol, including currentPrice, preMarketPrice, etc.
+        str: A formatted json string containing the latest stock info for the specified ticker symbol, including currentPrice, preMarketPrice, preMarketChange, postMarketPrice, postMarketChange, volume, averageVolume, etc.
     """
     return route_to_vendor("get_stock_info", symbol)
+
+
+@agentscope_tool
+def get_sector_performance(
+    symbol: Annotated[str, "ticker symbol of the company"],
+    look_back_days: Annotated[int, "how many days to look back"] = 30,
+) -> str:
+    """
+    Retrieve sector and industry performance data relative to the stock.
+    Args:
+        symbol (str): Ticker symbol of the company, e.g. AAPL, TSM
+        look_back_days (int): How many days to look back, default is 30
+    Returns:
+        str: A formatted string containing the stock's sector, industry, and performance comparison with sector ETF.
+    """
+    return route_to_vendor("get_sector_performance", symbol, look_back_days)
+
+
+@agentscope_tool
+def get_market_indices(
+    look_back_days: Annotated[int, "how many days to look back"] = 30,
+) -> str:
+    """
+    Retrieve major market indices performance (S&P 500, NASDAQ, Dow Jones, VIX, Russell 2000).
+    Args:
+        look_back_days (int): How many days to look back, default is 30
+    Returns:
+        str: A formatted string containing performance data for major market indices.
+    """
+    return route_to_vendor("get_market_indices", look_back_days)

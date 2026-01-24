@@ -31,6 +31,8 @@ from .y_finance import get_cashflow as get_yfinance_cashflow
 from .y_finance import get_income_statement as get_yfinance_income_statement
 from .y_finance import get_insider_transactions as get_yfinance_insider_transactions
 from .y_finance import get_stock_stats_indicators_window, get_YFin_data_online, get_YFin_stock_info
+from .y_finance import get_sector_performance as get_yfinance_sector_performance
+from .y_finance import get_market_indices as get_yfinance_market_indices
 
 # Tools organized by category
 TOOLS_CATEGORIES = {
@@ -45,6 +47,13 @@ TOOLS_CATEGORIES = {
         "description": "Technical analysis indicators",
         "tools": [
             "get_indicators"
+        ]
+    },
+    "market_context": {
+        "description": "Market and sector context data",
+        "tools": [
+            "get_sector_performance",
+            "get_market_indices"
         ]
     },
     "fundamental_data": {
@@ -85,6 +94,16 @@ VENDOR_METHODS = {
     "get_stock_info": {
         "yfinance": get_YFin_stock_info,
     },
+    
+    # market_context
+    "get_sector_performance": {
+        "yfinance": get_yfinance_sector_performance,
+    },
+    
+    "get_market_indices": {
+        "yfinance": get_yfinance_market_indices,
+    },
+    
     # technical_indicators
     "get_indicators": {
         "yfinance": get_stock_stats_indicators_window,

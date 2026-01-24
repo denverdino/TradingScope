@@ -22,6 +22,7 @@ DEFAULT_CONFIG = {
         "fundamental_data": "yfinance", # Options: openai, alpha_vantage, local
         "news_data": "alpha_vantage",        # Options: perplexity, openai, alpha_vantage, google, local
         "technical_indicators": "yfinance",
+        "market_context": "yfinance",        # Options: yfinance (sector performance, market indices)
     },
     # Tool-level configuration (takes precedence over category-level)
     "tool_vendors": {

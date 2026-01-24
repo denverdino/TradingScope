@@ -415,3 +415,189 @@ def get_insider_transactions(
 
     except Exception as e:
         return f"Error retrieving insider transactions for {ticker}: {str(e)}"
+
+
+def get_sector_performance(
+    ticker: Annotated[str, "ticker symbol of the company"],
+    look_back_days: Annotated[int, "how many days to look back"] = 30,
+):
+    """Get sector and industry performance data relative to the stock.
+    
+    Returns the stock's sector ETF performance compared to the stock itself,
+    helping analyze whether the stock is outperforming or underperforming its sector.
+    """
+    import pandas as pd
+    
+    # Sector ETF mappings for US stocks
+    SECTOR_ETFS = {
+        "Technology": "XLK",
+        "Healthcare": "XLV",
+        "Financial Services": "XLF",
+        "Consumer Cyclical": "XLY",
+        "Consumer Defensive": "XLP",
+        "Industrials": "XLI",
+        "Energy": "XLE",
+        "Utilities": "XLU",
+        "Real Estate": "XLRE",
+        "Basic Materials": "XLB",
+        "Communication Services": "XLC",
+    }
+    
+    try:
+        ticker_obj = yf.Ticker(ticker.upper())
+        info = ticker_obj.info
+        
+        sector = info.get("sector", "Unknown")
+        industry = info.get("industry", "Unknown")
+        
+        # Get stock price performance
+        end_date = datetime.now()
+        start_date = end_date - relativedelta(days=look_back_days + 10)  # Extra buffer for trading days
+        
+        stock_hist = ticker_obj.history(start=start_date.strftime("%Y-%m-%d"), end=end_date.strftime("%Y-%m-%d"))
+        
+        if stock_hist.empty:
+            return f"No historical data found for symbol '{ticker}'"
+        
+        result = f"# Sector and Industry Analysis for {ticker.upper()}\n"
+        result += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        result += f"## Stock Information\n"
+        result += f"- Sector: {sector}\n"
+        result += f"- Industry: {industry}\n\n"
+        
+        # Calculate stock performance
+        stock_close = stock_hist['Close']
+        if len(stock_close) >= 2:
+            stock_return_1d = ((stock_close.iloc[-1] / stock_close.iloc[-2]) - 1) * 100
+            result += f"- Stock 1-Day Return: {stock_return_1d:.2f}%\n"
+        
+        if len(stock_close) >= 5:
+            stock_return_5d = ((stock_close.iloc[-1] / stock_close.iloc[-5]) - 1) * 100
+            result += f"- Stock 5-Day Return: {stock_return_5d:.2f}%\n"
+        
+        if len(stock_close) >= look_back_days:
+            stock_return_period = ((stock_close.iloc[-1] / stock_close.iloc[-look_back_days]) - 1) * 100
+            result += f"- Stock {look_back_days}-Day Return: {stock_return_period:.2f}%\n"
+        
+        # Get sector ETF performance if available
+        sector_etf = SECTOR_ETFS.get(sector)
+        if sector_etf:
+            try:
+                etf_obj = yf.Ticker(sector_etf)
+                etf_hist = etf_obj.history(start=start_date.strftime("%Y-%m-%d"), end=end_date.strftime("%Y-%m-%d"))
+                
+                if not etf_hist.empty:
+                    etf_close = etf_hist['Close']
+                    result += f"\n## Sector ETF Performance ({sector_etf} - {sector})\n"
+                    
+                    if len(etf_close) >= 2:
+                        etf_return_1d = ((etf_close.iloc[-1] / etf_close.iloc[-2]) - 1) * 100
+                        result += f"- Sector 1-Day Return: {etf_return_1d:.2f}%\n"
+                        if len(stock_close) >= 2:
+                            result += f"- Stock vs Sector (1D): {stock_return_1d - etf_return_1d:+.2f}%\n"
+                    
+                    if len(etf_close) >= 5:
+                        etf_return_5d = ((etf_close.iloc[-1] / etf_close.iloc[-5]) - 1) * 100
+                        result += f"- Sector 5-Day Return: {etf_return_5d:.2f}%\n"
+                        if len(stock_close) >= 5:
+                            result += f"- Stock vs Sector (5D): {stock_return_5d - etf_return_5d:+.2f}%\n"
+                    
+                    if len(etf_close) >= look_back_days:
+                        etf_return_period = ((etf_close.iloc[-1] / etf_close.iloc[-look_back_days]) - 1) * 100
+                        result += f"- Sector {look_back_days}-Day Return: {etf_return_period:.2f}%\n"
+                        if len(stock_close) >= look_back_days:
+                            result += f"- Stock vs Sector ({look_back_days}D): {stock_return_period - etf_return_period:+.2f}%\n"
+            except Exception as e:
+                result += f"\n## Sector ETF ({sector_etf}) data unavailable: {str(e)}\n"
+        else:
+            result += f"\n## Note: No sector ETF mapping available for sector '{sector}'\n"
+        
+        return result
+        
+    except Exception as e:
+        return f"Error retrieving sector performance for {ticker}: {str(e)}"
+
+
+def get_market_indices(
+    look_back_days: Annotated[int, "how many days to look back"] = 30,
+):
+    """Get major market indices performance.
+    
+    Returns performance data for major market indices (S&P 500, Nasdaq, Dow Jones)
+    and China-related indices (for Chinese ADRs like BABA, PDD, JD, etc.)
+    to provide market context for stock analysis.
+    """
+    # Major market indices (US + China-related)
+    INDICES = {
+        # US Market
+        "^GSPC": "S&P 500",
+        "^IXIC": "NASDAQ Composite",
+        "^DJI": "Dow Jones Industrial Average",
+        "^VIX": "VIX Volatility Index",
+        "^RUT": "Russell 2000 (Small Cap)",
+        # China Market (important for Chinese ADRs like BABA, PDD, JD, NTES, etc.)
+        "^HXC": "Nasdaq Golden Dragon China Index (中概股)",
+        "MCHI": "iShares MSCI China ETF (中国ETF)",
+        "^HSI": "Hang Seng Index (恒生指数)",
+    }
+    
+    try:
+        end_date = datetime.now()
+        start_date = end_date - relativedelta(days=look_back_days + 10)
+        
+        result = f"# Major Market Indices Performance\n"
+        result += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        result += f"# Look back period: {look_back_days} days\n\n"
+        
+        for symbol, name in INDICES.items():
+            try:
+                ticker_obj = yf.Ticker(symbol)
+                hist = ticker_obj.history(start=start_date.strftime("%Y-%m-%d"), end=end_date.strftime("%Y-%m-%d"))
+                
+                if hist.empty:
+                    result += f"## {name} ({symbol}): No data available\n\n"
+                    continue
+                
+                close = hist['Close']
+                current_price = close.iloc[-1]
+                
+                result += f"## {name} ({symbol})\n"
+                result += f"- Current Level: {current_price:,.2f}\n"
+                
+                # Calculate returns for different periods
+                if len(close) >= 2:
+                    return_1d = ((close.iloc[-1] / close.iloc[-2]) - 1) * 100
+                    result += f"- 1-Day Change: {return_1d:+.2f}%\n"
+                
+                if len(close) >= 5:
+                    return_5d = ((close.iloc[-1] / close.iloc[-5]) - 1) * 100
+                    result += f"- 5-Day Change: {return_5d:+.2f}%\n"
+                
+                if len(close) >= 10:
+                    return_10d = ((close.iloc[-1] / close.iloc[-10]) - 1) * 100
+                    result += f"- 10-Day Change: {return_10d:+.2f}%\n"
+                
+                if len(close) >= look_back_days:
+                    return_period = ((close.iloc[-1] / close.iloc[-look_back_days]) - 1) * 100
+                    result += f"- {look_back_days}-Day Change: {return_period:+.2f}%\n"
+                
+                # For VIX, add interpretation
+                if symbol == "^VIX":
+                    if current_price < 15:
+                        result += f"- VIX Interpretation: Low volatility (complacency)\n"
+                    elif current_price < 20:
+                        result += f"- VIX Interpretation: Normal volatility\n"
+                    elif current_price < 30:
+                        result += f"- VIX Interpretation: Elevated volatility (caution)\n"
+                    else:
+                        result += f"- VIX Interpretation: High volatility (fear)\n"
+                
+                result += "\n"
+                
+            except Exception as e:
+                result += f"## {name} ({symbol}): Error - {str(e)}\n\n"
+        
+        return result
+        
+    except Exception as e:
+        return f"Error retrieving market indices: {str(e)}"
