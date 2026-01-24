@@ -13,10 +13,10 @@ from agentscope.tool import Toolkit
 from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT, get_company_name
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.core_stock_tools import (
+    get_market_indices,
+    get_sector_performance,
     get_stock_data,
     get_stock_info,
-    get_sector_performance,
-    get_market_indices,
 )
 from tradingscope.agents.utils.stock_utils import StockUtils
 from tradingscope.agents.utils.technical_indicators_tools import get_indicators

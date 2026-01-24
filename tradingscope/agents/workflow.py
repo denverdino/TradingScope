@@ -133,11 +133,11 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
     )
 
     # Extract manager content
-    investment_plan = get_content(manager_response)
-    print(f"投资决策:\n{investment_plan}")
+    researcher_investment_plan = get_content(manager_response)
+    print(f"投资决策:\n{researcher_investment_plan}")
 
     # 更新context中的投资计划
-    context.investment_plan = investment_plan
+    context.researcher_investment_plan = researcher_investment_plan
 
     # 交易员基于研究经理的决策做出最终交易决策
     print("\n=== 交易员最终决策 ===")
