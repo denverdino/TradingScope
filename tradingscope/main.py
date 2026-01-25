@@ -20,8 +20,7 @@ def send_html_email(subject, html_content, recipient_emails, sender_email, sende
     msg = MIMEMultipart('alternative')
     msg['Subject'] = subject
     msg['From'] = sender_email
-    msg['To'] = ','.join(recipient_emails) if isinstance(recipient_emails, list) else recipient_emails
-
+    msg['To'] = ','.join(recipient_emails)
     part = MIMEText(html_content, 'html')
     msg.attach(part)
 
@@ -50,12 +49,15 @@ def main():
     args = parser.parse_args()
 
     # Initialize model
-    # enable_thinking=True enables Qwen3 reasoning/thinking mode
+    # extra_body with enable_thinking=True enables Qwen3 reasoning/thinking mode
     model = OpenAIChatModel(
-        model_name="qwen3-max",
+        model_name="qwen3-max-preview",
         api_key=os.environ.get("DASHSCOPE_API_KEY"),
         stream=True,
-        generate_kwargs={"temperature": 0.1, "enable_thinking": True}
+        generate_kwargs={
+            "temperature": 0.1,
+            "extra_body": {"enable_thinking": True}
+        }
     )
 
     # Get ticker from command line argument or use default
@@ -126,7 +128,8 @@ def main():
             print("Error: EMAIL_FROM and EMAIL_PASSWORD environment variables must be set to send email.")
         else:
             subject = f"Stock Analysis Report: {ticker} ({trade_date})"
-            send_html_email(subject, html_with_style, [args.email_to], sender_email, sender_password)
+            recipient_list = [email.strip() for email in args.email_to.split(',')]
+            send_html_email(subject, html_with_style, recipient_list, sender_email, sender_password)
 
 if __name__ == "__main__":
     main()

@@ -10,9 +10,13 @@ from agentscope.model import OpenAIChatModel
 from tradingscope.agents.workflow import analyze
 
 model = OpenAIChatModel(
-    model_name="qwen-plus",
+    model_name="qwen3-max-preview",
     api_key=os.environ.get("DASHSCOPE_API_KEY"),
     stream=True,
+    generate_kwargs={
+        "temperature": 0.1,
+        "extra_body": {"enable_thinking": True}
+    }
 )
 
 trade_date = datetime.now().strftime("%Y-%m-%d")

@@ -29,7 +29,7 @@ jobs:
         run: |
           tickers=(MSFT AAPL TSLA AMZN META NVDA GOOGL BABA TSM)
           for ticker in "${tickers[@]}"; do
-            python -m tradingscope.main "$ticker" --email_to "${{ secrets.EMAIL_TO }}" || echo "Analyze stock $ticker failed, continuing..."
+            python -m tradingscope.main "$ticker" --email_to="${{ secrets.EMAIL_TO }}" || echo "Analyze stock $ticker failed, continuing..."
           done
         env:
           DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}

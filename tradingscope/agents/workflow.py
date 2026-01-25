@@ -46,11 +46,9 @@ from .utils.context import AgentContext
 def get_content(result: Msg | Exception) -> str:
     """从消息或异常中提取内容。"""
     if isinstance(result, Msg):
-        if isinstance(result.content, str):
-            return result.content
-        else:
-            return result.content[0].get("text", "")
+        return result.get_text_content()
     return str(result)
+
 
 def get_markdown(content: str, header_level: int) -> str:
     # Split the content into lines
