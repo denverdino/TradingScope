@@ -50,11 +50,12 @@ def main():
     args = parser.parse_args()
 
     # Initialize model
+    # enable_thinking=True enables Qwen3 reasoning/thinking mode
     model = OpenAIChatModel(
         model_name="qwen3-max",
         api_key=os.environ.get("DASHSCOPE_API_KEY"),
         stream=True,
-        generate_kwargs={"temperature": 0.1}
+        generate_kwargs={"temperature": 0.1, "enable_thinking": True}
     )
 
     # Get ticker from command line argument or use default

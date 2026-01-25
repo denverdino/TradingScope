@@ -17,5 +17,11 @@ model = OpenAIChatModel(
 
 trade_date = datetime.now().strftime("%Y-%m-%d")
 
+
+async def main():
+    report = await analyze(model, "AAPL", trade_date)
+    print(f"Final Report {trade_date}")
+    print(report)
+
 if __name__ == "__main__":
-    asyncio.run(analyze(model, "AAPL", trade_date))
+    asyncio.run(main())
