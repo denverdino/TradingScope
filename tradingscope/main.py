@@ -51,7 +51,7 @@ def main():
     # Initialize model
     # extra_body with enable_thinking=True enables Qwen3 reasoning/thinking mode
     model = OpenAIChatModel(
-        model_name="qwen3-max-preview",
+        model_name="qwen3-max-2026-01-23",
         api_key=os.environ.get("DASHSCOPE_API_KEY"),
         stream=True,
         generate_kwargs={
