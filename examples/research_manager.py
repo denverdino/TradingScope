@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Example script demonstrating how to use the Research Manager Agent."""
+"""Example script demonstrating how to use the Research Manager Agent with long-term memory."""
 
 import asyncio
 import os
@@ -7,6 +7,8 @@ import os
 from agentscope.model import OpenAIChatModel
 
 from tradingscope.agents.managers.research_manager import create_research_manager_agent
+from tradingscope.agents.utils.context import AgentContext
+from tradingscope.agents.utils.memory_manager import FinancialMemoryManager
 
 
 async def main():
@@ -17,12 +19,24 @@ async def main():
         stream=True,
     )
 
-    # Create the research manager agent
-    agent = create_research_manager_agent(model=model)
+    # Create AgentContext with sample data
+    context = AgentContext()
+    context.company_of_interest = "AAPL"
 
-    # Example usage with sample data
-    # In a real scenario, these would come from other agents' outputs
-    sample_prompt = """作为投资组合经理和辩论主持人，您的职责是批判性地评估这轮辩论并做出明确决策：支持看跌分析师、看涨分析师，或者仅在基于所提出论点有强有力理由时选择持有。
+    # Create memory manager for long-term memory
+    memory_manager = FinancialMemoryManager()
+
+    try:
+        # Create the research manager agent with long-term memory
+        agent = create_research_manager_agent(
+            model=model,
+            context=context,
+            long_term_memory=memory_manager.research_manager_memory,
+            long_term_memory_mode="static_control",
+        )
+
+        # Example usage with sample data
+        sample_prompt = """作为投资组合经理和辩论主持人，您的职责是批判性地评估这轮辩论并做出明确决策：支持看跌分析师、看涨分析师，或者仅在基于所提出论点有强有力理由时选择持有。
 
 请基于以下信息做出决策：
 
@@ -40,9 +54,11 @@ async def main():
 
 请用中文撰写所有分析内容和建议。"""
 
-    # Run the agent with the sample prompt
-    response = await agent(sample_prompt)
-    print("Investment Decision:", response.content)
+        # Run the agent with the sample prompt
+        response = await agent(sample_prompt)
+        print("Investment Decision:", response.content)
+    finally:
+        await memory_manager.close()
 
 
 if __name__ == "__main__":

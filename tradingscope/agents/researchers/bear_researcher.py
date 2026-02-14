@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from agentscope import logger
 from agentscope.agent import ReActAgent
@@ -15,11 +15,16 @@ from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.stock_utils import StockUtils
 
+if TYPE_CHECKING:
+    from tradingscope.agents.utils.memory import ModelStudioLongTermMemory
+
 
 def create_bear_researcher_agent(
     model: OpenAIChatModel,
     context: AgentContext,
     name: str = "BearResearcher",
+    long_term_memory: Optional["ModelStudioLongTermMemory"] = None,
+    long_term_memory_mode: str = "static_control",
 ) -> ReActAgent:
     """
     创建用于看跌分析的熊市研究员 ReActAgent
@@ -28,6 +33,8 @@ def create_bear_researcher_agent(
         model: AgentScope 模型实例
         context: AgentContext实例包含所有必要的上下文信息
         name: 代理名称
+        long_term_memory: 长期记忆实例用于存储和检索历史经验
+        long_term_memory_mode: 长期记忆模式 ("static_control", "agent_control", "both")
 
     Returns:
         ReActAgent: 配置好的看跌研究员代理
@@ -58,6 +65,7 @@ def create_bear_researcher_agent(
 2. 使用数据和事实支撑你的论点
 3. 直接回应和反驳看涨分析师的观点
 4. 在多轮辩论中逐步深化你的论点
+5. 参考长期记忆中的历史经验教训，避免重复过去的错误
 
 请用中文回答，重点关注以下几个方面：
 
@@ -77,7 +85,7 @@ def create_bear_researcher_agent(
     formatter = OpenAIMultiAgentFormatter()
     toolkit = Toolkit()
 
-    # 创建模型与 Agent
+    # 创建 ReActAgent with long-term memory
     agent = ReActAgent(
         name=name,
         sys_prompt=system_message,
@@ -85,6 +93,8 @@ def create_bear_researcher_agent(
         formatter=formatter,
         toolkit=toolkit,
         memory=InMemoryMemory(),
+        long_term_memory=long_term_memory,
+        long_term_memory_mode=long_term_memory_mode,
         parallel_tool_calls=True,
         max_iters=8,
     )

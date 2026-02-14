@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from agentscope import logger
 
@@ -18,13 +18,29 @@ from agentscope.tool import Toolkit
 from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT
 from tradingscope.agents.utils.context import AgentContext
 
+if TYPE_CHECKING:
+    from tradingscope.agents.utils.memory import ModelStudioLongTermMemory
+
 
 def create_risk_manager_agent(
     model: OpenAIChatModel,
     context: AgentContext,
     name: str = "RiskManager",
+    long_term_memory: Optional["ModelStudioLongTermMemory"] = None,
+    long_term_memory_mode: str = "static_control",
 ) -> ReActAgent:
-    """Create Risk Manager Agent that evaluates risk analysis debates and makes final decisions."""
+    """Create Risk Manager Agent that evaluates risk analysis debates and makes final decisions.
+
+    Args:
+        model: AgentScope model instance
+        context: AgentContext instance containing all necessary context information
+        name: Agent name
+        long_term_memory: 长期记忆实例用于存储和检索历史经验
+        long_term_memory_mode: 长期记忆模式 ("static_control", "agent_control", "both")
+
+    Returns:
+        ReActAgent: Configured risk manager agent
+    """
     company_of_interest = context.company_of_interest
 
     system_message = f"""{COMPLIANCE_PROMPT}
@@ -35,7 +51,7 @@ def create_risk_manager_agent(
 1. **总结关键论点**：提取每位分析师的最强观点，重点关注与背景的相关性。
 2. **提供理由**：用辩论中的直接引用和反驳论点支持您的建议。
 3. **完善交易计划**：根据分析师的见解调整交易员的原始交易员操作计划。
-4. **从过去的错误中学习**：使用历史经验教训来改进决策，确保不会重复过去的误判。
+4. **从过去的错误中学习**：使用长期记忆中的历史经验教训来改进决策，确保不会重复过去的误判。
 
 交付成果：
 - 明确且可操作的建议：买入、卖出或持有。
@@ -52,12 +68,15 @@ def create_risk_manager_agent(
     formatter = OpenAIMultiAgentFormatter()
     toolkit = Toolkit()
 
+    # 创建ReActAgent with long-term memory
     agent = ReActAgent(
         name=name,
         sys_prompt=system_message,
         model=model,
         formatter=formatter,
         memory=InMemoryMemory(),
+        long_term_memory=long_term_memory,
+        long_term_memory_mode=long_term_memory_mode,
         toolkit=toolkit,
         parallel_tool_calls=False,
         max_iters=8,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 # 导入统一日志系统
 from agentscope import logger
@@ -17,11 +17,16 @@ from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT, get_company
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.stock_utils import StockUtils
 
+if TYPE_CHECKING:
+    from tradingscope.agents.utils.memory import ModelStudioLongTermMemory
+
 
 def create_trader_agent(
     model: OpenAIChatModel,
     context: AgentContext,
     name: str = "Trader",
+    long_term_memory: Optional["ModelStudioLongTermMemory"] = None,
+    long_term_memory_mode: str = "static_control",
 ) -> ReActAgent:
     """
     创建使用AgentScope ReActAgent的交易员代理。
@@ -30,6 +35,8 @@ def create_trader_agent(
         model: AgentScope模型实例
         context: AgentContext实例包含所有必要的上下文信息
         name: 代理名称
+        long_term_memory: 长期记忆实例用于存储和检索历史经验
+        long_term_memory_mode: 长期记忆模式 ("static_control", "agent_control", "both")
 
     返回:
         配置好的ReActAgent实例
@@ -91,12 +98,16 @@ def create_trader_agent(
 - MACD 金叉/死叉信号
 - 成交量变化
 
+**5) 参考长期记忆中的历史交易经验教训，避免重复过去的交易错误**
+
 # 交易操作计划输出格式
 
 请严格按以下格式输出（中文）：
 
 ### 交易决策
 
+- **当前日期**：{current_date}
+- **股票代码**：{company_of_interest}
 - **操作建议**：买入 / 持有 / 卖出（三选一）
 - **交易类型**：短期交易（1-5天）
 
@@ -157,13 +168,15 @@ def create_trader_agent(
     formatter = OpenAIChatFormatter()
     toolkit = Toolkit()
 
-    # 创建ReActAgent
+    # 创建ReActAgent with long-term memory
     agent = ReActAgent(
         name=name,
         sys_prompt=system_prompt,
         model=model,
         formatter=formatter,
         memory=InMemoryMemory(),
+        long_term_memory=long_term_memory,
+        long_term_memory_mode=long_term_memory_mode,
         toolkit=toolkit,
         parallel_tool_calls=False,  # 交易员不需要并行工具调用
         enable_meta_tool=False,  # 禁用元工具以保持可控

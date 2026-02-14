@@ -15,7 +15,7 @@ model = OpenAIChatModel(
     stream=True,
     generate_kwargs={
         "temperature": 0.1,
-        "extra_body": {"enable_thinking": True}
+       # "extra_body": {"enable_thinking": True}
     }
 )
 

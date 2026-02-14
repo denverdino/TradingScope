@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Test script for the Bull Researcher Agent."""
+"""Test script for the Bull Researcher Agent with long-term memory."""
 
 import asyncio
 import os
@@ -8,10 +8,12 @@ from datetime import datetime
 from agentscope.model import OpenAIChatModel
 
 from tradingscope.agents.researchers.bull_researcher import create_bull_researcher_agent
+from tradingscope.agents.utils.context import AgentContext
+from tradingscope.agents.utils.memory_manager import FinancialMemoryManager
 
 
 async def main():
-    # Initialize the model (using a mock for testing)
+    # Initialize the model
     model = OpenAIChatModel(
         model_name="qwen-plus",
         api_key=os.environ.get("DASHSCOPE_API_KEY"),
@@ -26,7 +28,6 @@ async def main():
     trade_date = datetime.now().strftime("%Y-%m-%d")
 
     # Create AgentContext
-    from tradingscope.agents.utils.context import AgentContext
     context = AgentContext()
     context.company_of_interest = "AAPL"
     context.market_report = market_report
@@ -35,16 +36,23 @@ async def main():
     context.fundamentals_report = fundamentals_report
     context.trade_date = trade_date
 
-    # Create the bull researcher agent
-    agent = create_bull_researcher_agent(
-        model=model,
-        context=context,
-    )
+    # Create memory manager for long-term memory
+    memory_manager = FinancialMemoryManager()
 
-    print("🐂 Bull Researcher Agent created successfully!")
-    print(f"Agent name: {agent.name}")
+    try:
+        # Create the bull researcher agent with long-term memory
+        agent = create_bull_researcher_agent(
+            model=model,
+            context=context,
+            long_term_memory=memory_manager.bull_researcher_memory,
+            long_term_memory_mode="static_control",
+        )
 
-    await agent(None)
+        print(f"Bull Researcher Agent created: {agent.name}")
+
+        await agent(None)
+    finally:
+        await memory_manager.close()
 
 
 if __name__ == "__main__":

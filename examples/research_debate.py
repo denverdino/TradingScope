@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Example script demonstrating the research multi-agent debate system."""
+"""Example script demonstrating the research multi-agent debate system with long-term memory."""
 
 import asyncio
 import os
@@ -14,10 +14,12 @@ from tradingscope.agents.managers.research_manager import create_research_manage
 from tradingscope.agents.researchers.bear_researcher import create_bear_researcher_agent
 from tradingscope.agents.researchers.bull_researcher import create_bull_researcher_agent
 from tradingscope.agents.researchers.debate_orchestrator import create_research_debate_orchestrator
+from tradingscope.agents.utils.context import AgentContext
+from tradingscope.agents.utils.memory_manager import FinancialMemoryManager
 
 
 async def main():
-    """Example usage of the research debate system."""
+    """Example usage of the research debate system with long-term memory."""
 
     # Initialize the model
     model = OpenAIChatModel(
@@ -35,7 +37,6 @@ async def main():
     trade_date = "2025-10-05"
 
     # Create AgentContext
-    from tradingscope.agents.utils.context import AgentContext
     context = AgentContext()
     context.company_of_interest = company_of_interest
     context.market_report = market_research_report
@@ -44,49 +45,56 @@ async def main():
     context.fundamentals_report = fundamentals_report
     context.trade_date = trade_date
 
-    # Create the research agents
-    bull_researcher = create_bull_researcher_agent(
-        model=model,
-        context=context,
-    )
-
-    bear_researcher = create_bear_researcher_agent(
-        model=model,
-        context=context,
-    )
-
-    research_manager = create_research_manager_agent(
-        model=model,
-        context=context,
-    )
-
-    # Create the debate orchestrator
-    orchestrator = create_research_debate_orchestrator(
-        bull_researcher=bull_researcher, bear_researcher=bear_researcher, research_manager=research_manager, max_rounds=3
-    )
-
-    print("🚀 Starting research debate for Apple (AAPL)")
-    print(f"Company: {company_of_interest}")
-    print("=" * 60)
+    # Create memory manager for long-term memory
+    memory_manager = FinancialMemoryManager()
 
     try:
+        # Create the research agents with long-term memory
+        bull_researcher = create_bull_researcher_agent(
+            model=model,
+            context=context,
+            long_term_memory=memory_manager.bull_researcher_memory,
+            long_term_memory_mode="static_control",
+        )
+
+        bear_researcher = create_bear_researcher_agent(
+            model=model,
+            context=context,
+            long_term_memory=memory_manager.bear_researcher_memory,
+            long_term_memory_mode="static_control",
+        )
+
+        research_manager = create_research_manager_agent(
+            model=model,
+            context=context,
+            long_term_memory=memory_manager.research_manager_memory,
+            long_term_memory_mode="static_control",
+        )
+
+        # Create the debate orchestrator
+        orchestrator = create_research_debate_orchestrator(
+            bull_researcher=bull_researcher, bear_researcher=bear_researcher, research_manager=research_manager, max_rounds=3
+        )
+
+        print(f"Starting research debate for {company_of_interest}")
+        print("=" * 60)
+
         # Run the debate
         final_decision = await orchestrator.run_debate(
             company_name=company_of_interest,
         )
 
         print("=" * 60)
-        print("⚖️ Final Decision from Research Manager:")
+        print("Final Decision from Research Manager:")
         print(final_decision.content)
         print("=" * 60)
-        print("✅ Research debate completed successfully!")
 
     except Exception as e:
-        print(f"❌ Error during debate: {e}")
-        print("This might be due to API key issues or network problems.")
-        print("Please ensure you have a valid API key set in your environment variables.")
+        print(f"Error during debate: {e}")
+        print("Please ensure you have a valid DASHSCOPE_API_KEY set.")
+    finally:
+        await memory_manager.close()
 
 
 if __name__ == "__main__":
-    # Run the example
     asyncio.run(main())

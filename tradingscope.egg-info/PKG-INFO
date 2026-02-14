@@ -16,7 +16,8 @@ Classifier: Programming Language :: Python :: 3.10
 Classifier: Programming Language :: Python :: 3.11
 Requires-Python: >=3.8
 Description-Content-Type: text/markdown
-Requires-Dist: agentscope>=1.0.5
+Requires-Dist: agentscope>=1.0.15
+Requires-Dist: agentscope-runtime>=1.1.0
 Requires-Dist: openai>=2.3.0
 Requires-Dist: yfinance>=0.2.66
 Requires-Dist: pandas>=2.3.3
@@ -85,6 +86,9 @@ To run the fundamentals analyst agent example:
    export OPENAI_API_KEY='your-api-key-here'
    export OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
    export ALPHA_VANTAGE_API_KEY='your-api-key-here'
+  
+   # Optional
+   export PERPLEXITY_API_KEY='your-api-key-here'
    ```
 
 NOTE: This project can support DashScope Open API for Qwen model only at this time.
@@ -92,6 +96,15 @@ NOTE: This project can support DashScope Open API for Qwen model only at this ti
 2. Run the example script:
    ```bash
    python -m tradingscope.main AAPL
+   ```
+
+3. Run the example script and send the report by email
+   ```bash
+   export EMAIL_FROM=abc@gmail.com
+   export EMAIL_PASSWORD=xxxxxxx
+   export SMTP_SSL_HOST=smtp.gmail.com
+   export SMTP_SSL_PORT=465
+   python -m tradingscope.main AAPL --email_to test@xyz.com
    ```
 
 See [agents documentation](tradingscope/agents/README.md) for more details.

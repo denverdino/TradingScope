@@ -1,4 +1,4 @@
-"""Example script demonstrating the risk management multi-agent debate system."""
+"""Example script demonstrating the risk management multi-agent debate system with long-term memory."""
 
 import asyncio
 import os
@@ -14,10 +14,12 @@ from tradingscope.agents.risk_mgmt.aggressive_debator import create_aggressive_d
 from tradingscope.agents.risk_mgmt.conservative_debator import create_conservative_debator_agent
 from tradingscope.agents.risk_mgmt.debate_orchestrator import create_debate_orchestrator
 from tradingscope.agents.risk_mgmt.neutral_debator import create_neutral_debator_agent
+from tradingscope.agents.utils.context import AgentContext
+from tradingscope.agents.utils.memory_manager import FinancialMemoryManager
 
 
 async def main():
-    """Example usage of the risk management debate system."""
+    """Example usage of the risk management debate system with long-term memory."""
 
     # Initialize the model
     model = OpenAIChatModel(
@@ -31,7 +33,7 @@ async def main():
     company_name = "TSLA"
     trader_plan = "计划买入TSLA股票200股，目标价位250美元，止损价位200美元"
 
-    # Example reports (in a real scenario, these would come from actual analysis)
+    # Example reports
     market_research_report = """特斯拉(TSLA)股价近期表现强劲，电动汽车市场需求持续增长。
 技术分析显示股价处于上升通道中，相对强弱指数(RSI)处于健康水平。
 宏观经济环境有利于新能源汽车发展，政策支持力度不断加大。"""
@@ -56,7 +58,6 @@ async def main():
 - 市场份额在电动车领域领先"""
 
     # Create AgentContext
-    from tradingscope.agents.utils.context import AgentContext
     context = AgentContext()
     context.company_of_interest = company_name
     context.market_report = market_research_report
@@ -65,53 +66,58 @@ async def main():
     context.fundamentals_report = fundamentals_report
     context.trader_investment_plan = trader_plan
 
-    # Create the risk management agents
-    aggressive_agent = create_aggressive_debator_agent(
-        model=model,
-        context=context
-    )
-    conservative_agent = create_conservative_debator_agent(
-        model=model,
-        context=context
-    )
-    neutral_agent = create_neutral_debator_agent(
-        model=model,
-        context=context
-    )
-    risk_manager = create_risk_manager_agent(
-        model=model,
-        context=context
-    )
-
-    # Create the debate orchestrator
-    orchestrator = create_debate_orchestrator(
-        aggressive_agent=aggressive_agent, conservative_agent=conservative_agent, neutral_agent=neutral_agent, risk_manager=risk_manager, max_rounds=3
-    )
-
-
-    print("🚀 Starting risk management debate for Tesla (TSLA)")
-    print(f"Company: {company_name}")
-    print(f"Trader plan: {trader_plan}")
-    print("=" * 60)
+    # Create memory manager for long-term memory
+    memory_manager = FinancialMemoryManager()
 
     try:
+        # Create the risk management agents
+        # Debators don't use long-term memory, only the risk manager does
+        aggressive_agent = create_aggressive_debator_agent(
+            model=model,
+            context=context
+        )
+        conservative_agent = create_conservative_debator_agent(
+            model=model,
+            context=context
+        )
+        neutral_agent = create_neutral_debator_agent(
+            model=model,
+            context=context
+        )
+
+        # Risk manager with long-term memory
+        risk_manager = create_risk_manager_agent(
+            model=model,
+            context=context,
+            long_term_memory=memory_manager.risk_manager_memory,
+            long_term_memory_mode="static_control",
+        )
+
+        # Create the debate orchestrator
+        orchestrator = create_debate_orchestrator(
+            aggressive_agent=aggressive_agent, conservative_agent=conservative_agent, neutral_agent=neutral_agent, risk_manager=risk_manager, max_rounds=3
+        )
+
+        print(f"Starting risk management debate for {company_name}")
+        print(f"Trader plan: {trader_plan}")
+        print("=" * 60)
+
         # Run the debate
         final_decision = await orchestrator.run_debate(
             company_name=company_name,
         )
 
         print("=" * 60)
-        print("⚖️ Final Decision from Risk Manager:")
+        print("Final Decision from Risk Manager:")
         print(final_decision.content)
         print("=" * 60)
-        print("✅ Risk management debate completed successfully!")
 
     except Exception as e:
-        print(f"❌ Error during debate: {e}")
-        print("This might be due to API key issues or network problems.")
-        print("Please ensure you have a valid API key set in your environment variables.")
+        print(f"Error during debate: {e}")
+        print("Please ensure you have a valid DASHSCOPE_API_KEY set.")
+    finally:
+        await memory_manager.close()
 
 
 if __name__ == "__main__":
-    # Run the example
     asyncio.run(main())

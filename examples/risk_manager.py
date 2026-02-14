@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Example showing how to use the RiskManagerAgent with ReAct pattern."""
+"""Example showing how to use the RiskManagerAgent with long-term memory."""
 
 import asyncio
 import os
@@ -7,25 +7,39 @@ import os
 from agentscope.model import OpenAIChatModel
 
 from tradingscope.agents.managers.risk_manager import create_risk_manager_agent
+from tradingscope.agents.utils.context import AgentContext
+from tradingscope.agents.utils.memory_manager import FinancialMemoryManager
 
 
 async def main():
-    """Example of using the RiskManagerAgent with ReAct pattern."""
+    """Example of using the RiskManagerAgent with long-term memory."""
+    # Initialize the model
+    model = OpenAIChatModel(
+        model_name="qwen-plus",
+        api_key=os.environ.get("DASHSCOPE_API_KEY"),
+        stream=True,
+    )
+
+    # Create AgentContext with sample data
+    context = AgentContext()
+    context.company_of_interest = "AAPL"
+
+    # Create memory manager for long-term memory
+    memory_manager = FinancialMemoryManager()
+
     try:
-        # Initialize the model
-        model = OpenAIChatModel(
-            model_name="qwen-plus",
-            api_key=os.environ.get("DASHSCOPE_API_KEY"),
-            stream=True,
+        # Create the risk manager agent with long-term memory
+        risk_manager = create_risk_manager_agent(
+            model=model,
+            context=context,
+            name="RiskManager",
+            long_term_memory=memory_manager.risk_manager_memory,
+            long_term_memory_mode="static_control",
         )
 
-        # Create the risk manager agent with ReAct pattern
-        risk_manager = create_risk_manager_agent(model=model, name="RiskManager")
-
-        print("✅ RiskManagerAgent created with ReAct pattern")
+        print(f"RiskManagerAgent created: {risk_manager.name}")
 
         # Example usage with sample data
-        # In a real scenario, these would come from other agents' outputs
         sample_prompt = """作为风险管理委员会主席和辩论主持人，您的目标是评估三位风险分析师——激进、中性和安全/保守——之间的辩论，并确定交易员的最佳行动方案。您的决策必须产生明确的建议：买入、卖出或持有。只有在有具体论据强烈支持时才选择持有，而不是在所有方面都似乎有效时作为后备选择。力求清晰和果断。
 
 请基于以下信息做出决策：
@@ -49,18 +63,9 @@ async def main():
 
         # Call the agent
         response = await risk_manager(sample_prompt)
-        print("✅ RiskManagerAgent called successfully")
         print(f"Response: {response.content}")
-
-        print("\n🎉 Example completed successfully!")
-        return True
-
-    except Exception as e:
-        print(f"❌ Error in example: {e}")
-        import traceback
-
-        traceback.print_exc()
-        return False
+    finally:
+        await memory_manager.close()
 
 
 if __name__ == "__main__":

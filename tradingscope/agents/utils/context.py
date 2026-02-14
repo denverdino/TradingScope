@@ -58,3 +58,37 @@ class AgentContext:
 {self.trader_investment_plan}
 
 {self.generate_trader_context_md()}"""
+
+    def generate_situation_summary(self) -> str:
+        """Generate a condensed market situation summary for memory retrieval.
+
+        This method creates a concise description of the current market situation
+        from all analyst reports, optimized for semantic similarity search in
+        the memory system.
+
+        Returns:
+            Condensed situation summary string
+        """
+        summary_parts = [
+            f"股票: {self.company_of_interest}",
+            f"日期: {self.trade_date}",
+        ]
+
+        # Extract key points from each report (first 500 chars as summary)
+        if self.market_report:
+            market_summary = self.market_report[:500].strip()
+            summary_parts.append(f"市场技术面: {market_summary}")
+
+        if self.fundamentals_report:
+            fundamentals_summary = self.fundamentals_report[:500].strip()
+            summary_parts.append(f"基本面: {fundamentals_summary}")
+
+        if self.news_report:
+            news_summary = self.news_report[:500].strip()
+            summary_parts.append(f"消息面: {news_summary}")
+
+        if self.sentiment_report:
+            sentiment_summary = self.sentiment_report[:500].strip()
+            summary_parts.append(f"情绪面: {sentiment_summary}")
+
+        return "\n".join(summary_parts)

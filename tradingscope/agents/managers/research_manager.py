@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from agentscope import logger
 from agentscope.agent import ReActAgent
@@ -15,6 +15,9 @@ from pydantic import BaseModel, Field
 # Import unified logging system
 from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT
 from tradingscope.agents.utils.context import AgentContext
+
+if TYPE_CHECKING:
+    from tradingscope.agents.utils.memory import ModelStudioLongTermMemory
 
 
 class RecommendationEnum(str, Enum):
@@ -43,6 +46,8 @@ def create_research_manager_agent(
     model: OpenAIChatModel,
     context: AgentContext,
     name: str = "ResearchManager",
+    long_term_memory: Optional["ModelStudioLongTermMemory"] = None,
+    long_term_memory_mode: str = "static_control",
 ) -> ReActAgent:
     """创建支持结构化输出的投资决策经理 ReActAgent。
 
@@ -50,6 +55,8 @@ def create_research_manager_agent(
         model: AgentScope 模型实例
         context: AgentContext实例包含所有必要的上下文信息
         name: 代理名称
+        long_term_memory: 长期记忆实例用于存储和检索历史经验
+        long_term_memory_mode: 长期记忆模式 ("static_control", "agent_control", "both")
 
     Returns:
         ReActAgent: 配置好的投资决策经理代理
@@ -81,7 +88,7 @@ def create_research_manager_agent(
 **注意：**
 
 - 您必须提供具体的目标价格 - 不要回复'无法确定'或'需要更多信息'。
-- 考虑您在类似情况下的过去错误。利用这些见解来完善您的决策制定，确保您在学习和改进。
+- 考虑您在类似情况下的过去错误。利用长期记忆中的历史经验教训来完善您的决策制定，确保您在学习和改进。
 - 以对话方式呈现您的分析，但在最后请尝试以结构化的要点形式总结关键信息，便于后续处理。
 - 请用中文撰写所有分析内容和建议。
 
@@ -95,7 +102,7 @@ def create_research_manager_agent(
     formatter = OpenAIMultiAgentFormatter()
     toolkit = Toolkit()
 
-    # 创建模型与 Agent
+    # 创建 ReActAgent with long-term memory
     agent = ReActAgent(
         name=name,
         sys_prompt=system_message,
@@ -103,6 +110,8 @@ def create_research_manager_agent(
         formatter=formatter,
         toolkit=toolkit,
         memory=InMemoryMemory(),
+        long_term_memory=long_term_memory,
+        long_term_memory_mode=long_term_memory_mode,
         parallel_tool_calls=True,
         max_iters=8,
     )

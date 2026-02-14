@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Example script demonstrating how to use the Trader Agent."""
+"""Example script demonstrating how to use the Trader Agent with long-term memory."""
 
 import asyncio
 import os
@@ -8,6 +8,8 @@ from datetime import datetime
 from agentscope.model import OpenAIChatModel
 
 from tradingscope.agents.trader.trader import create_trader_agent
+from tradingscope.agents.utils.context import AgentContext
+from tradingscope.agents.utils.memory_manager import FinancialMemoryManager
 
 
 async def main():
@@ -28,7 +30,6 @@ async def main():
     trade_date = datetime.now().strftime("%Y-%m-%d")
 
     # Create AgentContext
-    from tradingscope.agents.utils.context import AgentContext
     context = AgentContext()
     context.company_of_interest = company_of_interest
     context.investment_plan = investment_plan
@@ -38,15 +39,23 @@ async def main():
     context.fundamentals_report = fundamentals_report
     context.trade_date = trade_date
 
-    # Create the trader agent
-    agent = create_trader_agent(
-        model=model,
-        context=context,
-    )
+    # Create memory manager for long-term memory
+    memory_manager = FinancialMemoryManager()
 
-    # Run the agent
-    response = await agent(None)
-    print(f"Trader Response: {response.content}")
+    try:
+        # Create the trader agent with long-term memory
+        agent = create_trader_agent(
+            model=model,
+            context=context,
+            long_term_memory=memory_manager.trader_memory,
+            long_term_memory_mode="static_control",
+        )
+
+        # Run the agent
+        response = await agent(None)
+        print(f"Trader Response: {response.content}")
+    finally:
+        await memory_manager.close()
 
 
 if __name__ == "__main__":
