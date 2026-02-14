@@ -45,6 +45,7 @@ tradingscope/agents/utils/memory_manager.py
 tradingscope/agents/utils/news_data_tools.py
 tradingscope/agents/utils/qwen_deep_research_agent.py
 tradingscope/agents/utils/stock_utils.py
+tradingscope/agents/utils/summarize.py
 tradingscope/agents/utils/technical_indicators_tools.py
 tradingscope/agents/utils/tool_response_helper.py
 tradingscope/config/__init__.py

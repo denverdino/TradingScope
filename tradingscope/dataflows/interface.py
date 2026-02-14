@@ -28,6 +28,7 @@ from .openai import get_fundamentals_openai, get_global_news_openai, get_stock_n
 from .perplexity import get_fundamentals_perplexity, get_global_news_perplexity, get_stock_news_perplexity
 from .y_finance import get_balance_sheet as get_yfinance_balance_sheet
 from .y_finance import get_cashflow as get_yfinance_cashflow
+from .y_finance import get_fundamentals as get_yfinance_fundamentals
 from .y_finance import get_income_statement as get_yfinance_income_statement
 from .y_finance import get_insider_transactions as get_yfinance_insider_transactions
 from .y_finance import get_market_indices as get_yfinance_market_indices
@@ -112,6 +113,7 @@ VENDOR_METHODS = {
     # fundamental_data
     "get_fundamentals": {
         "alpha_vantage": get_alpha_vantage_fundamentals,
+        "yfinance": get_yfinance_fundamentals,
         #"openai": get_fundamentals_openai,
         "perplexity": get_fundamentals_perplexity,
     },

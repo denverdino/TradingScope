@@ -21,7 +21,7 @@ async def main():
     # Create AgentContext
     from tradingscope.agents.utils.context import AgentContext
     context = AgentContext()
-    context.company_of_interest = "AAPL"
+    context.company_of_interest = "MSFT"
     context.trade_date = trade_date
 
     agent = create_social_media_analyst_agent(model=model, context=context)

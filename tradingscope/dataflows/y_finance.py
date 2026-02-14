@@ -518,6 +518,101 @@ def get_sector_performance(
         return f"Error retrieving sector performance for {ticker}: {str(e)}"
 
 
+def get_fundamentals(
+    ticker: Annotated[str, "ticker symbol of the company"],
+    curr_date: Annotated[str, "current date (not used for yfinance)"] = None
+):
+    """Get company fundamentals overview from yfinance."""
+    try:
+        ticker_obj = yf.Ticker(ticker.upper())
+        info = ticker_obj.info
+        if not info:
+            return f"No fundamentals data found for symbol '{ticker}'"
+
+        fields = [
+            ("Name", info.get("longName")),
+            ("Sector", info.get("sector")),
+            ("Industry", info.get("industry")),
+            ("Market Cap", info.get("marketCap")),
+            ("PE Ratio (TTM)", info.get("trailingPE")),
+            ("Forward PE", info.get("forwardPE")),
+            ("PEG Ratio", info.get("pegRatio")),
+            ("Price to Book", info.get("priceToBook")),
+            ("Price to Sales (TTM)", info.get("priceToSalesTrailing12Months")),
+            ("Enterprise Value", info.get("enterpriseValue")),
+            ("EV/Revenue", info.get("enterpriseToRevenue")),
+            ("EV/EBITDA", info.get("enterpriseToEbitda")),
+            ("Revenue (TTM)", info.get("totalRevenue")),
+            ("Gross Profit (TTM)", info.get("grossProfits")),
+            ("EBITDA", info.get("ebitda")),
+            ("Net Income (TTM)", info.get("netIncomeToCommon")),
+            ("EPS (TTM)", info.get("trailingEps")),
+            ("Forward EPS", info.get("forwardEps")),
+            ("Profit Margin", info.get("profitMargins")),
+            ("Operating Margin", info.get("operatingMargins")),
+            ("Return on Assets (TTM)", info.get("returnOnAssets")),
+            ("Return on Equity (TTM)", info.get("returnOnEquity")),
+            ("Revenue Growth", info.get("revenueGrowth")),
+            ("Earnings Growth", info.get("earningsGrowth")),
+            ("Total Cash", info.get("totalCash")),
+            ("Total Debt", info.get("totalDebt")),
+            ("Debt to Equity", info.get("debtToEquity")),
+            ("Current Ratio", info.get("currentRatio")),
+            ("Book Value", info.get("bookValue")),
+            ("Dividend Rate", info.get("dividendRate")),
+            ("Dividend Yield", info.get("dividendYield")/100),
+            ("Payout Ratio", info.get("payoutRatio")),
+            ("Beta", info.get("beta")),
+            ("52 Week High", info.get("fiftyTwoWeekHigh")),
+            ("52 Week Low", info.get("fiftyTwoWeekLow")),
+            ("50 Day Average", info.get("fiftyDayAverage")),
+            ("200 Day Average", info.get("twoHundredDayAverage")),
+            ("Shares Outstanding", info.get("sharesOutstanding")),
+            ("Float Shares", info.get("floatShares")),
+            ("Short Ratio", info.get("shortRatio")),
+            ("Short % of Float", info.get("shortPercentOfFloat")),
+            ("Free Cash Flow", info.get("freeCashflow")),
+        ]
+
+        lines = []
+        for label, value in fields:
+            if value is not None:
+                # Format percentages
+                if label in ["Profit Margin", "Operating Margin", "ROA", "ROE",
+                            "Revenue Growth", "Earnings Growth", "Dividend Yield",
+                            "Payout Ratio", "Short % of Float"]:
+                    if isinstance(value, (int, float)):
+                        lines.append(f"{label}: {value:.2%}")
+                    else:
+                        lines.append(f"{label}: {value}")
+                # Format large numbers
+                elif label in ["Market Cap", "Enterprise Value", "Revenue (TTM)",
+                              "Gross Profit (TTM)", "EBITDA", "Net Income (TTM)",
+                              "Total Cash", "Total Debt", "Free Cash Flow",
+                              "Shares Outstanding", "Float Shares"]:
+                    if isinstance(value, (int, float)) and value >= 1_000_000:
+                        if value >= 1_000_000_000_000:
+                            lines.append(f"{label}: ${value/1_000_000_000_000:.2f}T")
+                        elif value >= 1_000_000_000:
+                            lines.append(f"{label}: ${value/1_000_000_000:.2f}B")
+                        elif value >= 1_000_000:
+                            lines.append(f"{label}: ${value/1_000_000:.2f}M")
+                        else:
+                            lines.append(f"{label}: {value:,.0f}")
+                    else:
+                        lines.append(f"{label}: {value}")
+                else:
+                    lines.append(f"{label}: {value}")
+
+        header = f"# Company Fundamentals for {ticker.upper()}\n"
+        header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+
+        return header + "\n".join(lines)
+
+    except Exception as e:
+        return f"Error retrieving fundamentals for {ticker}: {str(e)}"
+
+
 def get_market_indices(
     look_back_days: Annotated[int, "how many days to look back"] = 30,
 ):
