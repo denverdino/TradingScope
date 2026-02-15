@@ -42,6 +42,7 @@ def create_risk_manager_agent(
         ReActAgent: Configured risk manager agent
     """
     company_of_interest = context.company_of_interest
+    trade_date = context.trade_date
 
     system_message = f"""{COMPLIANCE_PROMPT}
 
@@ -59,7 +60,8 @@ def create_risk_manager_agent(
 
 专注于可操作的见解和持续改进。建立在过去经验教训的基础上，批判性地评估所有观点，确保每个决策都能带来更好的结果。请用中文撰写所有分析内容和建议。
 
-公司名称：{company_of_interest}
+股票代码：{company_of_interest}
+交易日期：{trade_date}
 
 # 可用资源：
 

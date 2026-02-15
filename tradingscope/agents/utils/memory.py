@@ -184,10 +184,12 @@ class ModelStudioLongTermMemory(LongTermMemoryBase):
                     url,
                     json=payload,
                 )
+                request_id = result.get("request_id", "N/A")
                 _debug_logger.debug(
-                    "[%s] AddMemory response: %s",
-                    self.user_id, result,
+                    "[%s] AddMemory response (request_id=%s): %s",
+                    self.user_id, request_id, result,
                 )
+                logger.info(f"[{self.user_id}] AddMemory request_id: {request_id}")
                 total_saved += len(result.get("memory_nodes", []))
             except Exception as e:
                 logger.warning(
@@ -381,10 +383,12 @@ class ModelStudioLongTermMemory(LongTermMemoryBase):
 
             result = await self._search_memory.arun(search_input)
 
+            request_id = getattr(result, 'request_id', None) or "N/A"
             _debug_logger.debug(
-                "[%s] SearchMemory response: %s",
-                self.user_id, result,
+                "[%s] SearchMemory response (request_id=%s): %s",
+                self.user_id, request_id, result,
             )
+            logger.info(f"[{self.user_id}] SearchMemory request_id: {request_id}")
 
             if not result or not hasattr(result, 'memory_nodes') or not result.memory_nodes:
                 return ""
@@ -454,6 +458,9 @@ class ModelStudioLongTermMemory(LongTermMemoryBase):
                 messages=[Message(role="user", content=keywords)],
                 top_k=self.top_k
             ))
+
+            request_id = getattr(result, 'request_id', None) or "N/A"
+            logger.info(f"[{self.user_id}] SearchMemory request_id: {request_id}")
 
             if not result or not hasattr(result, 'memory_nodes') or not result.memory_nodes:
                 return "No relevant memories found"
