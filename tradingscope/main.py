@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import logging
 import os
 import smtplib
 from datetime import datetime
@@ -13,6 +14,25 @@ from agentscope import logger
 from agentscope.model import OpenAIChatModel
 
 from tradingscope.agents.workflow import analyze
+
+
+def _configure_memory_debug() -> None:
+    """Enable DEBUG logging for memory API when MEMORY_DEBUG env var is set."""
+    if not os.getenv("MEMORY_DEBUG"):
+        return
+
+    handler = logging.StreamHandler()
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s | %(name)s | %(levelname)s | %(message)s"),
+    )
+
+    for name in (
+        "agentscope_runtime.tools.modelstudio_memory",
+        "tradingscope.agents.utils.memory",
+    ):
+        log = logging.getLogger(name)
+        log.setLevel(logging.DEBUG)
+        log.addHandler(handler)
 
 
 def send_html_email(subject, html_content, recipient_emails, sender_email, sender_password):
@@ -39,6 +59,8 @@ def send_html_email(subject, html_content, recipient_emails, sender_email, sende
 
 def main():
     """Main entry point for the TradingScope application."""
+    _configure_memory_debug()
+
     # Create argument parser
     parser = argparse.ArgumentParser(description='TradingScope - Multi-Agents trading framework')
     parser.add_argument('ticker', nargs='?', default='AAPL', help='Stock ticker symbol (e.g., AAPL, BABA)')

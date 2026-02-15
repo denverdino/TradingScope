@@ -41,3 +41,4 @@ jobs:
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
           PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
           TZ: Asia/Shanghai
+          MEMORY_DEBUG: "1"

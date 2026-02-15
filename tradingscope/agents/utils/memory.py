@@ -8,6 +8,7 @@ memories, enabling agents to learn from historical trading experiences.
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any, List, Optional, Sequence, Union
 
 from agentscope import logger
@@ -15,6 +16,9 @@ from agentscope.memory import LongTermMemoryBase
 from agentscope.message import Msg
 
 from .summarize import summarize_for_memory
+
+# Module-level logger for debug output (controlled by MEMORY_DEBUG env var)
+_debug_logger = logging.getLogger(__name__)
 
 try:
     from agentscope_runtime.tools.modelstudio_memory import (
@@ -168,11 +172,21 @@ class ModelStudioLongTermMemory(LongTermMemoryBase):
                 "user_id": self.user_id,
                 "custom_content": chunk,
             }
+            url = self._add_memory.config.get_add_memory_url()
+            _debug_logger.debug(
+                "[%s] AddMemory request: url=%s, user_id=%s, "
+                "chunk_len=%d, chunk_preview=%.100r",
+                self.user_id, url, self.user_id, len(chunk), chunk,
+            )
             try:
                 result = await self._add_memory._request(
                     "POST",
-                    self._add_memory.config.get_add_memory_url(),
+                    url,
                     json=payload,
+                )
+                _debug_logger.debug(
+                    "[%s] AddMemory response: %s",
+                    self.user_id, result,
                 )
                 total_saved += len(result.get("memory_nodes", []))
             except Exception as e:
@@ -354,11 +368,23 @@ class ModelStudioLongTermMemory(LongTermMemoryBase):
             if not content:
                 return ""
 
-            result = await self._search_memory.arun(SearchMemoryInput(
+            search_input = SearchMemoryInput(
                 user_id=self.user_id,
                 messages=[Message(role="user", content=content)],
                 top_k=self.top_k
-            ))
+            )
+            _debug_logger.debug(
+                "[%s] SearchMemory request: user_id=%s, top_k=%d, "
+                "query_len=%d, query_preview=%.100r",
+                self.user_id, self.user_id, self.top_k, len(content), content,
+            )
+
+            result = await self._search_memory.arun(search_input)
+
+            _debug_logger.debug(
+                "[%s] SearchMemory response: %s",
+                self.user_id, result,
+            )
 
             if not result or not hasattr(result, 'memory_nodes') or not result.memory_nodes:
                 return ""
