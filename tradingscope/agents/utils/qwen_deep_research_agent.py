@@ -226,7 +226,7 @@ class QwenDeepResearchAgent(AgentBase):
 
                     # Display content
                     if self.verbose:
-                        print(content, end="", flush=True)
+                        logger.debug(content)
 
                 # Display status changes
                 if status:
@@ -337,7 +337,6 @@ class QwenDeepResearchAgent(AgentBase):
         if hasattr(response, "usage") and response.usage:
             usage = response.usage
             if self.verbose:
-                print("\n")
                 logger.info(
                     "\n📈 Token usage - input: %s output: %s",
                     usage.get("input_tokens", 0),

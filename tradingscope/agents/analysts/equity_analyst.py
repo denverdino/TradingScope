@@ -59,7 +59,7 @@ class EquityAnalyst(QwenDeepResearchAgent):
         )
 
         clarification = await self(user_msg)
-        print(f"\n{clarification.name}: {clarification.content}\n")
+        logger.info("%s: %s", clarification.name, clarification.content)
 
         # Step 2: Deep research
         # Based on the content of the follow-up question in Step 1,

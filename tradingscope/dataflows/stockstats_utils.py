@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import Annotated
 
@@ -7,6 +8,7 @@ from stockstats import wrap
 
 from .config import DATA_DIR, get_config
 
+logger = logging.getLogger(__name__)
 
 class StockstatsUtils:
     @staticmethod
@@ -22,8 +24,8 @@ class StockstatsUtils:
         # Get config and set up data directory path
         config = get_config()
         online = config["data_vendors"]["technical_indicators"] != "local"
-        print(f"Data cache dir: {config.get('data_cache_dir')}")
-        print(online)
+        logger.debug("Data cache dir: %s", config.get('data_cache_dir'))
+        logger.debug("Online mode: %s", online)
         df = None
         data = None
 

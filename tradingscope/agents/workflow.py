@@ -130,7 +130,7 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
 
         # Extract manager content
         researcher_investment_plan = get_content(manager_response)
-        print(f"投资决策:\n{researcher_investment_plan}")
+        logger.info("投资决策:\n%s", researcher_investment_plan)
 
         # 更新context中的投资计划
         context.researcher_investment_plan = researcher_investment_plan
@@ -141,7 +141,7 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
         })
 
         # 交易员基于研究经理的决策做出最终交易决策
-        print("\n=== 交易员最终决策 ===")
+        logger.info("=== 交易员最终决策 ===")
         # 创建交易员代理（带长期记忆）
         trader = create_trader_agent(
             model=model,
@@ -153,7 +153,7 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
         # 交易员做出交易决策
         trader_response = await trader(None)
         trader_plan = get_content(trader_response)
-        print(f"交易决策:\n{trader_plan}")
+        logger.info("交易决策:\n%s", trader_plan)
 
         # 更新context中的交易员计划
         context.trader_investment_plan = trader_plan
@@ -164,7 +164,7 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
         })
 
         # 风险管理团队对交易员决策进行辩论和评估
-        print("\n=== 风险管理团队辩论 ===")
+        logger.info("=== 风险管理团队辩论 ===")
 
         # 风险辩论者不使用长期记忆，只有风险经理使用
         aggressive_agent = create_aggressive_debator_agent(
@@ -195,7 +195,7 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
 
         # Extract manager content
         final_trade_decision = get_content(risk_decision)
-        print(f"最终交易决策:\n{final_trade_decision}")
+        logger.info("最终交易决策:\n%s", final_trade_decision)
 
         # 更新context中的最终决策
         context.final_trade_decision = final_trade_decision

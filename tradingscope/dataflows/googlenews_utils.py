@@ -1,3 +1,4 @@
+import logging
 import random
 import time
 from datetime import datetime
@@ -11,6 +12,7 @@ from tenacity import (
     wait_exponential,
 )
 
+logger = logging.getLogger(__name__)
 
 def is_rate_limited(response):
     """Check if the response indicates rate limiting (status code 429)"""
@@ -87,7 +89,7 @@ def getNewsData(query, start_date, end_date):
                         }
                     )
                 except Exception as e:
-                    print(f"Error processing result: {e}")
+                    logger.warning("Error processing result: %s", e)
                     # If one of the fields is not found, skip this result
                     continue
 
@@ -101,7 +103,7 @@ def getNewsData(query, start_date, end_date):
             page += 1
 
         except Exception as e:
-            print(f"Failed after multiple retries: {e}")
+            logger.error("Failed after multiple retries: %s", e)
             break
 
     return news_results

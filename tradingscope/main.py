@@ -52,14 +52,34 @@ def send_html_email(subject, html_content, recipient_emails, sender_email, sende
         with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
             server.login(sender_email, sender_password)
             server.sendmail(sender_email, recipient_emails, msg.as_string())
-        print("Report email sent successfully!")
+        logger.info("Report email sent successfully!")
     except Exception as e:
-        print(f"Failed to send email: {e}")
+        logger.error("Failed to send email: %s", e)
+
+
+def _configure_tool_debug() -> None:
+    """Gate tool-related console output behind the TOOL_DEBUG env var.
+
+    When TOOL_DEBUG is *not* set:
+      - Suppress the ``system: { "type": "tool_result", ... }`` JSON that
+        AgentScope prints for every tool call by replacing
+        ``AgentBase._print_last_block`` with a no-op.
+    When TOOL_DEBUG *is* set:
+      - Keep the original behaviour (the JSON is printed).
+    """
+    if os.getenv("TOOL_DEBUG"):
+        logger.info("TOOL_DEBUG enabled – tool calls will be logged with arguments and results")
+        return  # keep default printing behaviour
+
+    # Suppress AgentScope's tool-result JSON output
+    from agentscope.agent._agent_base import AgentBase  # noqa: E402
+    AgentBase._print_last_block = lambda self, block, msg: None
 
 
 def main():
     """Main entry point for the TradingScope application."""
     _configure_memory_debug()
+    _configure_tool_debug()
 
     # Create argument parser
     parser = argparse.ArgumentParser(description='TradingScope - Multi-Agents trading framework')
@@ -132,14 +152,14 @@ def main():
 </html>
 """
 
-    print("******************************* Final Report *******************************")
-    print(final_report)
+    logger.info("******************************* Final Report *******************************")
+    logger.info(final_report)
 
     # Save HTML output to a file
     html_filename = f"{ticker}_report_{trade_date}.html"
     with open(html_filename, "w", encoding="utf-8") as f:
         f.write(html_with_style)
-    print(f"\nHTML report saved to: {html_filename}")
+    logger.info("HTML report saved to: %s", html_filename)
 
     # Send email if email address is provided
     if args.email_to:
@@ -147,7 +167,7 @@ def main():
         sender_password = os.getenv("EMAIL_PASSWORD")
 
         if not sender_email or not sender_password:
-            print("Error: EMAIL_FROM and EMAIL_PASSWORD environment variables must be set to send email.")
+            logger.error("EMAIL_FROM and EMAIL_PASSWORD environment variables must be set to send email.")
         else:
             subject = f"Stock Analysis Report: {ticker} ({trade_date})"
             recipient_list = [email.strip() for email in args.email_to.split(',')]
