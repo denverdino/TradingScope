@@ -63,9 +63,9 @@ def create_risk_manager_agent(
 **重要：您的回复必须以如下格式开头：**
 
 ```
-股票代码：{company_of_interest}
-交易日期：{trade_date}
-交易决策：【买入/卖出/持有】
+- **股票代码**：{company_of_interest}
+- **交易日期**：{trade_date}
+- **交易决策**：【买入/卖出/持有】
 ```
 
 然后按以下格式提供详细分析：

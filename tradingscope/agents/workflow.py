@@ -5,6 +5,7 @@ from agentscope.message import Msg
 from agentscope.model import OpenAIChatModel
 
 from tradingscope.agents.managers.risk_manager import create_risk_manager_agent
+from tradingscope.utils.oss_report_uploader import upload_reports
 
 # Analyst imports
 from .analysts.equity_analyst import create_equity_analyst_agent
@@ -86,6 +87,14 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
 
         logger.info("分析师报告已生成，开始创建决策Agent（带长期记忆）")
 
+        # Upload analyst reports to OSS
+        await upload_reports(trade_date, ticker, {
+            "market_analyst": market_research_report,
+            "fundamentals_analyst": fundamentals_report,
+            "news_analyst": news_report,
+            "social_media_analyst": sentiment_report,
+        })
+
         # 创建研究员代理（带长期记忆）
         bear_researcher = create_bear_researcher_agent(
             model=model,
@@ -126,6 +135,11 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
         # 更新context中的投资计划
         context.researcher_investment_plan = researcher_investment_plan
 
+        # Upload research manager report to OSS
+        await upload_reports(trade_date, ticker, {
+            "research_manager": researcher_investment_plan,
+        })
+
         # 交易员基于研究经理的决策做出最终交易决策
         print("\n=== 交易员最终决策 ===")
         # 创建交易员代理（带长期记忆）
@@ -143,6 +157,11 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
 
         # 更新context中的交易员计划
         context.trader_investment_plan = trader_plan
+
+        # Upload trader report to OSS
+        await upload_reports(trade_date, ticker, {
+            "trader": trader_plan,
+        })
 
         # 风险管理团队对交易员决策进行辩论和评估
         print("\n=== 风险管理团队辩论 ===")
@@ -181,11 +200,23 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
         # 更新context中的最终决策
         context.final_trade_decision = final_trade_decision
 
+        # Upload risk manager report to OSS
+        await upload_reports(trade_date, ticker, {
+            "risk_manager": final_trade_decision,
+        })
+
         # 存储预测记录用于反思循环
         await _save_prediction_record(context, memory_manager)
 
         # 生成完整报告
-        return context.generate_full_report_md()
+        full_report = context.generate_full_report_md()
+
+        # Upload full report to OSS
+        await upload_reports(trade_date, ticker, {
+            "full_report": full_report,
+        })
+
+        return full_report
 
     finally:
         # 确保内存管理器正确关闭

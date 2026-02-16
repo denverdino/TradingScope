@@ -44,6 +44,7 @@ dependencies = [
     "tenacity>=8.2.3",
     "pytdx>=1.8.6",
     "markdown>=3.4.0",
+    "alibabacloud-oss-v2>=1.2.0",
 ]
 
 [project.optional-dependencies]

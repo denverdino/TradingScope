@@ -37,6 +37,7 @@ Requires-Dist: cachetools>=5.3.2
 Requires-Dist: tenacity>=8.2.3
 Requires-Dist: pytdx>=1.8.6
 Requires-Dist: markdown>=3.4.0
+Requires-Dist: alibabacloud-oss-v2>=1.2.0
 Provides-Extra: dev
 Requires-Dist: pytest>=7.0; extra == "dev"
 Requires-Dist: pytest-cov>=4.0; extra == "dev"
@@ -89,6 +90,12 @@ To run the fundamentals analyst agent example:
   
    # Optional
    export PERPLEXITY_API_KEY='your-api-key-here'
+
+   # Optional: OSS report storage
+   export OSS_ACCESS_KEY_ID='your-access-key-id'
+   export OSS_ACCESS_KEY_SECRET='your-access-key-secret'
+   export OSS_REGION='cn-hangzhou'
+   export OSS_BUCKET='your-bucket-name'
    ```
 
 NOTE: This project can support DashScope Open API for Qwen model only at this time.
@@ -118,4 +125,14 @@ This project uses:
 
 ## Data Storage
 
-This project now uses file-based caching for storing stock data and analysis results. 
+This project now uses file-based caching for storing stock data and analysis results.
+
+### OSS Report Storage
+
+When OSS environment variables are configured, agent-generated reports are automatically uploaded to Alibaba Cloud OSS at:
+
+```
+tradingscope/<date>/<ticker>/<agent_name>.md
+```
+
+Reports uploaded include: `market_analyst`, `fundamentals_analyst`, `news_analyst`, `social_media_analyst`, `research_manager`, `trader`, `risk_manager`, and `full_report`. If OSS is not configured, the workflow runs normally and skips uploads. 

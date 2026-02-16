@@ -38,6 +38,12 @@ To run the fundamentals analyst agent example:
   
    # Optional
    export PERPLEXITY_API_KEY='your-api-key-here'
+
+   # Optional: OSS report storage
+   export OSS_ACCESS_KEY_ID='your-access-key-id'
+   export OSS_ACCESS_KEY_SECRET='your-access-key-secret'
+   export OSS_REGION='cn-hangzhou'
+   export OSS_BUCKET='your-bucket-name'
    ```
 
 NOTE: This project can support DashScope Open API for Qwen model only at this time.
@@ -67,4 +73,14 @@ This project uses:
 
 ## Data Storage
 
-This project now uses file-based caching for storing stock data and analysis results. 
+This project now uses file-based caching for storing stock data and analysis results.
+
+### OSS Report Storage
+
+When OSS environment variables are configured, agent-generated reports are automatically uploaded to Alibaba Cloud OSS at:
+
+```
+tradingscope/<date>/<ticker>/<agent_name>.md
+```
+
+Reports uploaded include: `market_analyst`, `fundamentals_analyst`, `news_analyst`, `social_media_analyst`, `research_manager`, `trader`, `risk_manager`, and `full_report`. If OSS is not configured, the workflow runs normally and skips uploads. 
