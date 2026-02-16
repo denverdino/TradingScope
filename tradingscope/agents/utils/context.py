@@ -32,33 +32,62 @@ class AgentContext:
 
     def generate_analyst_reports_md(self) -> str:
         """Generate markdown formatted research reports section."""
-        return f"""## 股票技术面分析报告
-{self.market_report}
+        sections = []
 
-## 股票社交媒体情绪面分析报告
-{self.sentiment_report}
+        if self.market_report:
+            sections.append(f"## 股票技术面分析报告\n\n{self.market_report}")
 
-## 股票消息面分析报告
-{self.news_report}
+        if self.sentiment_report:
+            sections.append(f"## 股票社交媒体情绪面分析报告\n\n{self.sentiment_report}")
 
-## 股票基本面分析报告
-{self.fundamentals_report}
-"""
+        if self.news_report:
+            sections.append(f"## 股票消息面分析报告\n\n{self.news_report}")
+
+        if self.fundamentals_report:
+            sections.append(f"## 股票基本面分析报告\n\n{self.fundamentals_report}")
+
+        return "\n\n---\n\n".join(sections)
 
     def generate_trader_context_md(self) -> str:
         """Generate markdown formatted context for trader"""
         return f"""## 研究经理投资建议
+
 {self.researcher_investment_plan}
 
-{self.generate_analyst_reports_md()}"""
+---
 
+{self.generate_analyst_reports_md()}"""
 
     def generate_risk_evaluation_context_md(self) -> str:
         """Generate markdown formatted context for risk evaluation"""
         return f"""## 交易员操作计划
+
 {self.trader_investment_plan}
 
+---
+
 {self.generate_trader_context_md()}"""
+
+    def generate_full_report_md(self) -> str:
+        """Generate the complete analysis report in markdown format.
+
+        Returns:
+            Complete markdown report with all sections properly formatted
+        """
+        sections = [f"# 股票分析报告: {self.company_of_interest} ({self.trade_date})"]
+
+        if self.final_trade_decision:
+            sections.append(f"## 最终交易决策\n\n{self.final_trade_decision}")
+
+        if self.trader_investment_plan:
+            sections.append(f"## 交易员操作计划\n\n{self.trader_investment_plan}")
+
+        if self.researcher_investment_plan:
+            sections.append(f"## 研究经理投资建议\n\n{self.researcher_investment_plan}")
+
+        sections.append(self.generate_analyst_reports_md())
+
+        return "\n\n---\n\n".join(sections)
 
     def generate_situation_summary(self) -> str:
         """Generate a condensed market situation summary for memory retrieval.

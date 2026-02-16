@@ -46,19 +46,6 @@ def get_content(result: Msg | Exception) -> str:
     return str(result)
 
 
-def get_markdown(content: str, header_level: int) -> str:
-    # Split the content into lines
-    lines = content.split('\n')
-    markdown_lines = []
-    for line in lines:
-        if line.startswith('#'):
-            # If the line already starts with a header, keep it as is
-            markdown_lines.append(f"{'#' * header_level}{line}")
-        else:
-            markdown_lines.append(line)
-    return '\n'.join(markdown_lines)
-
-
 async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
     """运行并发智能体并执行多轮辩论，返回综合报告。"""
     # 创建AgentContext
@@ -197,14 +184,8 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
         # 存储预测记录用于反思循环
         await _save_prediction_record(context, memory_manager)
 
-        # Concatenate all reports into a single string for the markdown file
-        full_report = f"""# 股票分析报告: {ticker} ({trade_date})
-## 最终交易决策
-{final_trade_decision}
-
-{context.generate_risk_evaluation_context_md()}
-"""
-        return full_report
+        # 生成完整报告
+        return context.generate_full_report_md()
 
     finally:
         # 确保内存管理器正确关闭

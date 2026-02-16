@@ -138,16 +138,16 @@ def create_news_analyst_agent(
 🌍 考虑{market_info['market_name']}市场特点进行分析
 
 **输出格式：**
-### 📰 股票基本信息
+### 股票基本信息
 - 公司名称：{company_name}
 - 股票代码：{ticker}
 - 所属市场：{market_info['market_name']}
 - 当前价格/收盘价格：：xxx
 - 盘前/盘后价格：xxx
 
-### 📊 新闻事件分析
-### 💭 市场情绪评估
-### 📈 价格影响预测
+### 新闻事件分析
+### 市场情绪评估
+### 价格影响预测
 
 """
 
