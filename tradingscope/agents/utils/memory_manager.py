@@ -17,13 +17,14 @@ from .memory import ModelStudioLongTermMemory
 class FinancialMemoryManager:
     """Manages ModelStudioLongTermMemory instances for all decision agents.
 
-    This class creates and manages long-term memory instances for the 5 core
-    decision-making agents:
+    This class creates and manages long-term memory instances for the 6 core
+    roles:
     - bull_researcher: Bullish analysis memory
     - bear_researcher: Bearish analysis memory
     - trader: Trading decision memory
     - research_manager: Research synthesis memory
     - risk_manager: Risk assessment memory
+    - prediction_store: Prediction records storage for reflection loop
 
     Usage:
         memory_manager = FinancialMemoryManager()
@@ -38,6 +39,10 @@ class FinancialMemoryManager:
             long_term_memory_mode="static_control",
         )
 
+        # Store prediction for reflection
+        prediction_memory = memory_manager.prediction_store_memory
+        await prediction_memory.record_to_memory("...", prediction_content)
+
         # Cleanup when done
         await memory_manager.close()
     """
@@ -49,6 +54,7 @@ class FinancialMemoryManager:
         "trader",
         "research_manager",
         "risk_manager",
+        "prediction_store",  # For reflection loop prediction storage
     ]
 
     def __init__(self, user_name: str = "tradingscope", top_k: int = 5):
@@ -125,6 +131,11 @@ class FinancialMemoryManager:
     def risk_manager_memory(self) -> Optional[ModelStudioLongTermMemory]:
         """Get memory for risk manager agent."""
         return self.get_memory("risk_manager")
+
+    @property
+    def prediction_store_memory(self) -> Optional[ModelStudioLongTermMemory]:
+        """Get memory for prediction storage (reflection loop)."""
+        return self.get_memory("prediction_store")
 
     async def __aenter__(self) -> "FinancialMemoryManager":
         """Async context manager entry."""

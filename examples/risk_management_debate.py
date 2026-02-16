@@ -26,7 +26,7 @@ async def main():
         model_name="qwen-plus",
         api_key=os.environ.get("DASHSCOPE_API_KEY"),
         stream=True,
-        generate_kwargs={"temperature": 0.1}
+        generate_kwargs={"temperature": 0}
     )
 
     # Example data for a stock analysis

@@ -14,7 +14,7 @@ model = OpenAIChatModel(
     api_key=os.environ.get("DASHSCOPE_API_KEY"),
     stream=True,
     generate_kwargs={
-        "temperature": 0.1,
+        "temperature": 0,
        # "extra_body": {"enable_thinking": True}
     }
 )

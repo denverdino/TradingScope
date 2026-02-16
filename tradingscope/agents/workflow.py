@@ -15,6 +15,10 @@ from .analysts.social_media_analyst import create_social_media_analyst_agent
 
 # Researcher imports
 from .managers.research_manager import create_research_manager_agent
+
+# Import Reflection modules
+from .reflection.models import PredictionRecord
+from .reflection.prediction_store import PredictionStore
 from .researchers.bear_researcher import create_bear_researcher_agent
 from .researchers.bull_researcher import create_bull_researcher_agent
 from .researchers.debate_orchestrator import create_research_debate_orchestrator
@@ -190,6 +194,9 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
         # 更新context中的最终决策
         context.final_trade_decision = final_trade_decision
 
+        # 存储预测记录用于反思循环
+        await _save_prediction_record(context, memory_manager)
+
         # Concatenate all reports into a single string for the markdown file
         full_report = f"""# 股票分析报告: {ticker} ({trade_date})
 ## 最终交易决策
@@ -202,3 +209,55 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
     finally:
         # 确保内存管理器正确关闭
         await memory_manager.close()
+
+
+async def _save_prediction_record(
+    context: AgentContext,
+    memory_manager: FinancialMemoryManager
+) -> None:
+    """Save prediction record for reflection loop.
+
+    Extracts prediction data from context and stores it using
+    the prediction_store memory for later evaluation.
+
+    Args:
+        context: AgentContext with final trade decision
+        memory_manager: FinancialMemoryManager instance
+    """
+    try:
+        # Extract prediction data from context
+        pred_data = context.extract_prediction_data()
+
+        # Create prediction record
+        prediction = PredictionRecord.create(
+            symbol=context.company_of_interest,
+            prediction_date=context.trade_date,
+            direction=pred_data["direction"],
+            action=pred_data["action"],
+            confidence=pred_data["confidence"],
+            reasoning=pred_data["reasoning"],
+            evaluation_delay_days=5,  # T+5 evaluation
+            entry_price=pred_data.get("entry_price"),
+            target_price=pred_data.get("target_price"),
+            stop_loss=pred_data.get("stop_loss"),
+        )
+
+        # Save to prediction store
+        prediction_store = PredictionStore(
+            memory=memory_manager.prediction_store_memory
+        )
+        saved = await prediction_store.save(prediction)
+
+        if saved:
+            logger.info(
+                f"[ReflectionLoop] Saved prediction for {prediction.prediction_id}, "
+                f"evaluation scheduled for {prediction.evaluation_date}"
+            )
+        else:
+            logger.warning(
+                f"[ReflectionLoop] Failed to save prediction for {context.company_of_interest}"
+            )
+
+    except Exception as e:
+        logger.warning(f"[ReflectionLoop] Error saving prediction: {e}")
+        # Don't fail the workflow if prediction storage fails

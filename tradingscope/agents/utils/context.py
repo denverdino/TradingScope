@@ -1,5 +1,6 @@
+import re
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Dict, Optional
 
 
 class AgentContext:
@@ -92,3 +93,129 @@ class AgentContext:
             summary_parts.append(f"情绪面: {sentiment_summary}")
 
         return "\n".join(summary_parts)
+
+    def extract_prediction_data(self) -> Dict[str, Optional[str]]:
+        """Extract structured prediction data from final trade decision.
+
+        Parses the final_trade_decision text to extract:
+        - direction: bullish/bearish/neutral
+        - action: buy/sell/hold
+        - confidence: 0-1 (from 置信度 field)
+        - entry_price: suggested entry price
+        - target_price: price target
+        - stop_loss: stop loss price
+        - reasoning: core reasoning (compressed)
+
+        Returns:
+            Dictionary with extracted prediction fields
+        """
+        result = {
+            "direction": "neutral",
+            "action": "hold",
+            "confidence": 0.5,
+            "entry_price": None,
+            "target_price": None,
+            "stop_loss": None,
+            "reasoning": "",
+        }
+
+        decision_text = self.final_trade_decision
+        if not decision_text:
+            decision_text = self.trader_investment_plan
+
+        if not decision_text:
+            return result
+
+        text_lower = decision_text.lower()
+
+        # Extract action (buy/sell/hold)
+        if any(kw in text_lower for kw in ["买入", "buy", "做多", "增持"]):
+            result["action"] = "buy"
+            result["direction"] = "bullish"
+        elif any(kw in text_lower for kw in ["卖出", "sell", "做空", "减持", "清仓"]):
+            result["action"] = "sell"
+            result["direction"] = "bearish"
+        else:
+            result["action"] = "hold"
+            result["direction"] = "neutral"
+
+        # Extract confidence (置信度)
+        confidence_patterns = [
+            r"置信度[：:]\s*(\d+\.?\d*)",
+            r"信心[：:]\s*(\d+\.?\d*)",
+            r"confidence[：:]\s*(\d+\.?\d*)",
+        ]
+        for pattern in confidence_patterns:
+            match = re.search(pattern, decision_text, re.IGNORECASE)
+            if match:
+                conf = float(match.group(1))
+                # Normalize to 0-1 if given as percentage
+                if conf > 1:
+                    conf = conf / 100
+                result["confidence"] = min(1.0, max(0.0, conf))
+                break
+
+        # Extract entry price
+        entry_patterns = [
+            r"入场价[：:位]\s*\$?(\d+\.?\d*)",
+            r"建议入场[：:价]\s*\$?(\d+\.?\d*)",
+            r"entry[：:\s]+\$?(\d+\.?\d*)",
+        ]
+        for pattern in entry_patterns:
+            match = re.search(pattern, decision_text, re.IGNORECASE)
+            if match:
+                result["entry_price"] = float(match.group(1))
+                break
+
+        # Extract target price
+        target_patterns = [
+            r"目标价[：:位]\s*\$?(\d+\.?\d*)",
+            r"目标[：:\s]+\$?(\d+\.?\d*)",
+            r"target[：:\s]+\$?(\d+\.?\d*)",
+        ]
+        for pattern in target_patterns:
+            match = re.search(pattern, decision_text, re.IGNORECASE)
+            if match:
+                result["target_price"] = float(match.group(1))
+                break
+
+        # Extract stop loss
+        stop_patterns = [
+            r"止损[价位：:]\s*\$?(\d+\.?\d*)",
+            r"stop.?loss[：:\s]+\$?(\d+\.?\d*)",
+        ]
+        for pattern in stop_patterns:
+            match = re.search(pattern, decision_text, re.IGNORECASE)
+            if match:
+                result["stop_loss"] = float(match.group(1))
+                break
+
+        # Extract reasoning (first meaningful paragraph)
+        reasoning_parts = []
+
+        # Look for key decision points
+        reason_patterns = [
+            r"决策理由[：:](.*?)(?:\n\n|\n#|$)",
+            r"核心逻辑[：:](.*?)(?:\n\n|\n#|$)",
+            r"主要原因[：:](.*?)(?:\n\n|\n#|$)",
+        ]
+        for pattern in reason_patterns:
+            match = re.search(pattern, decision_text, re.DOTALL)
+            if match:
+                reasoning_parts.append(match.group(1).strip()[:100])
+                break
+
+        # If no explicit reasoning, extract from action context
+        if not reasoning_parts:
+            # Find sentences containing the action keyword
+            sentences = re.split(r'[。\.\n]', decision_text)
+            action_keywords = ["买入", "卖出", "持有", "buy", "sell", "hold"]
+            for sent in sentences:
+                if any(kw in sent.lower() for kw in action_keywords) and len(sent) > 20:
+                    reasoning_parts.append(sent.strip()[:100])
+                    break
+
+        result["reasoning"] = "".join(reasoning_parts)[:100] if reasoning_parts else "未提供详细理由"
+
+        return result
+

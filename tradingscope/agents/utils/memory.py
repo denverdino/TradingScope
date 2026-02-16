@@ -544,3 +544,52 @@ class ModelStudioLongTermMemory(LongTermMemoryBase):
         except Exception as e:
             logger.warning(f"[{self.user_id}] Failed to add trading lesson: {e}")
             return False
+
+    async def add_reflection_lesson(
+        self,
+        lesson_content: str,
+        weight: float = 1.0,
+        lesson_type: str = "reflection",
+    ) -> bool:
+        """Add a weighted reflection lesson to memory.
+
+        This method stores reflection lessons with embedded metadata
+        for weight and type information. Higher weight lessons are
+        more important for the agent to consider.
+
+        Args:
+            lesson_content: Pre-formatted lesson content (from ReflectionLesson.to_memory_format())
+            weight: Memory weight 0-1 (higher = more important, error cases get higher weight)
+            lesson_type: Type of lesson (success/failure/partial/reflection)
+
+        Returns:
+            True if successfully recorded, False otherwise
+        """
+        if not await self._ensure_initialized():
+            return False
+
+        try:
+            # The lesson_content should already be formatted with metadata
+            # If not, wrap it with weight information
+            if "[元数据]" not in lesson_content:
+                content = (
+                    f"[元数据]\n"
+                    f"类型: {lesson_type}\n"
+                    f"权重: {weight:.1f}\n\n"
+                    f"[内容]\n"
+                    f"{lesson_content}"
+                )
+            else:
+                content = lesson_content
+
+            saved = await self._add_memory_raw(content)
+
+            if saved:
+                logger.info(
+                    f"[{self.user_id}] Added reflection lesson (weight={weight:.2f}, type={lesson_type})"
+                )
+            return saved
+
+        except Exception as e:
+            logger.warning(f"[{self.user_id}] Failed to add reflection lesson: {e}")
+            return False
