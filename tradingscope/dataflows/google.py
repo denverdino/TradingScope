@@ -1,32 +1,57 @@
-from datetime import datetime
 from typing import Annotated
 
-from dateutil.relativedelta import relativedelta
+from tradingscope.agents.utils.agent_utils import get_company_name
 
 from .googlenews_utils import getNewsData
 
 
 def get_google_news(
-    query: Annotated[str, "Query to search with"],
-    curr_date: Annotated[str, "Curr date in yyyy-mm-dd format"],
-    look_back_days: Annotated[int, "how many days to look back"],
+    ticker: Annotated[str, "Stock ticker symbol"],
+    start_date: Annotated[str, "Start date in yyyy-mm-dd format"],
+    end_date: Annotated[str, "End date in yyyy-mm-dd format"],
 ) -> str:
-    query = query.replace(" ", "+")
+    """Fetch Google News for a stock using company name.
 
-    start_date = datetime.strptime(curr_date, "%Y-%m-%d")
-    before = start_date - relativedelta(days=look_back_days)
-    before = before.strftime("%Y-%m-%d")
+    Args:
+        ticker: Stock ticker symbol (will be converted to company name)
+        start_date: Start date in yyyy-mm-dd format
+        end_date: End date in yyyy-mm-dd format
 
-    news_results = getNewsData(query, before, curr_date)
+    Returns:
+        Formatted news string with inline links
+    """
+    # Convert ticker to company name for better search results
+    company_name = get_company_name(ticker)
+    query = company_name.replace(" ", "+")
 
-    news_str = ""
-
-    for news in news_results:
-        news_str += (
-            f"### {news['title']} (source: {news['source']}) \n\n{news['snippet']}\n\n"
-        )
+    news_results = getNewsData(query, start_date, end_date)
 
     if len(news_results) == 0:
         return ""
 
-    return f"## {query} Google News, from {before} to {curr_date}:\n\n{news_str}"
+    news_str = ""
+
+    for news in news_results:
+        title = news.get('title', '无标题')
+        link = news.get('link', '')
+        source = news.get('source', '未知来源')
+        snippet = news.get('snippet', '')
+        date = news.get('date', '')
+
+        # Build article entry with inline link
+        if link:
+            news_str += f"### [{title}]({link})\n"
+        else:
+            news_str += f"### {title}\n"
+
+        news_str += f"**来源:** {source}"
+        if date:
+            news_str += f" | **时间:** {date}"
+        news_str += "\n\n"
+
+        if snippet:
+            news_str += f"{snippet}\n\n"
+
+        news_str += "---\n\n"
+
+    return f"## {company_name} ({ticker}) Google News ({start_date} 至 {end_date}):\n\n{news_str}"

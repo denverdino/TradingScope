@@ -4,46 +4,133 @@ from agentscope import logger
 
 COMPLIANCE_PROMPT = "你必须严格遵守内容安全与合规要求，不得生成任何涉黄、涉暴、涉政、违法、仇恨、歧视等内容。"
 
-ticker_to_company = {
+# Mapping of ticker symbols to company names
+TICKER_TO_COMPANY = {
+    # Tech Giants
     "AAPL": "Apple",
     "MSFT": "Microsoft",
     "GOOGL": "Google",
+    "GOOG": "Google",
     "AMZN": "Amazon",
-    "TSLA": "Tesla",
+    "META": "Meta",
     "NVDA": "Nvidia",
-    "TSM": "Taiwan Semiconductor Manufacturing Company OR TSMC",
-    "JPM": "JPMorgan Chase OR JP Morgan",
-    "JNJ": "Johnson & Johnson OR JNJ",
-    "V": "Visa",
-    "WMT": "Walmart",
-    "META": "Meta OR Facebook",
+    "TSM": "Taiwan Semiconductor Manufacturing Company",
+    "AVGO": "Broadcom",
+    "ASML": "ASML",
     "AMD": "AMD",
     "INTC": "Intel",
     "QCOM": "Qualcomm",
-    "BABA": "Alibaba",
-    "ADBE": "Adobe",
-    "NFLX": "Netflix",
-    "CRM": "Salesforce",
-    "PYPL": "PayPal",
-    "PLTR": "Palantir",
     "MU": "Micron",
-    "SQ": "Block OR Square",
-    "ZM": "Zoom",
-    "CSCO": "Cisco",
-    "SHOP": "Shopify",
+    # Cloud & Software
+    "CRM": "Salesforce",
     "ORCL": "Oracle",
-    "X": "Twitter OR X",
-    "SPOT": "Spotify",
-    "AVGO": "Broadcom",
-    "ASML": "ASML ",
-    "TWLO": "Twilio",
-    "SNAP": "Snap Inc.",
+    "ADBE": "Adobe",
+    "NOW": "ServiceNow",
+    "SNOW": "Snowflake",
+    "DDOG": "Datadog",
+    "MDB": "MongoDB",
+    "NET": "Cloudflare",
     "TEAM": "Atlassian",
-    "SQSP": "Squarespace",
-    "UBER": "Uber",
+    "SHOP": "Shopify",
+    "TWLO": "Twilio",
+    # Cybersecurity
+    "CRWD": "CrowdStrike",
+    "PANW": "Palo Alto Networks",
+    "ZS": "Zscaler",
+    # Consumer Tech
+    "TSLA": "Tesla",
+    "NFLX": "Netflix",
+    "SPOT": "Spotify",
     "ROKU": "Roku",
+    "ZM": "Zoom",
+    "SNAP": "Snap Inc",
     "PINS": "Pinterest",
+    "UBER": "Uber",
+    "LYFT": "Lyft",
+    # Fintech & Payments
+    "V": "Visa",
+    "MA": "Mastercard",
+    "PYPL": "PayPal",
+    "SQ": "Block Square",
+    "COIN": "Coinbase",
+    "HOOD": "Robinhood",
+    # Finance
+    "JPM": "JPMorgan Chase",
+    "BAC": "Bank of America",
+    "WFC": "Wells Fargo",
+    "GS": "Goldman Sachs",
+    "MS": "Morgan Stanley",
+    "C": "Citigroup",
+    # Healthcare & Pharma
+    "JNJ": "Johnson & Johnson",
+    "UNH": "UnitedHealth",
+    "PFE": "Pfizer",
+    "MRNA": "Moderna",
+    "ABBV": "AbbVie",
+    "LLY": "Eli Lilly",
+    "BMY": "Bristol-Myers Squibb",
+    "GILD": "Gilead Sciences",
+    "AMGN": "Amgen",
+    "BIIB": "Biogen",
+    "REGN": "Regeneron",
+    "VRTX": "Vertex Pharmaceuticals",
+    "CVS": "CVS Health",
+    # Retail & Consumer
+    "WMT": "Walmart",
+    "COST": "Costco",
+    "TGT": "Target",
+    "HD": "Home Depot",
+    "LOW": "Lowe's",
+    "NKE": "Nike",
+    "SBUX": "Starbucks",
+    "MCD": "McDonald's",
+    "KO": "Coca-Cola",
+    "PEP": "PepsiCo",
+    "DIS": "Disney",
+    # Chinese Tech
+    "BABA": "Alibaba",
+    "JD": "JD.com",
+    "PDD": "Pinduoduo PDD",
+    "BIDU": "Baidu",
+    "NIO": "NIO",
+    "XPEV": "XPeng",
+    "LI": "Li Auto",
+    # Automotive
+    "F": "Ford",
+    "GM": "General Motors",
+    "TM": "Toyota",
+    "HMC": "Honda",
+    "RIVN": "Rivian",
+    "LCID": "Lucid Motors",
+    # Aerospace & Defense
+    "BA": "Boeing",
+    "LMT": "Lockheed Martin",
+    "RTX": "Raytheon",
+    "NOC": "Northrop Grumman",
+    # Telecom
+    "T": "AT&T",
+    "VZ": "Verizon",
+    "TMUS": "T-Mobile",
+    # Networking
+    "CSCO": "Cisco",
+    # Other
+    "PLTR": "Palantir",
+    "X": "Twitter X",
+    "SQSP": "Squarespace",
 }
 
-def get_company_name(ticker: str, market_info: dict) -> str:
-    return ticker_to_company.get(ticker.upper(), ticker)
+# Backward compatibility alias
+ticker_to_company = TICKER_TO_COMPANY
+
+
+def get_company_name(ticker: str, market_info: dict = None) -> str:
+    """Get company name from ticker symbol.
+
+    Args:
+        ticker: Stock ticker symbol
+        market_info: Optional market info dict (kept for backward compatibility)
+
+    Returns:
+        Company name if found, otherwise returns the ticker itself
+    """
+    return TICKER_TO_COMPANY.get(ticker.upper(), ticker)
