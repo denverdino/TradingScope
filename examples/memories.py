@@ -3,29 +3,29 @@
 
 Usage:
     # View all agent memories
-    python examples.view_memories
+    python examples.memories
 
     # View memories for a specific role
-    python examples.view_memories --role trader
+    python examples.memories --role trader
 
     # Search memories with a specific query
-    python examples.view_memories --role bull_researcher --query "技术面强但基本面疲软"
+    python examples.memories --role bull_researcher --query "技术面强但基本面疲软"
 
     # Add a trading lesson to a role's memory
-    python examples.view_memories --role trader --add \
+    python examples.memories --role trader --add \
         --situation "RSI超卖，MACD金叉" \
         --decision "买入" \
         --outcome "盈利8%" \
         --lesson "RSI超卖配合MACD金叉是较强的买入信号"
 
     # Clear memories for a specific role (requires confirmation)
-    python examples.view_memories --role trader --clear
+    python examples.memories --role trader --clear
 
     # Clear memories for ALL roles (requires confirmation)
-    python examples.view_memories --clear-all
+    python examples.memories --clear-all
 
     # Force clear without confirmation (use with caution!)
-    python examples.view_memories --clear-all --force
+    python examples.memories --clear-all --force
 """
 
 import argparse

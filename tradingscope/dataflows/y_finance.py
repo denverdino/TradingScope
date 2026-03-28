@@ -6,12 +6,12 @@ from typing import Annotated
 import yfinance as yf
 from dateutil.relativedelta import relativedelta
 
-from .stockstats_utils import StockstatsUtils
+from .stockstats_utils import StockstatsUtils, _clean_dataframe, yf_retry
 
 logger = logging.getLogger(__name__)
 
 def get_YFin_stock_info(symbol: Annotated[str, "ticker symbol of the company"]):
-    info = yf.Ticker(symbol.upper()).info
+    info = yf_retry(lambda: yf.Ticker(symbol.upper()).info)
     info.pop("longBusinessSummary", None)
     info.pop("companyOfficers", None)
     return info
@@ -30,7 +30,7 @@ def get_YFin_data_online(
     ticker = yf.Ticker(symbol.upper())
 
     # Fetch historical data for the specified date range
-    data = ticker.history(start=start_date, end=end_date)
+    data = yf_retry(lambda: ticker.history(start=start_date, end=end_date))
 
     # Check if data is empty
     if data.empty:
@@ -221,9 +221,9 @@ def _get_stock_stats_bulk(
                 os.path.join(
                     config.get("data_cache_dir", "data"),
                     f"{symbol}-YFin-data-2015-01-01-2025-03-25.csv",
-                )
+                ),
+                on_bad_lines="skip",
             )
-            df = wrap(data)
         except FileNotFoundError:
             raise Exception("Stockstats fail: Yahoo Finance data not fetched yet!")
     else:
@@ -244,22 +244,22 @@ def _get_stock_stats_bulk(
         )
 
         if os.path.exists(data_file):
-            data = pd.read_csv(data_file)
-            data["Date"] = pd.to_datetime(data["Date"])
+            data = pd.read_csv(data_file, on_bad_lines="skip")
         else:
-            data = yf.download(
+            data = yf_retry(lambda: yf.download(
                 symbol,
                 start=start_date_str,
                 end=end_date_str,
                 multi_level_index=False,
                 progress=False,
                 auto_adjust=True,
-            )
+            ))
             data = data.reset_index()
             data.to_csv(data_file, index=False)
 
-        df = wrap(data)
-        df["Date"] = df["Date"].dt.strftime("%Y-%m-%d")
+    data = _clean_dataframe(data)
+    df = wrap(data)
+    df["Date"] = df["Date"].dt.strftime("%Y-%m-%d")
 
     # Calculate the indicator for all rows at once
     df[indicator]  # This triggers stockstats to calculate the indicator
@@ -316,9 +316,9 @@ def get_balance_sheet(
         ticker_obj = yf.Ticker(ticker.upper())
 
         if freq.lower() == "quarterly":
-            data = ticker_obj.quarterly_balance_sheet
+            data = yf_retry(lambda: ticker_obj.quarterly_balance_sheet)
         else:
-            data = ticker_obj.balance_sheet
+            data = yf_retry(lambda: ticker_obj.balance_sheet)
 
         if data.empty:
             return f"No balance sheet data found for symbol '{ticker}'"
@@ -346,9 +346,9 @@ def get_cashflow(
         ticker_obj = yf.Ticker(ticker.upper())
 
         if freq.lower() == "quarterly":
-            data = ticker_obj.quarterly_cashflow
+            data = yf_retry(lambda: ticker_obj.quarterly_cashflow)
         else:
-            data = ticker_obj.cashflow
+            data = yf_retry(lambda: ticker_obj.cashflow)
 
         if data.empty:
             return f"No cash flow data found for symbol '{ticker}'"
@@ -376,9 +376,9 @@ def get_income_statement(
         ticker_obj = yf.Ticker(ticker.upper())
 
         if freq.lower() == "quarterly":
-            data = ticker_obj.quarterly_income_stmt
+            data = yf_retry(lambda: ticker_obj.quarterly_income_stmt)
         else:
-            data = ticker_obj.income_stmt
+            data = yf_retry(lambda: ticker_obj.income_stmt)
 
         if data.empty:
             return f"No income statement data found for symbol '{ticker}'"
@@ -402,7 +402,7 @@ def get_insider_transactions(
     """Get insider transactions data from yfinance."""
     try:
         ticker_obj = yf.Ticker(ticker.upper())
-        data = ticker_obj.insider_transactions
+        data = yf_retry(lambda: ticker_obj.insider_transactions)
 
         if data is None or data.empty:
             return f"No insider transactions data found for symbol '{ticker}'"
@@ -448,7 +448,7 @@ def get_sector_performance(
 
     try:
         ticker_obj = yf.Ticker(ticker.upper())
-        info = ticker_obj.info
+        info = yf_retry(lambda: ticker_obj.info)
 
         sector = info.get("sector", "Unknown")
         industry = info.get("industry", "Unknown")
@@ -457,7 +457,7 @@ def get_sector_performance(
         end_date = datetime.now()
         start_date = end_date - relativedelta(days=look_back_days + 10)  # Extra buffer for trading days
 
-        stock_hist = ticker_obj.history(start=start_date.strftime("%Y-%m-%d"), end=end_date.strftime("%Y-%m-%d"))
+        stock_hist = yf_retry(lambda: ticker_obj.history(start=start_date.strftime("%Y-%m-%d"), end=end_date.strftime("%Y-%m-%d")))
 
         if stock_hist.empty:
             return f"No historical data found for symbol '{ticker}'"
@@ -487,7 +487,7 @@ def get_sector_performance(
         if sector_etf:
             try:
                 etf_obj = yf.Ticker(sector_etf)
-                etf_hist = etf_obj.history(start=start_date.strftime("%Y-%m-%d"), end=end_date.strftime("%Y-%m-%d"))
+                etf_hist = yf_retry(lambda: etf_obj.history(start=start_date.strftime("%Y-%m-%d"), end=end_date.strftime("%Y-%m-%d")))
 
                 if not etf_hist.empty:
                     etf_close = etf_hist['Close']
@@ -528,7 +528,7 @@ def get_fundamentals(
     """Get company fundamentals overview from yfinance."""
     try:
         ticker_obj = yf.Ticker(ticker.upper())
-        info = ticker_obj.info
+        info = yf_retry(lambda: ticker_obj.info)
         if not info:
             return f"No fundamentals data found for symbol '{ticker}'"
 
@@ -650,7 +650,7 @@ def get_market_indices(
         for symbol, name in INDICES.items():
             try:
                 ticker_obj = yf.Ticker(symbol)
-                hist = ticker_obj.history(start=start_date.strftime("%Y-%m-%d"), end=end_date.strftime("%Y-%m-%d"))
+                hist = yf_retry(lambda t=ticker_obj: t.history(start=start_date.strftime("%Y-%m-%d"), end=end_date.strftime("%Y-%m-%d")))
 
                 if hist.empty:
                     result += f"## {name} ({symbol}): No data available\n\n"
