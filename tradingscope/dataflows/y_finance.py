@@ -679,16 +679,69 @@ def get_market_indices(
                     return_period = ((close.iloc[-1] / close.iloc[-look_back_days]) - 1) * 100
                     result += f"- {look_back_days}-Day Change: {return_period:+.2f}%\n"
 
-                # For VIX, add interpretation
+                # For VIX, add detailed interpretation and trend analysis
                 if symbol == "^VIX":
                     if current_price < 15:
-                        result += "- VIX Interpretation: Low volatility (complacency)\n"
+                        result += "- VIX Interpretation: Low volatility (complacency / 极度乐观)\n"
                     elif current_price < 20:
-                        result += "- VIX Interpretation: Normal volatility\n"
+                        result += "- VIX Interpretation: Normal volatility (正常波动)\n"
+                    elif current_price < 25:
+                        result += "- VIX Interpretation: Elevated volatility (波动偏高，需谨慎)\n"
                     elif current_price < 30:
-                        result += "- VIX Interpretation: Elevated volatility (caution)\n"
+                        result += "- VIX Interpretation: High volatility (高度恐慌，市场承压)\n"
                     else:
-                        result += "- VIX Interpretation: High volatility (fear)\n"
+                        result += "- VIX Interpretation: Extreme fear (极端恐慌，市场可能超卖)\n"
+
+                    # VIX trend analysis
+                    if len(close) >= 5:
+                        vix_5d_high = close.iloc[-5:].max()
+                        vix_5d_low = close.iloc[-5:].min()
+                        vix_5d_avg = close.iloc[-5:].mean()
+                        result += f"- VIX 5-Day Range: {vix_5d_low:.2f} - {vix_5d_high:.2f} (Avg: {vix_5d_avg:.2f})\n"
+
+                        # Spike detection: VIX surged more than 20% in 5 days
+                        vix_5d_change = ((close.iloc[-1] / close.iloc[-5]) - 1) * 100
+                        if vix_5d_change > 20:
+                            result += f"- ⚠ VIX Spike Detected: 5-day surge {vix_5d_change:+.2f}%, 市场恐慌情绪急剧上升\n"
+                        elif vix_5d_change < -20:
+                            result += f"- VIX Rapid Decline: 5-day drop {vix_5d_change:+.2f}%, 恐慌情绪快速消退\n"
+
+                    if len(close) >= 20:
+                        vix_20d_avg = close.iloc[-20:].mean()
+                        result += f"- VIX 20-Day Average: {vix_20d_avg:.2f}\n"
+                        if current_price > vix_20d_avg * 1.1:
+                            result += "- VIX above 20-day MA (市场波动高于近期均值，风险偏高)\n"
+                        elif current_price < vix_20d_avg * 0.9:
+                            result += "- VIX below 20-day MA (市场波动低于近期均值，情绪偏乐观)\n"
+                        else:
+                            result += "- VIX near 20-day MA (波动处于近期正常范围)\n"
+
+                # For NASDAQ, add trend and momentum analysis
+                if symbol == "^IXIC":
+                    if len(close) >= 20:
+                        nasdaq_20d_avg = close.iloc[-20:].mean()
+                        result += f"- NASDAQ 20-Day MA: {nasdaq_20d_avg:,.2f}\n"
+                        if current_price > nasdaq_20d_avg:
+                            pct_above = ((current_price / nasdaq_20d_avg) - 1) * 100
+                            result += f"- Price above 20-Day MA by {pct_above:.2f}% (中短期趋势偏多)\n"
+                        else:
+                            pct_below = ((nasdaq_20d_avg / current_price) - 1) * 100
+                            result += f"- Price below 20-Day MA by {pct_below:.2f}% (中短期趋势偏空)\n"
+
+                    if len(close) >= 5:
+                        nasdaq_5d_high = close.iloc[-5:].max()
+                        nasdaq_5d_low = close.iloc[-5:].min()
+                        result += f"- NASDAQ 5-Day Range: {nasdaq_5d_low:,.2f} - {nasdaq_5d_high:,.2f}\n"
+
+                        # Momentum: consecutive up/down days
+                        up_days = sum(1 for i in range(-5, 0) if close.iloc[i] > close.iloc[i-1])
+                        result += f"- NASDAQ Recent Momentum: {up_days}/5 trading days positive (近5日上涨天数)\n"
+
+                    if len(close) >= 2:
+                        # Daily range as volatility indicator
+                        if 'High' in hist.columns and 'Low' in hist.columns:
+                            daily_range_pct = ((hist['High'].iloc[-1] - hist['Low'].iloc[-1]) / close.iloc[-2]) * 100
+                            result += f"- NASDAQ Daily Range: {daily_range_pct:.2f}% (当日振幅)\n"
 
                 result += "\n"
 

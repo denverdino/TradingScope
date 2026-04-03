@@ -57,7 +57,7 @@ def create_social_media_analyst_agent(
     # 当前日期
     current_date = trade_date or datetime.now().strftime("%Y-%m-%d")
 
-    tool_names = "get_stock_info, get_news"
+    tool_names = ", ".join(toolkit.tools.keys())
 
     system_prompt = f"""
 {COMPLIANCE_PROMPT}
@@ -117,7 +117,7 @@ def create_social_media_analyst_agent(
 - 盘前/盘后价格：xxx
 
 ### 社交媒体舆情概览（时间窗口、来源、热度概况）
-### 平台分项分析（雪球/股吧/微博/Reddit 等，KOL & 观点要点）
+### 平台分项分析（主要财经媒体与社交平台，中英文，按数据可用性）
 ### 事件与话题脉络（时间线/因果链）
 ### 市场情绪评估（含**情绪指数 1–10 分**与理由）
 ### 价格影响预测（1–5 天，幅度区间、支撑/阻力位）

@@ -54,7 +54,14 @@ def create_fundamentals_analyst_agent(
     currency_symbol = market_info["currency_symbol"]
     market_name = market_info["market_name"]
 
-    tool_names = "get_fundamentals, get_balance_sheet, get_cashflow, get_income_statement"
+    formatter = OpenAIChatFormatter()
+    toolkit = Toolkit()
+    toolkit.register_tool_function(get_fundamentals)
+    toolkit.register_tool_function(get_balance_sheet)
+    toolkit.register_tool_function(get_cashflow)
+    toolkit.register_tool_function(get_income_statement)
+
+    tool_names = ", ".join(toolkit.tools.keys())
 
     # 面向短期交易的基本面分析提示词
     system_prompt = f"""{COMPLIANCE_PROMPT}
@@ -152,12 +159,6 @@ def create_fundamentals_analyst_agent(
 现在**立即**根据上述规范完成一次面向短期交易的基本面分析。
 """
 
-    formatter = OpenAIChatFormatter()
-    toolkit = Toolkit()
-    toolkit.register_tool_function(get_fundamentals)
-    toolkit.register_tool_function(get_balance_sheet)
-    toolkit.register_tool_function(get_cashflow)
-    toolkit.register_tool_function(get_income_statement)
 
     # ===== 创建 ReActAgent =====
     agent = ReActAgent(

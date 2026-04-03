@@ -64,7 +64,7 @@ def create_news_analyst_agent(
     current_date = trade_date or datetime.now().strftime("%Y-%m-%d")
 
     # 获取工具名称
-    tool_names = "get_stock_info, get_news, get_global_news"
+    tool_names = ", ".join(toolkit.tools.keys())
 
     # 构建完整的系统提示词
     system_prompt = f"""
