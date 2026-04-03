@@ -8,11 +8,12 @@ from datetime import datetime
 from agentscope.model import OpenAIChatModel
 
 from tradingscope.agents.analysts.social_media_analyst import create_social_media_analyst_agent
+from tradingscope.default_config import DEFAULT_CONFIG
 
 
 async def main():
     model = OpenAIChatModel(
-        model_name="qwen-plus",
+        model_name=DEFAULT_CONFIG["deep_think_llm"],
         api_key=os.environ.get("DASHSCOPE_API_KEY"),
         stream=True,
     )

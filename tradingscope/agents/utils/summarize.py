@@ -12,11 +12,13 @@ import os
 from agentscope import logger
 from openai import AsyncOpenAI
 
+from tradingscope.default_config import DEFAULT_CONFIG
+
 # DashScope OpenAI-compatible endpoint
 _DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 # Use a fast, cheap model for summarization
-_DEFAULT_MODEL = "qwen-turbo"
+_DEFAULT_MODEL = DEFAULT_CONFIG["quick_think_llm"]
 
 _SUMMARIZE_PROMPT = (
     "你是一位专业的股票分析摘要专家。请将以下股票分析内容压缩为一段简洁的摘要。\n"
@@ -46,7 +48,7 @@ async def summarize_for_memory(
     Args:
         content: The stock analysis text to summarize.
         max_chars: Maximum character count for the summary. Defaults to 500.
-        model: Model name to use. Defaults to qwen-turbo.
+        model: Model name to use. Defaults to DEFAULT_CONFIG["quick_think_llm"].
         api_key: DashScope API key. Defaults to DASHSCOPE_API_KEY env var.
 
     Returns:

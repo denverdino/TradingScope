@@ -93,7 +93,7 @@ def main():
     # Initialize model
     # extra_body with enable_thinking=True enables Qwen3 reasoning/thinking mode
     model = OpenAIChatModel(
-        model_name="qwen3.5-plus",
+        model_name=DEFAULT_CONFIG["deep_think_llm"],
         api_key=os.environ.get("DASHSCOPE_API_KEY"),
         stream=True,
         generate_kwargs={
@@ -174,4 +174,5 @@ def main():
             send_html_email(subject, html_with_style, recipient_list, sender_email, sender_password)
 
 if __name__ == "__main__":
+    main()
     main()

@@ -16,6 +16,7 @@ from tradingscope.agents.risk_mgmt.debate_orchestrator import create_debate_orch
 from tradingscope.agents.risk_mgmt.neutral_debator import create_neutral_debator_agent
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.memory_manager import FinancialMemoryManager
+from tradingscope.default_config import DEFAULT_CONFIG
 
 
 async def main():
@@ -23,7 +24,7 @@ async def main():
 
     # Initialize the model
     model = OpenAIChatModel(
-        model_name="qwen-plus",
+        model_name=DEFAULT_CONFIG["deep_think_llm"],
         api_key=os.environ.get("DASHSCOPE_API_KEY"),
         stream=True,
         generate_kwargs={"temperature": 0}

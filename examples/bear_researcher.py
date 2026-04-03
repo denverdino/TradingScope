@@ -10,12 +10,13 @@ from agentscope.model import OpenAIChatModel
 from tradingscope.agents.researchers.bear_researcher import create_bear_researcher_agent
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.memory_manager import FinancialMemoryManager
+from tradingscope.default_config import DEFAULT_CONFIG
 
 
 async def main():
     # Initialize the model
     model = OpenAIChatModel(
-        model_name="qwen-plus",
+        model_name=DEFAULT_CONFIG["deep_think_llm"],
         api_key=os.environ.get("DASHSCOPE_API_KEY"),
         stream=True,
     )

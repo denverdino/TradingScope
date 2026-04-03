@@ -8,9 +8,10 @@ from datetime import datetime
 from agentscope.model import OpenAIChatModel
 
 from tradingscope.agents.workflow import analyze
+from tradingscope.default_config import DEFAULT_CONFIG
 
 model = OpenAIChatModel(
-    model_name="qwen3.5-plus",
+    model_name=DEFAULT_CONFIG["deep_think_llm"],
     api_key=os.environ.get("DASHSCOPE_API_KEY"),
     stream=True,
     generate_kwargs={

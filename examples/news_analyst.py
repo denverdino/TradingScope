@@ -8,11 +8,12 @@ from datetime import datetime
 from agentscope.model import OpenAIChatModel
 
 from tradingscope.agents.analysts.news_analyst import create_news_analyst_agent
+from tradingscope.default_config import DEFAULT_CONFIG
 
 
 async def main():
     model = OpenAIChatModel(
-        model_name="qwen-plus",
+        model_name=DEFAULT_CONFIG["deep_think_llm"],
         api_key=os.environ.get("DASHSCOPE_API_KEY"),
         stream=True,
     )
@@ -21,7 +22,7 @@ async def main():
     # Create AgentContext
     from tradingscope.agents.utils.context import AgentContext
     context = AgentContext()
-    context.company_of_interest = "MSFT"
+    context.company_of_interest = "TSM"
     context.trade_date = trade_date
 
     agent = create_news_analyst_agent(model=model, context=context)

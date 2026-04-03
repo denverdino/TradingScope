@@ -10,8 +10,8 @@ DEFAULT_CONFIG = {
     ),
     # LLM settings
     "llm_provider": "openai",
-    "deep_think_llm": "qwen-plus",
-    "quick_think_llm": "qwen-flash",
+    "deep_think_llm": "qwen3.6-plus",
+    "quick_think_llm": "qwen3.5-flash",
     "backend_url": "https://api.openai.com/v1",
     # Debate and discussion settings
     "max_debate_rounds": 1,
