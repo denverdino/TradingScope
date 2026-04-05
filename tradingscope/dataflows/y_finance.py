@@ -2,6 +2,7 @@ import logging
 import os
 from datetime import datetime
 from typing import Annotated
+
 import pandas as pd
 import yfinance as yf
 from dateutil.relativedelta import relativedelta

@@ -14,6 +14,7 @@ from agentscope import logger
 from agentscope.model import OpenAIChatModel
 
 from tradingscope.agents.workflow import analyze
+from tradingscope.default_config import DEFAULT_CONFIG
 
 
 def _configure_memory_debug() -> None:
