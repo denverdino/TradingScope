@@ -2,7 +2,7 @@ import logging
 import os
 from datetime import datetime
 from typing import Annotated
-
+import pandas as pd
 import yfinance as yf
 from dateutil.relativedelta import relativedelta
 
@@ -206,7 +206,6 @@ def _get_stock_stats_bulk(
     Fetches data once and calculates indicator for all available dates.
     Returns dict mapping date strings to indicator values.
     """
-    import pandas as pd
     from stockstats import wrap
 
     from .config import get_config
