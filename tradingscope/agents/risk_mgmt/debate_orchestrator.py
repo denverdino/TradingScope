@@ -18,7 +18,7 @@ class RiskDebateOrchestrator:
         aggressive_agent,
         conservative_agent,
         neutral_agent,
-        risk_manager,
+        portfolio_manager,
         max_rounds: int,
     ):
         """Initialize the debate orchestrator.
@@ -34,10 +34,10 @@ class RiskDebateOrchestrator:
         self.conservative_agent = conservative_agent
         self.neutral_agent = neutral_agent
 
-        # Create the risk manager agent
-        self.risk_manager = risk_manager
+        # Create the portfolio manager agent
+        self.portfolio_manager = portfolio_manager
 
-        logger.info("✅ Risk Debate Orchestrator initialized with 3 debators and 1 risk manager")
+        logger.info("✅ Risk Debate Orchestrator initialized with 3 debators and 1 portfolio manager")
 
     def _get_round_prompts(self, round_num: int) -> tuple[Msg, Msg, Msg]:
         """根据辩论轮次返回不同阶段的提示词。
@@ -143,12 +143,12 @@ class RiskDebateOrchestrator:
             company_name: Name of the company being analyzed
 
         Returns:
-            Final decision from the risk manager
+            Final decision from the portfolio manager
         """
         logger.info(f"🚀 Starting risk management debate for {company_name}")
 
         # Use MsgHub for message broadcasting between debators
-        async with MsgHub(participants=[self.aggressive_agent, self.conservative_agent, self.neutral_agent, self.risk_manager]):
+        async with MsgHub(participants=[self.aggressive_agent, self.conservative_agent, self.neutral_agent, self.portfolio_manager]):
             # Run debate rounds
             for round_num in range(1, self.max_rounds + 1):
                 logger.info(f"🔄 Starting risk management debate round {round_num}")
@@ -163,10 +163,10 @@ class RiskDebateOrchestrator:
 
                 logger.info(f"📝 Risk management debate round {round_num} completed")
 
-        # Have risk manager make final decision
-        logger.info("⚖️ Requesting final decision from Risk Manager")
+        # Have portfolio manager make final decision
+        logger.info("⚖️ Requesting final decision from Portfolio Manager")
 
-        risk_manager_prompt = Msg(
+        portfolio_manager_prompt = Msg(
             name="DebateOrchestrator",
             role="user",
             content="""作为风险管理委员会主席，您的目标是评估三位风险分析师——激进、中性和安全/保守——之间的辩论，并确定交易员的最佳行动方案。您的决策必须产生明确的建议：买入、卖出或持有。只有在有具体论据强烈支持时才选择持有，而不是在所有方面都似乎有效时作为后备选择。力求清晰和果断。
@@ -186,7 +186,7 @@ class RiskDebateOrchestrator:
 """,
         )
 
-        final_decision = await self.risk_manager(risk_manager_prompt)
+        final_decision = await self.portfolio_manager(portfolio_manager_prompt)
 
         logger.info("✅ Risk management debate completed")
 
@@ -197,7 +197,7 @@ def create_debate_orchestrator(
     aggressive_agent,
     conservative_agent,
     neutral_agent,
-    risk_manager,
+    portfolio_manager,
     max_rounds: int = 3,
 ) -> RiskDebateOrchestrator:
     """Create a risk management debate orchestrator.
@@ -213,6 +213,6 @@ def create_debate_orchestrator(
         aggressive_agent=aggressive_agent,
         conservative_agent=conservative_agent,
         neutral_agent=neutral_agent,
-        risk_manager=risk_manager,
+        portfolio_manager=portfolio_manager,
         max_rounds=max_rounds,
     )

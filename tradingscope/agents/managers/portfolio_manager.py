@@ -1,4 +1,4 @@
-"""Risk Manager Agent for TradingScope using AgentScope ReAct framework."""
+"""Portfolio Manager Agent for TradingScope using AgentScope ReAct framework."""
 
 from __future__ import annotations
 
@@ -22,14 +22,14 @@ if TYPE_CHECKING:
     from tradingscope.agents.utils.memory import ModelStudioLongTermMemory
 
 
-def create_risk_manager_agent(
+def create_portfolio_manager_agent(
     model: OpenAIChatModel,
     context: AgentContext,
-    name: str = "RiskManager",
+    name: str = "PortfolioManager",
     long_term_memory: Optional["ModelStudioLongTermMemory"] = None,
     long_term_memory_mode: str = "static_control",
 ) -> ReActAgent:
-    """Create Risk Manager Agent that evaluates risk analysis debates and makes final decisions.
+    """Create Portfolio Manager Agent that evaluates risk analysis debates and makes final decisions.
 
     Args:
         model: AgentScope model instance
@@ -39,7 +39,7 @@ def create_risk_manager_agent(
         long_term_memory_mode: 长期记忆模式 ("static_control", "agent_control", "both")
 
     Returns:
-        ReActAgent: Configured risk manager agent
+        ReActAgent: Configured portfolio manager agent
     """
     company_of_interest = context.company_of_interest
     trade_date = context.trade_date
@@ -115,5 +115,5 @@ def create_risk_manager_agent(
         max_iters=8,
     )
 
-    logger.debug("📊 [DEBUG] ===== 风险决策经理 Agent 创建完成 =====")
+    logger.debug("📊 [DEBUG] ===== 投资组合经理 Agent 创建完成 =====")
     return agent

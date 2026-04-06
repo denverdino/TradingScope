@@ -442,7 +442,7 @@ class ReflectionLoop:
         Stores the lesson in:
         - trader memory (always)
         - research_manager memory (if direction was wrong)
-        - risk_manager memory (if stop loss triggered)
+        - portfolio_manager memory (if stop loss triggered)
         """
         if not self._memory_manager:
             return
@@ -462,9 +462,9 @@ class ReflectionLoop:
             if research_memory:
                 await research_memory.record_to_memory(thinking, content)
 
-        # Store in risk_manager if critical
+        # Store in portfolio_manager if critical
         if lesson.severity == "critical":
-            risk_memory = self._memory_manager.risk_manager_memory
+            risk_memory = self._memory_manager.portfolio_manager_memory
             if risk_memory:
                 await risk_memory.record_to_memory(thinking, content)
 

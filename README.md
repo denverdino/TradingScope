@@ -83,4 +83,4 @@ When OSS environment variables are configured, agent-generated reports are autom
 tradingscope/<date>/<ticker>/<agent_name>.md
 ```
 
-Reports uploaded include: `market_analyst`, `fundamentals_analyst`, `news_analyst`, `social_media_analyst`, `research_manager`, `trader`, `risk_manager`, and `full_report`. If OSS is not configured, the workflow runs normally and skips uploads. 
+Reports uploaded include: `market_analyst`, `fundamentals_analyst`, `news_analyst`, `social_media_analyst`, `research_manager`, `trader`, `portfolio_manager`, and `full_report`. If OSS is not configured, the workflow runs normally and skips uploads. 

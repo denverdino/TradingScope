@@ -23,7 +23,7 @@ class FinancialMemoryManager:
     - bear_researcher: Bearish analysis memory
     - trader: Trading decision memory
     - research_manager: Research synthesis memory
-    - risk_manager: Risk assessment memory
+    - portfolio_manager: Portfolio assessment memory
     - prediction_store: Prediction records storage for reflection loop
 
     Usage:
@@ -53,7 +53,7 @@ class FinancialMemoryManager:
         "bear_researcher",
         "trader",
         "research_manager",
-        "risk_manager",
+        "portfolio_manager",
         "prediction_store",  # For reflection loop prediction storage
     ]
 
@@ -128,9 +128,9 @@ class FinancialMemoryManager:
         return self.get_memory("research_manager")
 
     @property
-    def risk_manager_memory(self) -> Optional[ModelStudioLongTermMemory]:
-        """Get memory for risk manager agent."""
-        return self.get_memory("risk_manager")
+    def portfolio_manager_memory(self) -> Optional[ModelStudioLongTermMemory]:
+        """Get memory for portfolio manager agent."""
+        return self.get_memory("portfolio_manager")
 
     @property
     def prediction_store_memory(self) -> Optional[ModelStudioLongTermMemory]:

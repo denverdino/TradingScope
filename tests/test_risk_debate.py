@@ -27,11 +27,11 @@ def test_debate_orchestrator_creation(mock_model):
         mock_aggressive = MockAgent("Aggressive")
         mock_conservative = MockAgent("Conservative")
         mock_neutral = MockAgent("Neutral")
-        mock_risk_manager = MockAgent("RiskManager")
+        mock_portfolio_manager = MockAgent("PortfolioManager")
 
         # Test creating the orchestrator
         orchestrator = create_debate_orchestrator(
-            aggressive_agent=mock_aggressive, conservative_agent=mock_conservative, neutral_agent=mock_neutral, risk_manager=mock_risk_manager, max_rounds=1
+            aggressive_agent=mock_aggressive, conservative_agent=mock_conservative, neutral_agent=mock_neutral, portfolio_manager=mock_portfolio_manager, max_rounds=1
         )
         print("✅ Debate orchestrator created successfully!")
         assert orchestrator is not None

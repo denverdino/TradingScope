@@ -141,7 +141,7 @@ async def clear_role_memories(role: str, user_name: str, force: bool = False) ->
     delete_memory = DeleteMemory()
 
     try:
-        # Get all memory nodes
+        # Get first page to check total count
         result = await list_memory.arun(ListMemoryInput(
             user_id=user_id,
             page_size=100,
@@ -151,31 +151,38 @@ async def clear_role_memories(role: str, user_name: str, force: bool = False) ->
             print(f"  No memories found for {role}.")
             return True
 
-        memory_count = len(result.memory_nodes)
-        print(f"  Found {memory_count} memory node(s).")
+        total_count = getattr(result, 'total', len(result.memory_nodes))
+        print(f"  Found {total_count} memory node(s).")
 
         # Confirm deletion
         if not force:
-            confirm = input(f"  Are you sure you want to delete all {memory_count} memories? [y/N]: ")
+            confirm = input(f"  Are you sure you want to delete all {total_count} memories? [y/N]: ")
             if confirm.lower() != 'y':
                 print("  Cancelled.")
                 return False
 
-        # Delete each memory node
+        # Delete all memories by repeatedly fetching page 1 and deleting
         deleted_count = 0
-        for node in result.memory_nodes:
-            try:
-                memory_node_id = node.memory_node_id if hasattr(node, 'memory_node_id') else str(node)
-                await delete_memory.arun(DeleteMemoryInput(
-                    user_id=user_id,
-                    memory_node_id=memory_node_id,
-                ))
-                deleted_count += 1
-            except Exception as e:
-                print(f"  Warning: Failed to delete memory {memory_node_id}: {e}")
+        while result and hasattr(result, 'memory_nodes') and result.memory_nodes:
+            for node in result.memory_nodes:
+                try:
+                    memory_node_id = node.memory_node_id if hasattr(node, 'memory_node_id') else str(node)
+                    await delete_memory.arun(DeleteMemoryInput(
+                        user_id=user_id,
+                        memory_node_id=memory_node_id,
+                    ))
+                    deleted_count += 1
+                except Exception as e:
+                    print(f"  Warning: Failed to delete memory {memory_node_id}: {e}")
 
-        print(f"  Successfully deleted {deleted_count}/{memory_count} memories.")
-        return deleted_count == memory_count
+            # Fetch next batch (always page 1 since previous ones were deleted)
+            result = await list_memory.arun(ListMemoryInput(
+                user_id=user_id,
+                page_size=100,
+            ))
+
+        print(f"  Successfully deleted {deleted_count}/{total_count} memories.")
+        return deleted_count == total_count
 
     except Exception as e:
         print(f"  [ERROR] Failed to clear memories: {e}")

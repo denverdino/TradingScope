@@ -109,5 +109,5 @@
   <text x="600" y="930" class="phase-title">6. RISK MANAGEMENT PHASE</text>
   
   <rect x="500" y="950" width="200" height="50" class="manager"/>
-  <text x="600" y="975" class="agent-label">Risk Manager</text>
+  <text x="600" y="975" class="agent-label">Portfolio Manager</text>
 </svg>

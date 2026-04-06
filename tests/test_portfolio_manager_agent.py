@@ -1,4 +1,4 @@
-"""Unit tests for the Risk Manager Agent."""
+"""Unit tests for the Portfolio Manager Agent."""
 
 import os
 import sys
@@ -6,7 +6,7 @@ import sys
 # Add the project root to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from tradingscope.agents.managers.risk_manager import create_risk_manager_agent
+from tradingscope.agents.managers.portfolio_manager import create_portfolio_manager_agent
 
 
 class MockModel:
@@ -18,21 +18,21 @@ class MockModel:
     def __call__(self, *args, **kwargs):
         class MockResponse:
             def __init__(self):
-                self.content = "Mock risk manager response with recommendation: Hold"
+                self.content = "Mock portfolio manager response with recommendation: Hold"
 
         return MockResponse()
 
 
-class TestRiskManagerAgent:
-    """Test cases for the Risk Manager Agent."""
+class TestPortfolioManagerAgent:
+    """Test cases for the Portfolio Manager Agent."""
 
     def setup_method(self):
         """Set up test fixtures before each test method."""
         self.mock_model = MockModel()
-        self.agent_name = "TestRiskManager"
+        self.agent_name = "TestPortfolioManager"
 
-    def test_create_risk_manager_agent_success(self):
-        """Test that risk manager agent can be created successfully."""
+    def test_create_portfolio_manager_agent_success(self):
+        """Test that portfolio manager agent can be created successfully."""
         # Create AgentContext
         from tradingscope.agents.utils.context import AgentContext
         context = AgentContext()
@@ -43,7 +43,7 @@ class TestRiskManagerAgent:
         context.fundamentals_report = "Fundamentals data"
         context.trader_investment_plan = "Trader plan"
 
-        agent = create_risk_manager_agent(
+        agent = create_portfolio_manager_agent(
             model=self.mock_model,
             context=context,
             name=self.agent_name,
@@ -55,8 +55,8 @@ class TestRiskManagerAgent:
         assert agent.name == self.agent_name
         assert hasattr(agent, "memory")
 
-    def test_risk_manager_agent_system_prompt_content(self):
-        """Test that the risk manager agent has the correct system prompt content."""
+    def test_portfolio_manager_agent_system_prompt_content(self):
+        """Test that the portfolio manager agent has the correct system prompt content."""
         # Create AgentContext
         from tradingscope.agents.utils.context import AgentContext
         context = AgentContext()
@@ -67,7 +67,7 @@ class TestRiskManagerAgent:
         context.fundamentals_report = "Fundamentals data"
         context.trader_investment_plan = "Trader plan"
 
-        agent = create_risk_manager_agent(
+        agent = create_portfolio_manager_agent(
             model=self.mock_model,
             context=context,
             name=self.agent_name,
@@ -80,8 +80,8 @@ class TestRiskManagerAgent:
         assert "买入、卖出或持有" in agent.sys_prompt
         assert "辩论" in agent.sys_prompt
 
-    def test_risk_manager_agent_configuration(self):
-        """Test that the risk manager agent has the correct configuration."""
+    def test_portfolio_manager_agent_configuration(self):
+        """Test that the portfolio manager agent has the correct configuration."""
         # Create AgentContext
         from tradingscope.agents.utils.context import AgentContext
         context = AgentContext()
@@ -92,7 +92,7 @@ class TestRiskManagerAgent:
         context.fundamentals_report = "Fundamentals data"
         context.trader_investment_plan = "Trader plan"
 
-        agent = create_risk_manager_agent(
+        agent = create_portfolio_manager_agent(
             model=self.mock_model,
             context=context,
             name=self.agent_name,

@@ -4,7 +4,7 @@ from agentscope import logger
 from agentscope.message import Msg
 from agentscope.model import OpenAIChatModel
 
-from tradingscope.agents.managers.risk_manager import create_risk_manager_agent
+from tradingscope.agents.managers.portfolio_manager import create_portfolio_manager_agent
 from tradingscope.utils.oss_report_uploader import upload_reports
 
 # Analyst imports
@@ -177,16 +177,16 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
             model=model,
             context=context)
 
-        # 风险经理使用长期记忆
-        risk_manager = create_risk_manager_agent(
+        # 投资组合经理使用长期记忆
+        portfolio_manager = create_portfolio_manager_agent(
             model=model,
             context=context,
-            long_term_memory=memory_manager.risk_manager_memory,
+            long_term_memory=memory_manager.portfolio_manager_memory,
             long_term_memory_mode="static_control",
         )
 
         # 创建风险辩论协调器
-        risk_orchestrator = create_debate_orchestrator(aggressive_agent, conservative_agent, neutral_agent, risk_manager, max_rounds=2)
+        risk_orchestrator = create_debate_orchestrator(aggressive_agent, conservative_agent, neutral_agent, portfolio_manager, max_rounds=2)
 
         # 运行风险辩论
         risk_decision = await risk_orchestrator.run_debate(
@@ -200,9 +200,9 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
         # 更新context中的最终决策
         context.final_trade_decision = final_trade_decision
 
-        # Upload risk manager report to OSS
+        # Upload portfolio manager report to OSS
         await upload_reports(trade_date, ticker, {
-            "risk_manager": final_trade_decision,
+            "portfolio_manager": final_trade_decision,
         })
 
         # 存储预测记录用于反思循环

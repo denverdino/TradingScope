@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from agentscope.model import OpenAIChatModel
 
-from tradingscope.agents.managers.risk_manager import create_risk_manager_agent
+from tradingscope.agents.managers.portfolio_manager import create_portfolio_manager_agent
 from tradingscope.agents.risk_mgmt.aggressive_debator import create_aggressive_debator_agent
 from tradingscope.agents.risk_mgmt.conservative_debator import create_conservative_debator_agent
 from tradingscope.agents.risk_mgmt.debate_orchestrator import create_debate_orchestrator
@@ -72,7 +72,7 @@ async def main():
 
     try:
         # Create the risk management agents
-        # Debators don't use long-term memory, only the risk manager does
+        # Debators don't use long-term memory, only the portfolio manager does
         aggressive_agent = create_aggressive_debator_agent(
             model=model,
             context=context
@@ -86,17 +86,17 @@ async def main():
             context=context
         )
 
-        # Risk manager with long-term memory
-        risk_manager = create_risk_manager_agent(
+        # Portfolio manager with long-term memory
+        portfolio_manager = create_portfolio_manager_agent(
             model=model,
             context=context,
-            long_term_memory=memory_manager.risk_manager_memory,
+            long_term_memory=memory_manager.portfolio_manager_memory,
             long_term_memory_mode="static_control",
         )
 
         # Create the debate orchestrator
         orchestrator = create_debate_orchestrator(
-            aggressive_agent=aggressive_agent, conservative_agent=conservative_agent, neutral_agent=neutral_agent, risk_manager=risk_manager, max_rounds=3
+            aggressive_agent=aggressive_agent, conservative_agent=conservative_agent, neutral_agent=neutral_agent, portfolio_manager=portfolio_manager, max_rounds=3
         )
 
         print(f"Starting risk management debate for {company_name}")
@@ -109,7 +109,7 @@ async def main():
         )
 
         print("=" * 60)
-        print("Final Decision from Risk Manager:")
+        print("Final Decision from Portfolio Manager:")
         print(final_decision.content)
         print("=" * 60)
 

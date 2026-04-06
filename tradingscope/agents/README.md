@@ -39,7 +39,7 @@ The risk management system implements a multi-agent debate pattern where differe
 - **Aggressive Debator** (`risk_mgmt/aggressive_debator.py`) - Advocates for high-return, high-risk investment opportunities
 - **Conservative Debator** (`risk_mgmt/conservative_debator.py`) - Focuses on protecting assets and minimizing volatility
 - **Neutral Debator** (`risk_mgmt/neutral_debator.py`) - Provides a balanced perspective weighing potential gains and risks
-- **Risk Manager** (`managers/risk_manager.py`) - Evaluates the debate and makes the final risk assessment
+- **Portfolio Manager** (`managers/portfolio_manager.py`) - Evaluates the debate and makes the final risk assessment
 - **Risk Debate Orchestrator** (`risk_mgmt/debate_orchestrator.py`) - Coordinates the risk management debate
 
 ### 4. Managers
@@ -47,7 +47,7 @@ The risk management system implements a multi-agent debate pattern where differe
 The manager agents coordinate different phases and synthesize results:
 
 - **Research Manager** (`managers/research_manager.py`) - Synthesizes the research debate results into investment recommendations
-- **Risk Manager** (`managers/risk_manager.py`) - Evaluates the risk debate and makes the final risk-adjusted trading decision
+- **Portfolio Manager** (`managers/portfolio_manager.py`) - Evaluates the risk debate and makes the final risk-adjusted trading decision
 
 ### 5. Trader
 
@@ -70,7 +70,7 @@ The system follows a comprehensive multi-stage workflow defined in `workflow.py`
 3. **Research Management**: Research manager synthesizes the debate into investment recommendations
 4. **Trading Decision**: Trader makes trading decisions based on all analysis and research findings
 5. **Risk Assessment Debate**: Risk management team (Aggressive, Conservative, Neutral debators) debates the trading decision, coordinated by Risk Debate Orchestrator
-6. **Risk Management**: Risk manager evaluates the debate and makes the final risk-adjusted trading decision
+6. **Risk Management**: Portfolio manager evaluates the debate and makes the final risk-adjusted trading decision
 7. **Final Report**: All findings are compiled into a comprehensive report
 
 ## Usage
@@ -100,7 +100,7 @@ The risk management debate system implements a multi-agent debate pattern where 
 - **Aggressive Debator**: Advocates for high-return, high-risk investment opportunities
 - **Conservative Debator**: Focuses on protecting assets and minimizing volatility
 - **Neutral Debator**: Provides a balanced perspective weighing potential gains and risks
-- **Risk Manager**: Evaluates the debate and makes the final risk assessment
+- **Portfolio Manager**: Evaluates the debate and makes the final risk assessment
 
 ### Direct Usage
 

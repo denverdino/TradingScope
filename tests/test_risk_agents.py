@@ -7,7 +7,7 @@ def test_agent_creation(mock_model):
         # Import AgentScope components
         from agentscope.message import Msg
 
-        from tradingscope.agents.managers.risk_manager import create_risk_manager_agent
+        from tradingscope.agents.managers.portfolio_manager import create_portfolio_manager_agent
 
         # Import our agents
         from tradingscope.agents.risk_mgmt.aggressive_debator import create_aggressive_debator_agent
@@ -34,11 +34,11 @@ def test_agent_creation(mock_model):
         create_neutral_debator_agent(mock_model, context, "TestNeutral")
         print("✅ Neutral debator agent created successfully")
 
-        # Test creating risk manager agent
-        risk_manager = create_risk_manager_agent(mock_model, context, "TestRiskManager")
-        print("✅ Risk manager agent created successfully")
+        # Test creating portfolio manager agent
+        portfolio_manager = create_portfolio_manager_agent(mock_model, context, "TestPortfolioManager")
+        print("✅ Portfolio manager agent created successfully")
 
-        print("✅ Risk manager agent instantiation verified")
+        print("✅ Portfolio manager agent instantiation verified")
 
         print("\n🎉 All risk management agents instantiated and tested successfully!")
         # Use assertion instead of return

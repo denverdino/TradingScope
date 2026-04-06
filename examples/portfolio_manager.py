@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""Example showing how to use the RiskManagerAgent with long-term memory."""
+"""Example showing how to use the PortfolioManagerAgent with long-term memory."""
 
 import asyncio
 import os
 
 from agentscope.model import OpenAIChatModel
 
-from tradingscope.agents.managers.risk_manager import create_risk_manager_agent
+from tradingscope.agents.managers.portfolio_manager import create_portfolio_manager_agent
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.memory_manager import FinancialMemoryManager
 from tradingscope.default_config import DEFAULT_CONFIG
 
 
 async def main():
-    """Example of using the RiskManagerAgent with long-term memory."""
+    """Example of using the PortfolioManagerAgent with long-term memory."""
     # Initialize the model
     model = OpenAIChatModel(
         model_name=DEFAULT_CONFIG["deep_think_llm"],
@@ -29,16 +29,16 @@ async def main():
     memory_manager = FinancialMemoryManager()
 
     try:
-        # Create the risk manager agent with long-term memory
-        risk_manager = create_risk_manager_agent(
+        # Create the portfolio manager agent with long-term memory
+        portfolio_manager = create_portfolio_manager_agent(
             model=model,
             context=context,
-            name="RiskManager",
-            long_term_memory=memory_manager.risk_manager_memory,
+            name="PortfolioManager",
+            long_term_memory=memory_manager.portfolio_manager_memory,
             long_term_memory_mode="static_control",
         )
 
-        print(f"RiskManagerAgent created: {risk_manager.name}")
+        print(f"PortfolioManagerAgent created: {portfolio_manager.name}")
 
         # Example usage with sample data
         sample_prompt = """作为风险管理委员会主席和辩论主持人，您的目标是评估三位风险分析师——激进、中性和安全/保守——之间的辩论，并确定交易员的最佳行动方案。您的决策必须产生明确的建议：买入、卖出或持有。只有在有具体论据强烈支持时才选择持有，而不是在所有方面都似乎有效时作为后备选择。力求清晰和果断。
@@ -63,7 +63,7 @@ async def main():
 请用中文撰写所有分析内容和建议。"""
 
         # Call the agent
-        response = await risk_manager(sample_prompt)
+        response = await portfolio_manager(sample_prompt)
         print(f"Response: {response.content}")
     finally:
         await memory_manager.close()

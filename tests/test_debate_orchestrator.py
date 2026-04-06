@@ -33,7 +33,7 @@ class TestRiskDebateOrchestrator:
         self.mock_aggressive_agent = MockAgent("AggressiveAgent")
         self.mock_conservative_agent = MockAgent("ConservativeAgent")
         self.mock_neutral_agent = MockAgent("NeutralAgent")
-        self.mock_risk_manager = MockAgent("RiskManager")
+        self.mock_portfolio_manager = MockAgent("PortfolioManager")
         self.max_rounds = 2
 
     def test_create_debate_orchestrator_success(self):
@@ -42,7 +42,7 @@ class TestRiskDebateOrchestrator:
             aggressive_agent=self.mock_aggressive_agent,
             conservative_agent=self.mock_conservative_agent,
             neutral_agent=self.mock_neutral_agent,
-            risk_manager=self.mock_risk_manager,
+            portfolio_manager=self.mock_portfolio_manager,
             max_rounds=self.max_rounds,
         )
 
@@ -53,7 +53,7 @@ class TestRiskDebateOrchestrator:
         assert orchestrator.aggressive_agent == self.mock_aggressive_agent
         assert orchestrator.conservative_agent == self.mock_conservative_agent
         assert orchestrator.neutral_agent == self.mock_neutral_agent
-        assert orchestrator.risk_manager == self.mock_risk_manager
+        assert orchestrator.portfolio_manager == self.mock_portfolio_manager
 
     def test_debate_orchestrator_initialization(self):
         """Test that debate orchestrator initializes correctly."""
@@ -61,7 +61,7 @@ class TestRiskDebateOrchestrator:
             aggressive_agent=self.mock_aggressive_agent,
             conservative_agent=self.mock_conservative_agent,
             neutral_agent=self.mock_neutral_agent,
-            risk_manager=self.mock_risk_manager,
+            portfolio_manager=self.mock_portfolio_manager,
             max_rounds=self.max_rounds,
         )
 
@@ -71,7 +71,7 @@ class TestRiskDebateOrchestrator:
         assert orchestrator.aggressive_agent == self.mock_aggressive_agent
         assert orchestrator.conservative_agent == self.mock_conservative_agent
         assert orchestrator.neutral_agent == self.mock_neutral_agent
-        assert orchestrator.risk_manager == self.mock_risk_manager
+        assert orchestrator.portfolio_manager == self.mock_portfolio_manager
 
     @pytest.mark.asyncio
     async def test_run_debate_method_exists(self):
@@ -80,7 +80,7 @@ class TestRiskDebateOrchestrator:
             aggressive_agent=self.mock_aggressive_agent,
             conservative_agent=self.mock_conservative_agent,
             neutral_agent=self.mock_neutral_agent,
-            risk_manager=self.mock_risk_manager,
+            portfolio_manager=self.mock_portfolio_manager,
             max_rounds=self.max_rounds,
         )
 
@@ -94,7 +94,7 @@ class TestRiskDebateOrchestrator:
             aggressive_agent=self.mock_aggressive_agent,
             conservative_agent=self.mock_conservative_agent,
             neutral_agent=self.mock_neutral_agent,
-            risk_manager=self.mock_risk_manager,
+            portfolio_manager=self.mock_portfolio_manager,
             max_rounds=self.max_rounds,
         )
 
