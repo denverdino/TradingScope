@@ -18,11 +18,11 @@ DEFAULT_CONFIG = {
     "max_risk_discuss_rounds": 1,
     "max_recur_limit": 100,
     "data_vendors": {
-        "core_stock_apis": "yfinance",       # Options: yfinance, alpha_vantage, local
-        "fundamental_data": "yfinance", # Options: openai, alpha_vantage, local
-        "news_data": "alpha_vantage",        # Options: perplexity, openai, alpha_vantage, google, local
+        "core_stock_apis": "yfinance",  # Options: yfinance, alpha_vantage, local
+        "fundamental_data": "yfinance",  # Options: openai, alpha_vantage, local
+        "news_data": "alpha_vantage",  # Options: perplexity, openai, alpha_vantage, google, local
         "technical_indicators": "yfinance",
-        "market_context": "yfinance",        # Options: yfinance (sector performance, market indices)
+        "market_context": "yfinance",  # Options: yfinance (sector performance, market indices)
     },
     # Tool-level configuration (takes precedence over category-level)
     "tool_vendors": {

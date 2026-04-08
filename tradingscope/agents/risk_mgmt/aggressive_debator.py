@@ -6,9 +6,7 @@ from agentscope import logger
 
 # AgentScope imports
 from agentscope.agent import ReActAgent
-from agentscope.formatter import OpenAIMultiAgentFormatter
 from agentscope.memory import InMemoryMemory
-from agentscope.model import OpenAIChatModel
 from agentscope.tool import Toolkit
 
 # Local imports
@@ -17,7 +15,6 @@ from tradingscope.agents.utils.context import AgentContext
 
 
 def create_aggressive_debator_agent(
-    model: OpenAIChatModel,
     context: AgentContext,
     name: str = "AggressiveRiskDebator",
 ) -> ReActAgent:
@@ -47,14 +44,14 @@ def create_aggressive_debator_agent(
 
 {context.generate_risk_evaluation_context_md()}"""
 
-    formatter = OpenAIMultiAgentFormatter()
+    formatter = context.multi_agent_formatter
     toolkit = Toolkit()
 
     # Create the agent
     agent = ReActAgent(
         name=name,
         sys_prompt=prompt,
-        model=model,
+        model=context.model,
         formatter=formatter,
         memory=InMemoryMemory(),
         toolkit=toolkit,

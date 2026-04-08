@@ -73,12 +73,14 @@ def _upload_report(trade_date: str, ticker: str, agent_name: str, content: str) 
 
     key = f"tradingscope/{trade_date}/{ticker}/{agent_name}.md"
     try:
-        client.put_object(oss.PutObjectRequest(
-            bucket=_bucket_name,
-            key=key,
-            body=content.encode("utf-8"),
-            content_type="text/markdown; charset=utf-8",
-        ))
+        client.put_object(
+            oss.PutObjectRequest(
+                bucket=_bucket_name,
+                key=key,
+                body=content.encode("utf-8"),
+                content_type="text/markdown; charset=utf-8",
+            )
+        )
         logger.info(f"[OSSUploader] Uploaded: oss://{_bucket_name}/{key}")
         return True
     except Exception as e:
@@ -109,11 +111,7 @@ async def upload_reports(trade_date: str, ticker: str, reports: Dict[str, str]) 
     if _get_client() is None:
         return dict.fromkeys(reports, False)
 
-    tasks = {
-        name: upload_report(trade_date, ticker, name, content)
-        for name, content in reports.items()
-        if content
-    }
+    tasks = {name: upload_report(trade_date, ticker, name, content) for name, content in reports.items() if content}
     results = {}
     for name, task in tasks.items():
         results[name] = await task

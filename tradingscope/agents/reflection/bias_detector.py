@@ -75,9 +75,7 @@ class BiasDetector:
             results.append(directional_result)
 
         if evaluations:
-            overconfidence_result = self.detect_overconfidence_bias(
-                predictions, evaluations
-            )
+            overconfidence_result = self.detect_overconfidence_bias(predictions, evaluations)
             if overconfidence_result.detected:
                 results.append(overconfidence_result)
 
@@ -141,18 +139,10 @@ class BiasDetector:
 
         if evaluations:
             bull_correct = sum(
-                1
-                for p in predictions
-                if p.direction == "bullish"
-                and p.prediction_id in evaluations
-                and evaluations[p.prediction_id].direction_correct
+                1 for p in predictions if p.direction == "bullish" and p.prediction_id in evaluations and evaluations[p.prediction_id].direction_correct
             )
             bear_correct = sum(
-                1
-                for p in predictions
-                if p.direction == "bearish"
-                and p.prediction_id in evaluations
-                and evaluations[p.prediction_id].direction_correct
+                1 for p in predictions if p.direction == "bearish" and p.prediction_id in evaluations and evaluations[p.prediction_id].direction_correct
             )
 
             bull_accuracy = bull_correct / bull_count if bull_count > 0 else 0
@@ -168,10 +158,7 @@ class BiasDetector:
         severity = imbalance * (1.5 if accuracy_mismatch else 1.0)
 
         favored = "看涨" if bull_rate > bear_rate else "看跌"
-        evidence = (
-            f"预测倾向{favored}（{max(bull_rate, bear_rate):.1%}），"
-            f"但该方向准确率较低（看涨{bull_accuracy:.1%}，看跌{bear_accuracy:.1%}）"
-        )
+        evidence = f"预测倾向{favored}（{max(bull_rate, bear_rate):.1%}），但该方向准确率较低（看涨{bull_accuracy:.1%}，看跌{bear_accuracy:.1%}）"
 
         recommendation = f"增加对{'看跌' if favored == '看涨' else '看涨'}观点的关注度"
 
@@ -255,10 +242,7 @@ class BiasDetector:
         else:
             direction = "无明显方向偏差"
 
-        evidence = (
-            f"操作分布：买入{buy_rate:.1%}，卖出{sell_rate:.1%}，持有{hold_rate:.1%}。"
-            f"最优分布：买入{optimal_buy:.1%}，卖出{optimal_sell:.1%}"
-        )
+        evidence = f"操作分布：买入{buy_rate:.1%}，卖出{sell_rate:.1%}，持有{hold_rate:.1%}。最优分布：买入{optimal_buy:.1%}，卖出{optimal_sell:.1%}"
 
         if detected:
             recommendation = f"存在{direction}，建议更客观评估反向信号"
@@ -345,15 +329,10 @@ class BiasDetector:
         detected = avg_calibration_error > self.overconfidence_threshold
 
         # Determine if overconfident or underconfident
-        high_accuracy = (
-            buckets["high"][0] / buckets["high"][1] if buckets["high"][1] > 0 else 0
-        )
+        high_accuracy = buckets["high"][0] / buckets["high"][1] if buckets["high"][1] > 0 else 0
         is_overconfident = high_accuracy < 0.7  # High confidence but low accuracy
 
-        evidence = (
-            f"校准误差：{avg_calibration_error:.1%}。"
-            f"高置信度预测准确率：{high_accuracy:.1%}"
-        )
+        evidence = f"校准误差：{avg_calibration_error:.1%}。高置信度预测准确率：{high_accuracy:.1%}"
 
         if is_overconfident and detected:
             recommendation = "降低高置信度预测的比例，或提高决策门槛"
@@ -472,9 +451,7 @@ class BiasDetector:
                     BiasType.RECENCY: "近因偏差",
                 }.get(result.bias_type, result.bias_type.value)
 
-                severity_label = (
-                    "严重" if result.severity > 0.7 else ("中等" if result.severity > 0.4 else "轻微")
-                )
+                severity_label = "严重" if result.severity > 0.7 else ("中等" if result.severity > 0.4 else "轻微")
 
                 lines.append(f"### {bias_name} ({severity_label})")
                 lines.append(f"- 证据：{result.evidence}")

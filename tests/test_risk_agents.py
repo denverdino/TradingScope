@@ -16,6 +16,7 @@ def test_agent_creation(mock_model):
 
         # Create AgentContext
         from tradingscope.agents.utils.context import AgentContext
+
         context = AgentContext()
         context.company_of_interest = "AAPL"
         context.market_report = "Market data"

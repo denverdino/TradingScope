@@ -35,6 +35,7 @@ class TestPortfolioManagerAgent:
         """Test that portfolio manager agent can be created successfully."""
         # Create AgentContext
         from tradingscope.agents.utils.context import AgentContext
+
         context = AgentContext()
         context.company_of_interest = "AAPL"
         context.market_report = "Market data"
@@ -59,6 +60,7 @@ class TestPortfolioManagerAgent:
         """Test that the portfolio manager agent has the correct system prompt content."""
         # Create AgentContext
         from tradingscope.agents.utils.context import AgentContext
+
         context = AgentContext()
         context.company_of_interest = "AAPL"
         context.market_report = "Market data"
@@ -84,6 +86,7 @@ class TestPortfolioManagerAgent:
         """Test that the portfolio manager agent has the correct configuration."""
         # Create AgentContext
         from tradingscope.agents.utils.context import AgentContext
+
         context = AgentContext()
         context.company_of_interest = "AAPL"
         context.market_report = "Market data"

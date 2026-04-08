@@ -41,35 +41,10 @@ logger = logging.getLogger(__name__)
 
 # Tools organized by category
 TOOLS_CATEGORIES = {
-    "core_stock_apis": {
-        "description": "OHLCV stock price data",
-        "tools": [
-            "get_stock_data",
-            "get_stock_info"
-        ]
-    },
-    "technical_indicators": {
-        "description": "Technical analysis indicators",
-        "tools": [
-            "get_indicators"
-        ]
-    },
-    "market_context": {
-        "description": "Market and sector context data",
-        "tools": [
-            "get_sector_performance",
-            "get_market_indices"
-        ]
-    },
-    "fundamental_data": {
-        "description": "Company fundamentals",
-        "tools": [
-            "get_fundamentals",
-            "get_balance_sheet",
-            "get_cashflow",
-            "get_income_statement"
-        ]
-    },
+    "core_stock_apis": {"description": "OHLCV stock price data", "tools": ["get_stock_data", "get_stock_info"]},
+    "technical_indicators": {"description": "Technical analysis indicators", "tools": ["get_indicators"]},
+    "market_context": {"description": "Market and sector context data", "tools": ["get_sector_performance", "get_market_indices"]},
+    "fundamental_data": {"description": "Company fundamentals", "tools": ["get_fundamentals", "get_balance_sheet", "get_cashflow", "get_income_statement"]},
     "news_data": {
         "description": "News (public/insiders, original/processed)",
         "tools": [
@@ -77,16 +52,11 @@ TOOLS_CATEGORIES = {
             "get_global_news",
             "get_insider_sentiment",
             "get_insider_transactions",
-        ]
-    }
+        ],
+    },
 }
 
-VENDOR_LIST = [
-    "local",
-    "yfinance",
-    "openai",
-    "google"
-]
+VENDOR_LIST = ["local", "yfinance", "openai", "google"]
 
 # Mapping of methods to their vendor-specific implementations
 VENDOR_METHODS = {
@@ -95,20 +65,16 @@ VENDOR_METHODS = {
         "alpha_vantage": get_alpha_vantage_stock,
         "yfinance": get_YFin_data_online,
     },
-
     "get_stock_info": {
         "yfinance": get_YFin_stock_info,
     },
-
     # market_context
     "get_sector_performance": {
         "yfinance": get_yfinance_sector_performance,
     },
-
     "get_market_indices": {
         "yfinance": get_yfinance_market_indices,
     },
-
     # technical_indicators
     "get_indicators": {
         "yfinance": get_stock_stats_indicators_window,
@@ -118,7 +84,7 @@ VENDOR_METHODS = {
     "get_fundamentals": {
         "alpha_vantage": get_alpha_vantage_fundamentals,
         "yfinance": get_yfinance_fundamentals,
-        #"openai": get_fundamentals_openai,
+        # "openai": get_fundamentals_openai,
         "perplexity": get_fundamentals_perplexity,
     },
     "get_balance_sheet": {
@@ -138,20 +104,19 @@ VENDOR_METHODS = {
         "google": get_google_news,
         "alpha_vantage": get_alpha_vantage_news,
         "perplexity": get_stock_news_perplexity,
-        #"openai": get_stock_news_openai,
+        # "openai": get_stock_news_openai,
     },
     "get_global_news": {
         "perplexity": get_global_news_perplexity,
-        #"openai": get_global_news_openai,
+        # "openai": get_global_news_openai,
     },
-    "get_insider_sentiment": {
-        "local": get_finnhub_company_insider_sentiment
-    },
+    "get_insider_sentiment": {"local": get_finnhub_company_insider_sentiment},
     "get_insider_transactions": {
         "alpha_vantage": get_alpha_vantage_insider_transactions,
         "yfinance": get_yfinance_insider_transactions,
     },
 }
+
 
 def get_category_for_method(method: str) -> str:
     """Get the category that contains the specified method."""
@@ -159,6 +124,7 @@ def get_category_for_method(method: str) -> str:
         if method in info["tools"]:
             return category
     raise ValueError(f"Method '{method}' not found in any category")
+
 
 def get_vendor(category: str, method: str = None) -> str:
     """Get the configured vendor for a data category or specific tool method.
@@ -175,13 +141,14 @@ def get_vendor(category: str, method: str = None) -> str:
     # Fall back to category-level configuration
     return config.get("data_vendors", {}).get(category, "default")
 
+
 def route_to_vendor(method: str, *args, **kwargs):
     """Route method calls to appropriate vendor implementation with fallback support."""
     category = get_category_for_method(method)
     vendor_config = get_vendor(category, method)
 
     # Handle comma-separated vendors
-    primary_vendors = [v.strip() for v in vendor_config.split(',')]
+    primary_vendors = [v.strip() for v in vendor_config.split(",")]
 
     if method not in VENDOR_METHODS:
         raise ValueError(f"Method '{method}' not supported")
@@ -277,4 +244,4 @@ def route_to_vendor(method: str, *args, **kwargs):
         return results[0]
     else:
         # Convert all results to strings and concatenate
-        return '\n'.join(str(result) for result in results)
+        return "\n".join(str(result) for result in results)

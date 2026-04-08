@@ -1,5 +1,9 @@
 # Import tools from separate utility files
+from __future__ import annotations
 
+import asyncio
+
+import httpx
 from agentscope import logger
 
 COMPLIANCE_PROMPT = "你必须严格遵守内容安全与合规要求，不得生成任何涉黄、涉暴、涉政、违法、仇恨、歧视等内容。"
@@ -121,6 +125,64 @@ TICKER_TO_COMPANY = {
 
 # Backward compatibility alias
 ticker_to_company = TICKER_TO_COMPANY
+
+
+_RETRIABLE_EXCEPTIONS = (
+    httpx.RemoteProtocolError,
+    httpx.ReadTimeout,
+    httpx.ConnectTimeout,
+    httpx.ConnectError,
+)
+
+
+async def call_agent_with_retry(
+    agent,
+    prompt,
+    max_retries: int = 3,
+    base_delay: float = 2.0,
+):
+    """Call an agent with retry on transient network errors.
+
+    Uses exponential backoff to retry on httpx connection/protocol errors
+    that commonly occur during streaming LLM responses.
+
+    Args:
+        agent: AgentScope agent to call
+        prompt: Message prompt to pass to the agent
+        max_retries: Maximum number of retry attempts
+        base_delay: Base delay in seconds for exponential backoff
+
+    Returns:
+        Agent response message
+
+    Raises:
+        The last exception if all retries are exhausted
+    """
+    last_exc = None
+    for attempt in range(max_retries + 1):
+        try:
+            return await agent(prompt)
+        except _RETRIABLE_EXCEPTIONS as e:
+            last_exc = e
+            if attempt < max_retries:
+                delay = base_delay * (2**attempt)
+                logger.warning(
+                    "[Retry] Agent '%s' failed (attempt %d/%d): %s. Retrying in %.0fs...",
+                    getattr(agent, "name", "unknown"),
+                    attempt + 1,
+                    max_retries,
+                    e,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+            else:
+                logger.error(
+                    "[Retry] Agent '%s' failed after %d attempts: %s",
+                    getattr(agent, "name", "unknown"),
+                    max_retries + 1,
+                    e,
+                )
+                raise last_exc from e
 
 
 def get_company_name(ticker: str, market_info: dict = None) -> str:

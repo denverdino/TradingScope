@@ -4,9 +4,7 @@ from typing import Optional
 
 from agentscope import logger
 from agentscope.agent import ReActAgent
-from agentscope.formatter import OpenAIChatFormatter
 from agentscope.memory import InMemoryMemory
-from agentscope.model import OpenAIChatModel
 from agentscope.tool import Toolkit
 
 from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT, get_company_name
@@ -21,14 +19,12 @@ from tradingscope.agents.utils.stock_utils import StockUtils
 
 
 def create_fundamentals_analyst_agent(
-    model: OpenAIChatModel,
     context: AgentContext,
     name: str = "FundamentalsAnalyst",
 ) -> ReActAgent:
     """创建 AgentScope 版本的基本面分析师。
 
     参数：
-        model: AgentScope 模型实例（如 DashScopeChatModel / OpenAIChatModel）。
         context: AgentContext实例包含所有必要的上下文信息
         name: Agent 名称（默认"基本面分析师"）。
 
@@ -54,7 +50,7 @@ def create_fundamentals_analyst_agent(
     currency_symbol = market_info["currency_symbol"]
     market_name = market_info["market_name"]
 
-    formatter = OpenAIChatFormatter()
+    formatter = context.chat_formatter
     toolkit = Toolkit()
     toolkit.register_tool_function(get_fundamentals)
     toolkit.register_tool_function(get_balance_sheet)
@@ -159,12 +155,11 @@ def create_fundamentals_analyst_agent(
 现在**立即**根据上述规范完成一次面向短期交易的基本面分析。
 """
 
-
     # ===== 创建 ReActAgent =====
     agent = ReActAgent(
         name=name,
         sys_prompt=system_prompt,
-        model=model,
+        model=context.model,
         formatter=formatter,
         memory=InMemoryMemory(),
         toolkit=toolkit,

@@ -11,6 +11,7 @@ def test_trader_agent_creation(mock_model, sample_company_data):
 
         # Create AgentContext
         from tradingscope.agents.utils.context import AgentContext
+
         context = AgentContext()
         context.company_of_interest = sample_company_data["company_of_interest"]
         context.investment_plan = sample_company_data["investment_plan"]
@@ -50,6 +51,7 @@ def test_trader_agent_with_china_stock(mock_get_market_info, mock_get_company_na
 
         # Create AgentContext
         from tradingscope.agents.utils.context import AgentContext
+
         context = AgentContext()
         context.company_of_interest = "600000"  # China stock code
         context.investment_plan = sample_company_data["investment_plan"]

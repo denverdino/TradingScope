@@ -12,8 +12,8 @@ help:
 	@echo "  make install     - Install dependencies"
 	@echo "  make lint        - Run linting with ruff"
 	@echo "  make lint-fix    - Run linting and resolve violations with ruff"
-	@echo "  make format      - Format code with black"
-	@echo "  make format-check - Check formatting with black"
+	@echo "  make format      - Format code with ruff"
+	@echo "  make format-check - Check formatting with ruff"
 	@echo "  make imports     - Order imports with ruff"
 	@echo "  make test        - Run tests with pytest"
 	@echo "  make test-cov    - Run tests with coverage report"
@@ -42,12 +42,12 @@ imports:
 # Formatting
 .PHONY: format
 format:
-	black .
+	ruff format .
 
 # Check formatting
 .PHONY: format-check
 format-check:
-	black --check .
+	ruff format --check .
 
 # Testing
 .PHONY: test

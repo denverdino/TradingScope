@@ -181,9 +181,7 @@ class ReflectionLoop:
             self._memory_manager = FinancialMemoryManager()
 
         if self._prediction_store is None:
-            self._prediction_store = PredictionStore(
-                memory=self._memory_manager.prediction_store_memory
-            )
+            self._prediction_store = PredictionStore(memory=self._memory_manager.prediction_store_memory)
 
         return True
 
@@ -224,9 +222,7 @@ class ReflectionLoop:
                     if lesson:
                         lessons.append(lesson)
                 except Exception as e:
-                    logger.warning(
-                        f"[ReflectionLoop] Error reflecting on {prediction.prediction_id}: {e}"
-                    )
+                    logger.warning(f"[ReflectionLoop] Error reflecting on {prediction.prediction_id}: {e}")
 
             logger.info(f"[ReflectionLoop] Generated {len(lessons)} lessons")
 
@@ -255,9 +251,7 @@ class ReflectionLoop:
         # Step 1: Evaluate prediction
         evaluation = await self._evaluator.evaluate(prediction)
         if evaluation is None:
-            logger.warning(
-                f"[ReflectionLoop] Could not evaluate {prediction.prediction_id}"
-            )
+            logger.warning(f"[ReflectionLoop] Could not evaluate {prediction.prediction_id}")
             return None
 
         # Step 2: Generate reflection lesson
@@ -339,11 +333,7 @@ class ReflectionLoop:
     ) -> str:
         """Generate root cause analysis text."""
         if evaluation.lesson_type == "success":
-            return (
-                f"预测{prediction.symbol}方向正确，"
-                f"实际收益{evaluation.actual_return:.1%}，"
-                f"分析依据有效。"
-            )
+            return f"预测{prediction.symbol}方向正确，实际收益{evaluation.actual_return:.1%}，分析依据有效。"
 
         direction_text = "看涨" if prediction.direction == "bullish" else "看跌"
         actual_direction = "上涨" if evaluation.actual_return > 0 else "下跌"
@@ -357,15 +347,9 @@ class ReflectionLoop:
             )
 
         if evaluation.stop_loss_triggered:
-            return (
-                "预测方向正确但触发止损。"
-                "实际波动超出预期，止损设置可能过紧。"
-            )
+            return "预测方向正确但触发止损。实际波动超出预期，止损设置可能过紧。"
 
-        return (
-            "预测部分正确，方向对但未达目标价。"
-            "目标价设置可能过于乐观。"
-        )
+        return "预测部分正确，方向对但未达目标价。目标价设置可能过于乐观。"
 
     def _generate_lesson_text(
         self,
@@ -377,13 +361,8 @@ class ReflectionLoop:
             return f"{prediction.symbol}分析方法有效，继续使用类似分析框架。"
 
         if not evaluation.direction_correct:
-            actual_vs_expected = (
-                f"预期{prediction.direction}，实际{'上涨' if evaluation.actual_return > 0 else '下跌'}"
-            )
-            return (
-                f"方向判断错误：{actual_vs_expected}。"
-                f"需要增加反向信号的关注度。"
-            )
+            actual_vs_expected = f"预期{prediction.direction}，实际{'上涨' if evaluation.actual_return > 0 else '下跌'}"
+            return f"方向判断错误：{actual_vs_expected}。需要增加反向信号的关注度。"
 
         if evaluation.stop_loss_triggered:
             return "止损被触发，考虑使用更宽松的止损或分批建仓策略。"

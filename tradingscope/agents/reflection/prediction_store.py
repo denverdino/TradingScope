@@ -90,9 +90,7 @@ class PredictionStore:
 
             result = await self._memory.record_to_memory(thinking, content)
             if "Successfully" in result:
-                logger.info(
-                    f"[PredictionStore] Saved prediction: {prediction.prediction_id}"
-                )
+                logger.info(f"[PredictionStore] Saved prediction: {prediction.prediction_id}")
                 return True
             else:
                 logger.warning(f"[PredictionStore] Failed to save: {result}")
@@ -226,9 +224,7 @@ class PredictionStore:
 
             result = await self._memory.record_to_memory(thinking, content)
             if "Successfully" in result:
-                logger.info(
-                    f"[PredictionStore] Marked as evaluated: {prediction.prediction_id}"
-                )
+                logger.info(f"[PredictionStore] Marked as evaluated: {prediction.prediction_id}")
                 return True
             return False
 

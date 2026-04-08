@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Qwen Deep Research Agent"""
+
 # pylint: disable=line-too-long, too-many-branches, too-many-statements
 
 import os
@@ -177,10 +178,7 @@ class QwenDeepResearchAgent(AgentBase):
 
         async for response in responses:
             # Check response status
-            if (
-                hasattr(response, "status_code")
-                and response.status_code != 200
-            ):
+            if hasattr(response, "status_code") and response.status_code != 200:
                 error_msg = f"HTTP status code: {response.status_code}"
                 if hasattr(response, "code"):
                     error_msg += f", Error code: {response.code}"
@@ -230,11 +228,7 @@ class QwenDeepResearchAgent(AgentBase):
 
                 # Display status changes
                 if status:
-                    if (
-                        status != current_status
-                        and status != "typing"
-                        and self.verbose
-                    ):
+                    if status != current_status and status != "typing" and self.verbose:
                         self._log_status(status)
                     current_status = status
 
@@ -254,13 +248,7 @@ class QwenDeepResearchAgent(AgentBase):
                                     f'[{i + 1}]: {url} "{title}"',
                                 )
                                 list_links.append(f"{i + 1}. [{title}]({url})")
-                            phase_content = (
-                                phase_content
-                                + "\n\n## References\n\n"
-                                + "\n".join(list_links)
-                                + "\n\n"
-                                + "\n".join(reference_links)
-                            )
+                            phase_content = phase_content + "\n\n## References\n\n" + "\n".join(list_links) + "\n\n" + "\n".join(reference_links)
                             break
 
                 # Process KeepAlive
@@ -298,13 +286,8 @@ class QwenDeepResearchAgent(AgentBase):
                     if sites and sites != web_sites:
                         # web_sites.clear()
                         web_sites.extend(sites)
-                        msg = (
-                            f"\n🔍 Found {len(sites)} relevant websites:\n"
-                            + "\n".join(
-                                f"  {i + 1}. {site.get('title', 'No title')}\n"
-                                f"     {site.get('url', 'No link')}"
-                                for i, site in enumerate(sites)
-                            )
+                        msg = f"\n🔍 Found {len(sites)} relevant websites:\n" + "\n".join(
+                            f"  {i + 1}. {site.get('title', 'No title')}\n     {site.get('url', 'No link')}" for i, site in enumerate(sites)
                         )
                         logger.info(msg)
             # handle finished status
@@ -320,12 +303,9 @@ class QwenDeepResearchAgent(AgentBase):
         """log status information"""
 
         status_desc = {
-            "streamingQueries": "Generating research goals and search queries "
-            "(WebResearch phase)",
-            "streamingWebResult": "Performing search, web page reading, and "
-            "code execution (WebResearch phase)",
-            "WebResultFinished": "Web search phase completed (WebResearch "
-            "phase)",
+            "streamingQueries": "Generating research goals and search queries (WebResearch phase)",
+            "streamingWebResult": "Performing search, web page reading, and code execution (WebResearch phase)",
+            "WebResultFinished": "Web search phase completed (WebResearch phase)",
         }
 
         if status in status_desc:

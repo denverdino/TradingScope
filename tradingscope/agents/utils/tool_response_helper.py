@@ -9,6 +9,7 @@ from agentscope.tool import ToolResponse
 
 F = TypeVar("F", bound=Callable[..., Any])
 
+
 def agentscope_tool(func: F) -> F:
     cache = {}
 

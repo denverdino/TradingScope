@@ -196,14 +196,10 @@ class PredictionEvaluator:
             end_date = (eval_date + timedelta(days=5)).strftime("%Y-%m-%d")
 
             # Fetch stock data
-            stock_data = self._get_stock_data(
-                prediction.symbol, start_date, end_date
-            )
+            stock_data = self._get_stock_data(prediction.symbol, start_date, end_date)
 
             if not stock_data or "Error" in stock_data:
-                logger.warning(
-                    f"Failed to fetch stock data for {prediction.symbol}: {stock_data}"
-                )
+                logger.warning(f"Failed to fetch stock data for {prediction.symbol}: {stock_data}")
                 return None
 
             # Extract prices
@@ -211,10 +207,7 @@ class PredictionEvaluator:
             actual_price_tn = _parse_stock_data(stock_data, prediction.evaluation_date)
 
             if actual_price_t is None or actual_price_tn is None:
-                logger.warning(
-                    f"Could not find prices for {prediction.symbol} "
-                    f"at {prediction.prediction_date} or {prediction.evaluation_date}"
-                )
+                logger.warning(f"Could not find prices for {prediction.symbol} at {prediction.prediction_date} or {prediction.evaluation_date}")
                 return None
 
             # Calculate returns
@@ -223,18 +216,14 @@ class PredictionEvaluator:
             # Calculate predicted return if entry/target prices available
             predicted_return = 0.0
             if prediction.entry_price and prediction.target_price:
-                predicted_return = (
-                    prediction.target_price - prediction.entry_price
-                ) / prediction.entry_price
+                predicted_return = (prediction.target_price - prediction.entry_price) / prediction.entry_price
 
             # Determine direction correctness
-            actual_direction = "bullish" if actual_return > 0.001 else (
-                "bearish" if actual_return < -0.001 else "neutral"
-            )
+            actual_direction = "bullish" if actual_return > 0.001 else ("bearish" if actual_return < -0.001 else "neutral")
             direction_correct = (
-                (prediction.direction == "bullish" and actual_return > 0) or
-                (prediction.direction == "bearish" and actual_return < 0) or
-                (prediction.direction == "neutral" and abs(actual_return) < 0.02)
+                (prediction.direction == "bullish" and actual_return > 0)
+                or (prediction.direction == "bearish" and actual_return < 0)
+                or (prediction.direction == "neutral" and abs(actual_return) < 0.02)
             )
 
             # Check if target was reached

@@ -6,9 +6,7 @@ from agentscope import logger
 
 # AgentScope imports
 from agentscope.agent import ReActAgent
-from agentscope.formatter import OpenAIMultiAgentFormatter
 from agentscope.memory import InMemoryMemory
-from agentscope.model import OpenAIChatModel
 from agentscope.tool import Toolkit
 
 # Local imports
@@ -17,7 +15,6 @@ from tradingscope.agents.utils.context import AgentContext
 
 
 def create_neutral_debator_agent(
-    model: OpenAIChatModel,
     context: AgentContext,
     name: str = "NeutralRiskDebator",
 ) -> ReActAgent:
@@ -32,7 +29,7 @@ def create_neutral_debator_agent(
         A configured ReActAgent instance
     """
     company_of_interest = context.company_of_interest
-    formatter = OpenAIMultiAgentFormatter()
+    formatter = context.multi_agent_formatter
     toolkit = Toolkit()
 
     prompt = f"""{COMPLIANCE_PROMPT}
@@ -47,12 +44,11 @@ def create_neutral_debator_agent(
 
 {context.generate_risk_evaluation_context_md()}"""
 
-
     # Create the agent
     agent = ReActAgent(
         name=name,
         sys_prompt=prompt,
-        model=model,
+        model=context.model,
         formatter=formatter,
         memory=InMemoryMemory(),
         toolkit=toolkit,

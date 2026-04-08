@@ -26,7 +26,7 @@ def _format_response_with_citations(content: str, citations: list[str] | None) -
             return f"[[{idx + 1}]]({citations[idx]})"
         return match.group(0)
 
-    formatted_content = re.sub(r'\[(\d+)\]', replace_citation, content)
+    formatted_content = re.sub(r"\[(\d+)\]", replace_citation, content)
 
     # Append citations list at the end for reference
     citations_section = "\n\n**信息来源:**\n"
@@ -49,21 +49,14 @@ def _call_perplexity_api(messages: list[dict]) -> str:
     if not api_key:
         raise ValueError("PERPLEXITY_API_KEY environment variable is not set")
 
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
     payload = {
         "model": perplexity_mode,
         "messages": messages,
     }
 
-    response = requests.post(
-        "https://api.perplexity.ai/chat/completions",
-        headers=headers,
-        json=payload
-    )
+    response = requests.post("https://api.perplexity.ai/chat/completions", headers=headers, json=payload)
     response.raise_for_status()
     data = response.json()
 

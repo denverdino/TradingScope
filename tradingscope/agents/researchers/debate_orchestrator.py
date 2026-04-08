@@ -9,6 +9,8 @@ from agentscope import logger
 from agentscope.message import Msg
 from agentscope.pipeline import MsgHub
 
+from tradingscope.agents.utils.agent_utils import call_agent_with_retry
+
 
 class ResearchDebateOrchestrator:
     """Orchestrates a multi-agent debate between bull and bear researchers."""
@@ -129,8 +131,8 @@ class ResearchDebateOrchestrator:
                 bull_prompt, bear_prompt = self._get_round_prompts(round_num)
 
                 # Run all researchers concurrently within the MsgHub context
-                await self.bull_researcher(bull_prompt)
-                await self.bear_researcher(bear_prompt)
+                await call_agent_with_retry(self.bull_researcher, bull_prompt)
+                await call_agent_with_retry(self.bear_researcher, bear_prompt)
 
                 logger.info(f"📝 Research debate round {round_num} completed")
 
@@ -147,7 +149,7 @@ class ResearchDebateOrchestrator:
 """,
         )
 
-        final_decision = await self.research_manager(research_manager_prompt)
+        final_decision = await call_agent_with_retry(self.research_manager, research_manager_prompt)
         logger.info("✅ Research debate completed")
 
         return final_decision

@@ -67,8 +67,7 @@ See [agents documentation](tradingscope/agents/README.md) for more details.
 ## Development
 
 This project uses:
-- `ruff` for linting
-- `black` for formatting
+- `ruff` for linting and formatting
 - `pytest` for testing
 
 ## Data Storage

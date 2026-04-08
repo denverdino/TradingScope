@@ -2,7 +2,6 @@ import asyncio
 
 from agentscope import logger
 from agentscope.message import Msg
-from agentscope.model import OpenAIChatModel
 
 from tradingscope.agents.managers.portfolio_manager import create_portfolio_manager_agent
 from tradingscope.utils.oss_report_uploader import upload_reports
@@ -32,6 +31,7 @@ from .risk_mgmt.neutral_debator import create_neutral_debator_agent
 
 # Trader imports
 from .trader.trader import create_trader_agent
+from .utils.agent_utils import call_agent_with_retry
 
 # Import AgentContext
 from .utils.context import AgentContext
@@ -47,22 +47,23 @@ def get_content(result: Msg | Exception) -> str:
     return str(result)
 
 
-async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
+async def analyze(ticker: str, trade_date: str | None = None) -> str:
     """运行并发智能体并执行多轮辩论，返回综合报告。"""
     # 创建AgentContext
     context = AgentContext()
     context.company_of_interest = ticker
-    context.trade_date = trade_date
+    if trade_date:
+        context.trade_date = trade_date
 
     # 创建内存管理器 - 为每个决策Agent提供长期记忆实例
     memory_manager = FinancialMemoryManager()
 
     try:
         # 创建分析师代理（分析师不使用长期记忆）
-        fundamentals_analyst = create_fundamentals_analyst_agent(model=model, context=context)
-        market_analyst = create_market_analyst_agent(model=model, context=context)
-        news_analyst = create_news_analyst_agent(model=model, context=context)
-        social_media_analyst = create_social_media_analyst_agent(model=model, context=context)
+        fundamentals_analyst = create_fundamentals_analyst_agent(context=context)
+        market_analyst = create_market_analyst_agent(context=context)
+        news_analyst = create_news_analyst_agent(context=context)
+        social_media_analyst = create_social_media_analyst_agent(context=context)
 
         # 并发运行分析师代理并获取结果
         analyst_results = await asyncio.gather(
@@ -88,23 +89,25 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
         logger.info("分析师报告已生成，开始创建决策Agent（带长期记忆）")
 
         # Upload analyst reports to OSS
-        await upload_reports(trade_date, ticker, {
-            "market_analyst": market_research_report,
-            "fundamentals_analyst": fundamentals_report,
-            "news_analyst": news_report,
-            "social_media_analyst": sentiment_report,
-        })
+        await upload_reports(
+            context.trade_date,
+            ticker,
+            {
+                "market_analyst": market_research_report,
+                "fundamentals_analyst": fundamentals_report,
+                "news_analyst": news_report,
+                "social_media_analyst": sentiment_report,
+            },
+        )
 
         # 创建研究员代理（带长期记忆）
         bear_researcher = create_bear_researcher_agent(
-            model=model,
             context=context,
             long_term_memory=memory_manager.bear_researcher_memory,
             long_term_memory_mode="static_control",
         )
 
         bull_researcher = create_bull_researcher_agent(
-            model=model,
             context=context,
             long_term_memory=memory_manager.bull_researcher_memory,
             long_term_memory_mode="static_control",
@@ -112,7 +115,6 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
 
         # 创建研究经理代理（带长期记忆）
         research_manager = create_research_manager_agent(
-            model=model,
             context=context,
             long_term_memory=memory_manager.research_manager_memory,
             long_term_memory_mode="static_control",
@@ -136,22 +138,25 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
         context.researcher_investment_plan = researcher_investment_plan
 
         # Upload research manager report to OSS
-        await upload_reports(trade_date, ticker, {
-            "research_manager": researcher_investment_plan,
-        })
+        await upload_reports(
+            context.trade_date,
+            ticker,
+            {
+                "research_manager": researcher_investment_plan,
+            },
+        )
 
         # 交易员基于研究经理的决策做出最终交易决策
         logger.info("=== 交易员最终决策 ===")
         # 创建交易员代理（带长期记忆）
         trader = create_trader_agent(
-            model=model,
             context=context,
             long_term_memory=memory_manager.trader_memory,
             long_term_memory_mode="static_control",
         )
 
         # 交易员做出交易决策
-        trader_response = await trader(None)
+        trader_response = await call_agent_with_retry(trader, None)
         trader_plan = get_content(trader_response)
         logger.info("交易决策:\n%s", trader_plan)
 
@@ -159,27 +164,24 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
         context.trader_investment_plan = trader_plan
 
         # Upload trader report to OSS
-        await upload_reports(trade_date, ticker, {
-            "trader": trader_plan,
-        })
+        await upload_reports(
+            context.trade_date,
+            ticker,
+            {
+                "trader": trader_plan,
+            },
+        )
 
         # 风险管理团队对交易员决策进行辩论和评估
         logger.info("=== 风险管理团队辩论 ===")
 
         # 风险辩论者不使用长期记忆，只有风险经理使用
-        aggressive_agent = create_aggressive_debator_agent(
-            model=model,
-            context=context)
-        conservative_agent = create_conservative_debator_agent(
-            model=model,
-            context=context)
-        neutral_agent = create_neutral_debator_agent(
-            model=model,
-            context=context)
+        aggressive_agent = create_aggressive_debator_agent(context=context)
+        conservative_agent = create_conservative_debator_agent(context=context)
+        neutral_agent = create_neutral_debator_agent(context=context)
 
         # 投资组合经理使用长期记忆
         portfolio_manager = create_portfolio_manager_agent(
-            model=model,
             context=context,
             long_term_memory=memory_manager.portfolio_manager_memory,
             long_term_memory_mode="static_control",
@@ -201,9 +203,13 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
         context.final_trade_decision = final_trade_decision
 
         # Upload portfolio manager report to OSS
-        await upload_reports(trade_date, ticker, {
-            "portfolio_manager": final_trade_decision,
-        })
+        await upload_reports(
+            context.trade_date,
+            ticker,
+            {
+                "portfolio_manager": final_trade_decision,
+            },
+        )
 
         # 存储预测记录用于反思循环
         await _save_prediction_record(context, memory_manager)
@@ -212,9 +218,13 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
         full_report = context.generate_full_report_md()
 
         # Upload full report to OSS
-        await upload_reports(trade_date, ticker, {
-            "full_report": full_report,
-        })
+        await upload_reports(
+            context.trade_date,
+            ticker,
+            {
+                "full_report": full_report,
+            },
+        )
 
         return full_report
 
@@ -223,10 +233,7 @@ async def analyze(model: OpenAIChatModel, ticker: str, trade_date: str) -> str:
         await memory_manager.close()
 
 
-async def _save_prediction_record(
-    context: AgentContext,
-    memory_manager: FinancialMemoryManager
-) -> None:
+async def _save_prediction_record(context: AgentContext, memory_manager: FinancialMemoryManager) -> None:
     """Save prediction record for reflection loop.
 
     Extracts prediction data from context and stores it using
@@ -255,20 +262,13 @@ async def _save_prediction_record(
         )
 
         # Save to prediction store
-        prediction_store = PredictionStore(
-            memory=memory_manager.prediction_store_memory
-        )
+        prediction_store = PredictionStore(memory=memory_manager.prediction_store_memory)
         saved = await prediction_store.save(prediction)
 
         if saved:
-            logger.info(
-                f"[ReflectionLoop] Saved prediction for {prediction.prediction_id}, "
-                f"evaluation scheduled for {prediction.evaluation_date}"
-            )
+            logger.info(f"[ReflectionLoop] Saved prediction for {prediction.prediction_id}, evaluation scheduled for {prediction.evaluation_date}")
         else:
-            logger.warning(
-                f"[ReflectionLoop] Failed to save prediction for {context.company_of_interest}"
-            )
+            logger.warning(f"[ReflectionLoop] Failed to save prediction for {context.company_of_interest}")
 
     except Exception as e:
         logger.warning(f"[ReflectionLoop] Error saving prediction: {e}")

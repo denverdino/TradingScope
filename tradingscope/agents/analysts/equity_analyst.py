@@ -1,11 +1,9 @@
 # -*- coding: utf-8 -*-
 """The main entry point of the Qwen Deep Research agent example."""
-import asyncio
-from datetime import date, datetime, timedelta
-from typing import Any, Optional
+
+from datetime import datetime, timedelta
 
 from agentscope import logger
-from agentscope.agent import ReActAgent
 from agentscope.message import Msg
 
 from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT

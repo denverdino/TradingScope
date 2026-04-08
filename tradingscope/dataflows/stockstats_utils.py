@@ -25,7 +25,7 @@ def yf_retry(func, max_retries=3, base_delay=2.0):
             return func()
         except YFRateLimitError:
             if attempt < max_retries:
-                delay = base_delay * (2 ** attempt)
+                delay = base_delay * (2**attempt)
                 logger.warning("Yahoo Finance rate limited, retrying in %.0fs (attempt %d/%d)", delay, attempt + 1, max_retries)
                 time.sleep(delay)
             else:
@@ -49,17 +49,13 @@ class StockstatsUtils:
     @staticmethod
     def get_stock_stats(
         symbol: Annotated[str, "ticker symbol for the company"],
-        indicator: Annotated[
-            str, "quantitative indicators based off of the stock data for the company"
-        ],
-        curr_date: Annotated[
-            str, "curr date for retrieving stock price data, YYYY-mm-dd"
-        ],
+        indicator: Annotated[str, "quantitative indicators based off of the stock data for the company"],
+        curr_date: Annotated[str, "curr date for retrieving stock price data, YYYY-mm-dd"],
     ):
         # Get config and set up data directory path
         config = get_config()
         online = config["data_vendors"]["technical_indicators"] != "local"
-        logger.debug("Data cache dir: %s", config.get('data_cache_dir'))
+        logger.debug("Data cache dir: %s", config.get("data_cache_dir"))
         logger.debug("Online mode: %s", online)
         df = None
         data = None
@@ -98,14 +94,16 @@ class StockstatsUtils:
             if os.path.exists(data_file):
                 data = pd.read_csv(data_file, on_bad_lines="skip")
             else:
-                data = yf_retry(lambda: yf.download(
-                    symbol,
-                    start=start_date,
-                    end=end_date,
-                    multi_level_index=False,
-                    progress=False,
-                    auto_adjust=True,
-                ))
+                data = yf_retry(
+                    lambda: yf.download(
+                        symbol,
+                        start=start_date,
+                        end=end_date,
+                        multi_level_index=False,
+                        progress=False,
+                        auto_adjust=True,
+                    )
+                )
                 data = data.reset_index()
                 data.to_csv(data_file, index=False)
 

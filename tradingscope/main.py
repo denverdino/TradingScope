@@ -3,7 +3,6 @@ import asyncio
 import logging
 import os
 import smtplib
-from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -11,10 +10,9 @@ import markdown
 
 # 导入日志模块
 from agentscope import logger
-from agentscope.model import OpenAIChatModel
 
+from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.workflow import analyze
-from tradingscope.default_config import DEFAULT_CONFIG
 
 
 def _configure_memory_debug() -> None:
@@ -38,16 +36,16 @@ def _configure_memory_debug() -> None:
 
 def send_html_email(subject, html_content, recipient_emails, sender_email, sender_password):
     """Send HTML email via configurable SMTP."""
-    msg = MIMEMultipart('alternative')
-    msg['Subject'] = subject
-    msg['From'] = sender_email
-    msg['To'] = ','.join(recipient_emails)
-    part = MIMEText(html_content, 'html')
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = sender_email
+    msg["To"] = ",".join(recipient_emails)
+    part = MIMEText(html_content, "html")
     msg.attach(part)
 
     # Get SMTP configuration from environment variables with Gmail defaults
-    smtp_host = os.getenv('SMTP_SSL_HOST', 'smtp.gmail.com')
-    smtp_port = int(os.getenv('SMTP_SSL_PORT', '465'))
+    smtp_host = os.getenv("SMTP_SSL_HOST", "smtp.gmail.com")
+    smtp_port = int(os.getenv("SMTP_SSL_PORT", "465"))
 
     try:
         with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
@@ -74,6 +72,7 @@ def _configure_tool_debug() -> None:
 
     # Suppress AgentScope's tool-result JSON output
     from agentscope.agent._agent_base import AgentBase  # noqa: E402
+
     AgentBase._print_last_block = lambda self, block, msg: None
 
 
@@ -83,34 +82,23 @@ def main():
     _configure_tool_debug()
 
     # Create argument parser
-    parser = argparse.ArgumentParser(description='TradingScope - Multi-Agents trading framework')
-    parser.add_argument('ticker', nargs='?', default='AAPL', help='Stock ticker symbol (e.g., AAPL, BABA)')
-    parser.add_argument('--email_to', help='Email address to send the report to')
-    parser.add_argument('--version', action='version', version='%(prog)s 0.1.0')
+    parser = argparse.ArgumentParser(description="TradingScope - Multi-Agents trading framework")
+    parser.add_argument("ticker", nargs="?", default="AAPL", help="Stock ticker symbol (e.g., AAPL, BABA)")
+    parser.add_argument("--email_to", help="Email address to send the report to")
+    parser.add_argument("--version", action="version", version="%(prog)s 0.1.0")
 
     # Parse arguments
     args = parser.parse_args()
 
-    # Initialize model
-    # extra_body with enable_thinking=True enables Qwen3 reasoning/thinking mode
-    model = OpenAIChatModel(
-        model_name=DEFAULT_CONFIG["deep_think_llm"],
-        api_key=os.environ.get("DASHSCOPE_API_KEY"),
-        stream=True,
-        generate_kwargs={
-            "temperature": 0,
-            #"extra_body": {"enable_thinking": True}
-        }
-    )
-
     # Get ticker from command line argument or use default
     ticker = args.ticker
 
-    trade_date = datetime.now().strftime("%Y-%m-%d")
-    final_report = asyncio.run(analyze(model, ticker, trade_date))
+    # Use AgentContext as the single source of truth for trade_date
+    trade_date = AgentContext().trade_date
+    final_report = asyncio.run(analyze(ticker))
 
     # Generate HTML output from Markdown with table extension
-    html_output = markdown.markdown(final_report, extensions=['tables'])
+    html_output = markdown.markdown(final_report, extensions=["tables"])
 
     # Add CSS styling for tables with grid lines
     html_with_style = f"""
@@ -171,8 +159,9 @@ def main():
             logger.error("EMAIL_FROM and EMAIL_PASSWORD environment variables must be set to send email.")
         else:
             subject = f"Stock Analysis Report: {ticker} ({trade_date})"
-            recipient_list = [email.strip() for email in args.email_to.split(',')]
+            recipient_list = [email.strip() for email in args.email_to.split(",")]
             send_html_email(subject, html_with_style, recipient_list, sender_email, sender_password)
+
 
 if __name__ == "__main__":
     main()

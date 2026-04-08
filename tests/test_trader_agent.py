@@ -41,6 +41,7 @@ class TestTraderAgent:
         """Test that trader agent can be created successfully."""
         # Create AgentContext
         from tradingscope.agents.utils.context import AgentContext
+
         context = AgentContext()
         context.company_of_interest = self.company_of_interest
         context.investment_plan = self.investment_plan
@@ -74,6 +75,7 @@ class TestTraderAgent:
 
         # Create AgentContext
         from tradingscope.agents.utils.context import AgentContext
+
         context = AgentContext()
         context.company_of_interest = self.company_of_interest
         context.investment_plan = self.investment_plan
@@ -101,6 +103,7 @@ class TestTraderAgent:
 
         # Create AgentContext
         from tradingscope.agents.utils.context import AgentContext
+
         context = AgentContext()
         context.company_of_interest = self.company_of_interest
         context.investment_plan = self.investment_plan
@@ -124,6 +127,7 @@ class TestTraderAgent:
         """Test that the trader agent has the user message pre-loaded in memory."""
         # Create AgentContext
         from tradingscope.agents.utils.context import AgentContext
+
         context = AgentContext()
         context.company_of_interest = self.company_of_interest
         context.investment_plan = self.investment_plan

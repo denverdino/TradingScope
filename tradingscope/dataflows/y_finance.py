@@ -11,6 +11,7 @@ from .stockstats_utils import StockstatsUtils, _clean_dataframe, yf_retry
 
 logger = logging.getLogger(__name__)
 
+
 def get_YFin_stock_info(symbol: Annotated[str, "ticker symbol of the company"]):
     info = yf_retry(lambda: yf.Ticker(symbol.upper()).info)
     info.pop("longBusinessSummary", None)
@@ -35,9 +36,7 @@ def get_YFin_data_online(
 
     # Check if data is empty
     if data.empty:
-        return (
-            f"No data found for symbol '{symbol}' between {start_date} and {end_date}"
-        )
+        return f"No data found for symbol '{symbol}' between {start_date} and {end_date}"
 
     # Remove timezone info from index for cleaner output
     if data.index.tz is not None:
@@ -59,12 +58,11 @@ def get_YFin_data_online(
 
     return header + csv_string
 
+
 def get_stock_stats_indicators_window(
     symbol: Annotated[str, "ticker symbol of the company"],
     indicator: Annotated[str, "technical indicator to get the analysis and report of"],
-    curr_date: Annotated[
-        str, "The current trading date you are trading on, YYYY-mm-dd"
-    ],
+    curr_date: Annotated[str, "The current trading date you are trading on, YYYY-mm-dd"],
     look_back_days: Annotated[int, "how many days to look back"],
 ) -> str:
 
@@ -142,9 +140,7 @@ def get_stock_stats_indicators_window(
     }
 
     if indicator not in best_ind_params:
-        raise ValueError(
-            f"Indicator {indicator} is not supported. Please choose from: {list(best_ind_params.keys())}"
-        )
+        raise ValueError(f"Indicator {indicator} is not supported. Please choose from: {list(best_ind_params.keys())}")
 
     end_date = curr_date
     curr_date_dt = datetime.strptime(curr_date, "%Y-%m-%d")
@@ -159,7 +155,7 @@ def get_stock_stats_indicators_window(
         date_values = []
 
         while current_dt >= before:
-            date_str = current_dt.strftime('%Y-%m-%d')
+            date_str = current_dt.strftime("%Y-%m-%d")
 
             # Look up the indicator value for this date
             if date_str in indicator_data:
@@ -181,9 +177,7 @@ def get_stock_stats_indicators_window(
         ind_string = ""
         curr_date_dt = datetime.strptime(curr_date, "%Y-%m-%d")
         while curr_date_dt >= before:
-            indicator_value = get_stockstats_indicator(
-                symbol, indicator, curr_date_dt.strftime("%Y-%m-%d")
-            )
+            indicator_value = get_stockstats_indicator(symbol, indicator, curr_date_dt.strftime("%Y-%m-%d"))
             ind_string += f"{curr_date_dt.strftime('%Y-%m-%d')}: {indicator_value}\n"
             curr_date_dt = curr_date_dt - relativedelta(days=1)
 
@@ -200,7 +194,7 @@ def get_stock_stats_indicators_window(
 def _get_stock_stats_bulk(
     symbol: Annotated[str, "ticker symbol of the company"],
     indicator: Annotated[str, "technical indicator to calculate"],
-    curr_date: Annotated[str, "current date for reference"]
+    curr_date: Annotated[str, "current date for reference"],
 ) -> dict:
     """
     Optimized bulk calculation of stock stats indicators.
@@ -246,14 +240,16 @@ def _get_stock_stats_bulk(
         if os.path.exists(data_file):
             data = pd.read_csv(data_file, on_bad_lines="skip")
         else:
-            data = yf_retry(lambda: yf.download(
-                symbol,
-                start=start_date_str,
-                end=end_date_str,
-                multi_level_index=False,
-                progress=False,
-                auto_adjust=True,
-            ))
+            data = yf_retry(
+                lambda: yf.download(
+                    symbol,
+                    start=start_date_str,
+                    end=end_date_str,
+                    multi_level_index=False,
+                    progress=False,
+                    auto_adjust=True,
+                )
+            )
             data = data.reset_index()
             data.to_csv(data_file, index=False)
 
@@ -282,9 +278,7 @@ def _get_stock_stats_bulk(
 def get_stockstats_indicator(
     symbol: Annotated[str, "ticker symbol of the company"],
     indicator: Annotated[str, "technical indicator to get the analysis and report of"],
-    curr_date: Annotated[
-        str, "The current trading date you are trading on, YYYY-mm-dd"
-    ],
+    curr_date: Annotated[str, "The current trading date you are trading on, YYYY-mm-dd"],
 ) -> str:
 
     curr_date_dt = datetime.strptime(curr_date, "%Y-%m-%d")
@@ -299,7 +293,9 @@ def get_stockstats_indicator(
     except Exception as e:
         logger.warning(
             "Error getting stockstats indicator data for indicator %s on %s: %s",
-            indicator, curr_date, e,
+            indicator,
+            curr_date,
+            e,
         )
         return ""
 
@@ -309,7 +305,7 @@ def get_stockstats_indicator(
 def get_balance_sheet(
     ticker: Annotated[str, "ticker symbol of the company"],
     freq: Annotated[str, "frequency of data: 'annual' or 'quarterly'"] = "quarterly",
-    curr_date: Annotated[str, "current date (not used for yfinance)"] = None
+    curr_date: Annotated[str, "current date (not used for yfinance)"] = None,
 ):
     """Get balance sheet data from yfinance."""
     try:
@@ -339,7 +335,7 @@ def get_balance_sheet(
 def get_cashflow(
     ticker: Annotated[str, "ticker symbol of the company"],
     freq: Annotated[str, "frequency of data: 'annual' or 'quarterly'"] = "quarterly",
-    curr_date: Annotated[str, "current date (not used for yfinance)"] = None
+    curr_date: Annotated[str, "current date (not used for yfinance)"] = None,
 ):
     """Get cash flow data from yfinance."""
     try:
@@ -369,7 +365,7 @@ def get_cashflow(
 def get_income_statement(
     ticker: Annotated[str, "ticker symbol of the company"],
     freq: Annotated[str, "frequency of data: 'annual' or 'quarterly'"] = "quarterly",
-    curr_date: Annotated[str, "current date (not used for yfinance)"] = None
+    curr_date: Annotated[str, "current date (not used for yfinance)"] = None,
 ):
     """Get income statement data from yfinance."""
     try:
@@ -396,9 +392,7 @@ def get_income_statement(
         return f"Error retrieving income statement for {ticker}: {str(e)}"
 
 
-def get_insider_transactions(
-    ticker: Annotated[str, "ticker symbol of the company"]
-):
+def get_insider_transactions(ticker: Annotated[str, "ticker symbol of the company"]):
     """Get insider transactions data from yfinance."""
     try:
         ticker_obj = yf.Ticker(ticker.upper())
@@ -469,7 +463,7 @@ def get_sector_performance(
         result += f"- Industry: {industry}\n\n"
 
         # Calculate stock performance
-        stock_close = stock_hist['Close']
+        stock_close = stock_hist["Close"]
         if len(stock_close) >= 2:
             stock_return_1d = ((stock_close.iloc[-1] / stock_close.iloc[-2]) - 1) * 100
             result += f"- Stock 1-Day Return: {stock_return_1d:.2f}%\n"
@@ -490,7 +484,7 @@ def get_sector_performance(
                 etf_hist = yf_retry(lambda: etf_obj.history(start=start_date.strftime("%Y-%m-%d"), end=end_date.strftime("%Y-%m-%d")))
 
                 if not etf_hist.empty:
-                    etf_close = etf_hist['Close']
+                    etf_close = etf_hist["Close"]
                     result += f"\n## Sector ETF Performance ({sector_etf} - {sector})\n"
 
                     if len(etf_close) >= 2:
@@ -521,10 +515,7 @@ def get_sector_performance(
         return f"Error retrieving sector performance for {ticker}: {str(e)}"
 
 
-def get_fundamentals(
-    ticker: Annotated[str, "ticker symbol of the company"],
-    curr_date: Annotated[str, "current date (not used for yfinance)"] = None
-):
+def get_fundamentals(ticker: Annotated[str, "ticker symbol of the company"], curr_date: Annotated[str, "current date (not used for yfinance)"] = None):
     """Get company fundamentals overview from yfinance."""
     try:
         ticker_obj = yf.Ticker(ticker.upper())
@@ -563,7 +554,7 @@ def get_fundamentals(
             ("Current Ratio", info.get("currentRatio")),
             ("Book Value", info.get("bookValue")),
             ("Dividend Rate", info.get("dividendRate")),
-            ("Dividend Yield", info.get("dividendYield")/100),
+            ("Dividend Yield", info.get("dividendYield") / 100),
             ("Payout Ratio", info.get("payoutRatio")),
             ("Beta", info.get("beta")),
             ("52 Week High", info.get("fiftyTwoWeekHigh")),
@@ -581,25 +572,42 @@ def get_fundamentals(
         for label, value in fields:
             if value is not None:
                 # Format percentages
-                if label in ["Profit Margin", "Operating Margin", "ROA", "ROE",
-                            "Revenue Growth", "Earnings Growth", "Dividend Yield",
-                            "Payout Ratio", "Short % of Float"]:
+                if label in [
+                    "Profit Margin",
+                    "Operating Margin",
+                    "ROA",
+                    "ROE",
+                    "Revenue Growth",
+                    "Earnings Growth",
+                    "Dividend Yield",
+                    "Payout Ratio",
+                    "Short % of Float",
+                ]:
                     if isinstance(value, (int, float)):
                         lines.append(f"{label}: {value:.2%}")
                     else:
                         lines.append(f"{label}: {value}")
                 # Format large numbers
-                elif label in ["Market Cap", "Enterprise Value", "Revenue (TTM)",
-                              "Gross Profit (TTM)", "EBITDA", "Net Income (TTM)",
-                              "Total Cash", "Total Debt", "Free Cash Flow",
-                              "Shares Outstanding", "Float Shares"]:
+                elif label in [
+                    "Market Cap",
+                    "Enterprise Value",
+                    "Revenue (TTM)",
+                    "Gross Profit (TTM)",
+                    "EBITDA",
+                    "Net Income (TTM)",
+                    "Total Cash",
+                    "Total Debt",
+                    "Free Cash Flow",
+                    "Shares Outstanding",
+                    "Float Shares",
+                ]:
                     if isinstance(value, (int, float)) and value >= 1_000_000:
                         if value >= 1_000_000_000_000:
-                            lines.append(f"{label}: ${value/1_000_000_000_000:.2f}T")
+                            lines.append(f"{label}: ${value / 1_000_000_000_000:.2f}T")
                         elif value >= 1_000_000_000:
-                            lines.append(f"{label}: ${value/1_000_000_000:.2f}B")
+                            lines.append(f"{label}: ${value / 1_000_000_000:.2f}B")
                         elif value >= 1_000_000:
-                            lines.append(f"{label}: ${value/1_000_000:.2f}M")
+                            lines.append(f"{label}: ${value / 1_000_000:.2f}M")
                         else:
                             lines.append(f"{label}: {value:,.0f}")
                     else:
@@ -656,7 +664,7 @@ def get_market_indices(
                     result += f"## {name} ({symbol}): No data available\n\n"
                     continue
 
-                close = hist['Close']
+                close = hist["Close"]
                 current_price = close.iloc[-1]
 
                 result += f"## {name} ({symbol})\n"
@@ -734,13 +742,13 @@ def get_market_indices(
                         result += f"- NASDAQ 5-Day Range: {nasdaq_5d_low:,.2f} - {nasdaq_5d_high:,.2f}\n"
 
                         # Momentum: consecutive up/down days
-                        up_days = sum(1 for i in range(-5, 0) if close.iloc[i] > close.iloc[i-1])
+                        up_days = sum(1 for i in range(-5, 0) if close.iloc[i] > close.iloc[i - 1])
                         result += f"- NASDAQ Recent Momentum: {up_days}/5 trading days positive (近5日上涨天数)\n"
 
                     if len(close) >= 2:
                         # Daily range as volatility indicator
-                        if 'High' in hist.columns and 'Low' in hist.columns:
-                            daily_range_pct = ((hist['High'].iloc[-1] - hist['Low'].iloc[-1]) / close.iloc[-2]) * 100
+                        if "High" in hist.columns and "Low" in hist.columns:
+                            daily_range_pct = ((hist["High"].iloc[-1] - hist["Low"].iloc[-1]) / close.iloc[-2]) * 100
                             result += f"- NASDAQ Daily Range: {daily_range_pct:.2f}% (当日振幅)\n"
 
                 result += "\n"

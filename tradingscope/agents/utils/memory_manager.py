@@ -70,11 +70,7 @@ class FinancialMemoryManager:
 
         # Create memory instances for each role
         for role in self.AGENT_ROLES:
-            self._memories[role] = ModelStudioLongTermMemory(
-                agent_name=role,
-                user_name=user_name,
-                top_k=top_k
-            )
+            self._memories[role] = ModelStudioLongTermMemory(agent_name=role, user_name=user_name, top_k=top_k)
 
         logger.info(f"FinancialMemoryManager created with {len(self._memories)} memory instances")
 
@@ -86,9 +82,7 @@ class FinancialMemoryManager:
         logger.info("Closing FinancialMemoryManager...")
 
         # Close all memories concurrently
-        close_tasks = [
-            memory.close() for memory in self._memories.values()
-        ]
+        close_tasks = [memory.close() for memory in self._memories.values()]
         await asyncio.gather(*close_tasks, return_exceptions=True)
 
         logger.info("FinancialMemoryManager closed")

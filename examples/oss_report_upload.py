@@ -45,6 +45,7 @@ def _object_exists(client: oss.Client, bucket: str, key: str) -> bool:
 async def main():
     # Step 0: Verify OSS client can be initialized
     import tradingscope.utils.oss_report_uploader as m
+
     m._client = None  # reset cached client
     client = _get_client()
     if client is None:

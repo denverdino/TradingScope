@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
 from agentscope import logger
 from agentscope.agent import ReActAgent
-from agentscope.formatter import OpenAIMultiAgentFormatter
 from agentscope.memory import InMemoryMemory
-from agentscope.model import OpenAIChatModel
 from agentscope.tool import Toolkit
 
 # 导入统一日志系统
@@ -20,7 +17,6 @@ if TYPE_CHECKING:
 
 
 def create_bear_researcher_agent(
-    model: OpenAIChatModel,
     context: AgentContext,
     name: str = "BearResearcher",
     long_term_memory: Optional["ModelStudioLongTermMemory"] = None,
@@ -47,8 +43,7 @@ def create_bear_researcher_agent(
     currency = market_info["currency_name"]
     currency_symbol = market_info["currency_symbol"]
 
-    # 获取当前日期
-    current_date = trade_date or datetime.now().strftime("%Y-%m-%d")
+    current_date = trade_date
 
     # 构建系统提示词
     system_message = f"""{COMPLIANCE_PROMPT}
@@ -56,7 +51,7 @@ def create_bear_researcher_agent(
 你是一位看跌分析师，负责论证不投资股票 {company_name} 的理由。
 
 ⚠️ 重要提醒：
-当前分析的是 {market_info['market_name']}，所有价格和估值请使用 {currency}（{currency_symbol}）作为单位。
+当前分析的是 {market_info["market_name"]}，所有价格和估值请使用 {currency}（{currency_symbol}）作为单位。
 当前日期是 {current_date}
 
 你的目标是在辩论中担任反方角色，提出合理的论证，强调风险、挑战和负面指标。你需要：
@@ -82,14 +77,14 @@ def create_bear_researcher_agent(
 {context.generate_analyst_reports_md()}"""
 
     # 工具注册（如果需要）
-    formatter = OpenAIMultiAgentFormatter()
+    formatter = context.multi_agent_formatter
     toolkit = Toolkit()
 
     # 创建 ReActAgent with long-term memory
     agent = ReActAgent(
         name=name,
         sys_prompt=system_message,
-        model=model,
+        model=context.model,
         formatter=formatter,
         toolkit=toolkit,
         memory=InMemoryMemory(),

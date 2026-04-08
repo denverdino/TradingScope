@@ -7,8 +7,6 @@ import sys
 # Add the project root to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from agentscope.model import OpenAIChatModel
-
 from tradingscope.agents.managers.portfolio_manager import create_portfolio_manager_agent
 from tradingscope.agents.risk_mgmt.aggressive_debator import create_aggressive_debator_agent
 from tradingscope.agents.risk_mgmt.conservative_debator import create_conservative_debator_agent
@@ -16,19 +14,10 @@ from tradingscope.agents.risk_mgmt.debate_orchestrator import create_debate_orch
 from tradingscope.agents.risk_mgmt.neutral_debator import create_neutral_debator_agent
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.memory_manager import FinancialMemoryManager
-from tradingscope.default_config import DEFAULT_CONFIG
 
 
 async def main():
     """Example usage of the risk management debate system with long-term memory."""
-
-    # Initialize the model
-    model = OpenAIChatModel(
-        model_name=DEFAULT_CONFIG["deep_think_llm"],
-        api_key=os.environ.get("DASHSCOPE_API_KEY"),
-        stream=True,
-        generate_kwargs={"temperature": 0}
-    )
 
     # Example data for a stock analysis
     company_name = "TSLA"
@@ -73,22 +62,12 @@ async def main():
     try:
         # Create the risk management agents
         # Debators don't use long-term memory, only the portfolio manager does
-        aggressive_agent = create_aggressive_debator_agent(
-            model=model,
-            context=context
-        )
-        conservative_agent = create_conservative_debator_agent(
-            model=model,
-            context=context
-        )
-        neutral_agent = create_neutral_debator_agent(
-            model=model,
-            context=context
-        )
+        aggressive_agent = create_aggressive_debator_agent(context=context)
+        conservative_agent = create_conservative_debator_agent(context=context)
+        neutral_agent = create_neutral_debator_agent(context=context)
 
         # Portfolio manager with long-term memory
         portfolio_manager = create_portfolio_manager_agent(
-            model=model,
             context=context,
             long_term_memory=memory_manager.portfolio_manager_memory,
             long_term_memory_mode="static_control",
@@ -96,7 +75,11 @@ async def main():
 
         # Create the debate orchestrator
         orchestrator = create_debate_orchestrator(
-            aggressive_agent=aggressive_agent, conservative_agent=conservative_agent, neutral_agent=neutral_agent, portfolio_manager=portfolio_manager, max_rounds=3
+            aggressive_agent=aggressive_agent,
+            conservative_agent=conservative_agent,
+            neutral_agent=neutral_agent,
+            portfolio_manager=portfolio_manager,
+            max_rounds=3,
         )
 
         print(f"Starting risk management debate for {company_name}")

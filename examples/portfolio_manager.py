@@ -2,25 +2,14 @@
 """Example showing how to use the PortfolioManagerAgent with long-term memory."""
 
 import asyncio
-import os
-
-from agentscope.model import OpenAIChatModel
 
 from tradingscope.agents.managers.portfolio_manager import create_portfolio_manager_agent
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.memory_manager import FinancialMemoryManager
-from tradingscope.default_config import DEFAULT_CONFIG
 
 
 async def main():
     """Example of using the PortfolioManagerAgent with long-term memory."""
-    # Initialize the model
-    model = OpenAIChatModel(
-        model_name=DEFAULT_CONFIG["deep_think_llm"],
-        api_key=os.environ.get("DASHSCOPE_API_KEY"),
-        stream=True,
-    )
-
     # Create AgentContext with sample data
     context = AgentContext()
     context.company_of_interest = "AAPL"
@@ -31,7 +20,6 @@ async def main():
     try:
         # Create the portfolio manager agent with long-term memory
         portfolio_manager = create_portfolio_manager_agent(
-            model=model,
             context=context,
             name="PortfolioManager",
             long_term_memory=memory_manager.portfolio_manager_memory,

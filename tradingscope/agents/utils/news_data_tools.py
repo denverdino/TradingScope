@@ -23,6 +23,7 @@ def get_news(
     """
     return route_to_vendor("get_news", ticker, start_date, end_date)
 
+
 @agentscope_tool
 def get_global_news(
     curr_date: Annotated[str, "Current date in yyyy-mm-dd format"],
@@ -44,8 +45,10 @@ def get_global_news(
     except Exception as e:
         # Print stack trace for debugging
         import traceback
+
         traceback.print_exc()
         return f"Error retrieving global news: {str(e)}"
+
 
 @agentscope_tool
 def get_insider_sentiment(
@@ -62,6 +65,7 @@ def get_insider_sentiment(
         str: A report of insider sentiment data
     """
     return route_to_vendor("get_insider_sentiment", ticker, curr_date)
+
 
 @agentscope_tool
 def get_insider_transactions(

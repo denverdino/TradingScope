@@ -32,11 +32,11 @@ def get_google_news(
     news_str = ""
 
     for news in news_results:
-        title = news.get('title', '无标题')
-        link = news.get('link', '')
-        source = news.get('source', '未知来源')
-        snippet = news.get('snippet', '')
-        date = news.get('date', '')
+        title = news.get("title", "无标题")
+        link = news.get("link", "")
+        source = news.get("source", "未知来源")
+        snippet = news.get("snippet", "")
+        date = news.get("date", "")
 
         # Build article entry with inline link
         if link:

@@ -2,24 +2,13 @@
 """Example script demonstrating how to use the Research Manager Agent with long-term memory."""
 
 import asyncio
-import os
-
-from agentscope.model import OpenAIChatModel
 
 from tradingscope.agents.managers.research_manager import create_research_manager_agent
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.memory_manager import FinancialMemoryManager
-from tradingscope.default_config import DEFAULT_CONFIG
 
 
 async def main():
-    # Initialize the model
-    model = OpenAIChatModel(
-        model_name=DEFAULT_CONFIG["deep_think_llm"],
-        api_key=os.environ.get("DASHSCOPE_API_KEY"),
-        stream=True,
-    )
-
     # Create AgentContext with sample data
     context = AgentContext()
     context.company_of_interest = "AAPL"
@@ -30,7 +19,6 @@ async def main():
     try:
         # Create the research manager agent with long-term memory
         agent = create_research_manager_agent(
-            model=model,
             context=context,
             long_term_memory=memory_manager.research_manager_memory,
             long_term_memory_mode="static_control",

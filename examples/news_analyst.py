@@ -2,30 +2,16 @@
 """Example script demonstrating how to use the News Analyst Agent."""
 
 import asyncio
-import os
-from datetime import datetime
-
-from agentscope.model import OpenAIChatModel
 
 from tradingscope.agents.analysts.news_analyst import create_news_analyst_agent
-from tradingscope.default_config import DEFAULT_CONFIG
+from tradingscope.agents.utils.context import AgentContext
 
 
 async def main():
-    model = OpenAIChatModel(
-        model_name=DEFAULT_CONFIG["deep_think_llm"],
-        api_key=os.environ.get("DASHSCOPE_API_KEY"),
-        stream=True,
-    )
-    trade_date = datetime.now().strftime("%Y-%m-%d")
-
-    # Create AgentContext
-    from tradingscope.agents.utils.context import AgentContext
     context = AgentContext()
     context.company_of_interest = "TSM"
-    context.trade_date = trade_date
 
-    agent = create_news_analyst_agent(model=model, context=context)
+    agent = create_news_analyst_agent(context=context)
     await agent(None)
 
 

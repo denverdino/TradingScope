@@ -2,14 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Optional
-
 from agentscope import logger
 from agentscope.agent import ReActAgent
-from agentscope.formatter import OpenAIChatFormatter
 from agentscope.memory import InMemoryMemory
-from agentscope.model import OpenAIChatModel
 from agentscope.tool import Toolkit
 
 from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT, get_company_name
@@ -20,7 +15,6 @@ from tradingscope.agents.utils.stock_utils import StockUtils
 
 
 def create_social_media_analyst_agent(
-    model: OpenAIChatModel,
     context: AgentContext,
     name: str = "SocialMediaAnalyst",
 ) -> ReActAgent:
@@ -30,7 +24,6 @@ def create_social_media_analyst_agent(
     - 输出中文与固定结构（含情绪评分与价格影响评估）。
 
     Args:
-        model: OpenAIChatModel 实例
         context: AgentContext实例包含所有必要的上下文信息
         name: 代理名称
 
@@ -47,15 +40,14 @@ def create_social_media_analyst_agent(
     logger.info(f"[社交媒体分析师] 创建Agent - 股票: {ticker}, 公司: {company_name}, 市场: {market_info['market_name']}")
 
     # 工具注册
-    formatter = OpenAIChatFormatter()
+    formatter = context.chat_formatter
     toolkit = Toolkit()
 
     # 注册社交媒体相关工具（优先中国社媒，备选 Reddit）
     toolkit.register_tool_function(get_stock_info)
     toolkit.register_tool_function(get_news)
 
-    # 当前日期
-    current_date = trade_date or datetime.now().strftime("%Y-%m-%d")
+    current_date = trade_date
 
     tool_names = ", ".join(toolkit.tools.keys())
 
@@ -76,8 +68,8 @@ def create_social_media_analyst_agent(
 **股票信息：**
 - 公司名称：{company_name}
 - 股票代码：{ticker}
-- 所属市场：{market_info['market_name']}
-- 计价货币：{market_info['currency_name']}（{market_info['currency_symbol']}）
+- 所属市场：{market_info["market_name"]}
+- 计价货币：{market_info["currency_name"]}（{market_info["currency_symbol"]}）
 
 **主要职责包括：**
 1. 分析主要财经平台的投资者情绪
@@ -104,14 +96,14 @@ def create_social_media_analyst_agent(
 **特别注意：**
 ⚠️ 若数据**超过 2 小时**未更新，需在报告中明确标注时效性限制
 ✅ 优先分析最新、相关性强的舆情与事件
-🌍 结合{market_info['market_name']}市场微观结构与交易特征
-💵 所有价格数据使用{market_info['currency_name']}（{market_info['currency_symbol']}）表示
+🌍 结合{market_info["market_name"]}市场微观结构与交易特征
+💵 所有价格数据使用{market_info["currency_name"]}（{market_info["currency_symbol"]}）表示
 
 **输出格式（严格遵循）：**
 ### 股票基本信息
 - 公司名称：{company_name}
 - 股票代码：{ticker}
-- 所属市场：{market_info['market_name']}
+- 所属市场：{market_info["market_name"]}
 - 当前日期：{current_date}。
 - 当前价格/收盘价格：：xxx
 - 盘前/盘后价格：xxx
@@ -130,7 +122,7 @@ def create_social_media_analyst_agent(
     agent = ReActAgent(
         name=name,
         sys_prompt=system_prompt,
-        model=model,
+        model=context.model,
         formatter=formatter,
         toolkit=toolkit,
         memory=InMemoryMemory(),

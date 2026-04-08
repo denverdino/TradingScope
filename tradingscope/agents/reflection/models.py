@@ -246,9 +246,7 @@ class ReflectionLesson:
         bias_str = ",".join([b.value for b in self.bias_findings]) if self.bias_findings else "无"
         actions_str = "; ".join(self.improvement_actions[:3]) if self.improvement_actions else "无"
 
-        result_label = {"success": "正确预测", "failure": "错误预测", "partial": "部分正确"}.get(
-            self.lesson_type, "未知"
-        )
+        result_label = {"success": "正确预测", "failure": "错误预测", "partial": "部分正确"}.get(self.lesson_type, "未知")
 
         content = f"""[元数据]
 类型: 反思教训

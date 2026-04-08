@@ -1,14 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
 from agentscope import logger
 from agentscope.agent import ReActAgent
-from agentscope.formatter import OpenAIMultiAgentFormatter
 from agentscope.memory import InMemoryMemory
-from agentscope.model import OpenAIChatModel
 from agentscope.tool import Toolkit
 from pydantic import BaseModel, Field
 
@@ -43,7 +40,6 @@ class InvestmentDecision(BaseModel):
 
 
 def create_research_manager_agent(
-    model: OpenAIChatModel,
     context: AgentContext,
     name: str = "ResearchManager",
     long_term_memory: Optional["ModelStudioLongTermMemory"] = None,
@@ -52,7 +48,6 @@ def create_research_manager_agent(
     """创建支持结构化输出的投资决策经理 ReActAgent。
 
     Args:
-        model: AgentScope 模型实例
         context: AgentContext实例包含所有必要的上下文信息
         name: 代理名称
         long_term_memory: 长期记忆实例用于存储和检索历史经验
@@ -127,14 +122,14 @@ def create_research_manager_agent(
 {context.generate_analyst_reports_md()}"""
 
     # 工具注册（如果需要）
-    formatter = OpenAIMultiAgentFormatter()
+    formatter = context.multi_agent_formatter
     toolkit = Toolkit()
 
     # 创建 ReActAgent with long-term memory
     agent = ReActAgent(
         name=name,
         sys_prompt=system_message,
-        model=model,
+        model=context.model,
         formatter=formatter,
         toolkit=toolkit,
         memory=InMemoryMemory(),

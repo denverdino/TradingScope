@@ -1,6 +1,12 @@
+import os
 import re
 from datetime import datetime
 from typing import Annotated, Dict, Optional
+
+from agentscope.formatter import OpenAIChatFormatter, OpenAIMultiAgentFormatter
+from agentscope.model import OpenAIChatModel
+
+from tradingscope.default_config import DEFAULT_CONFIG
 
 
 class AgentContext:
@@ -9,7 +15,6 @@ class AgentContext:
     # Core context information
     company_of_interest: Annotated[str, "Company that we are interested in trading"] = ""
     trade_date: Annotated[str, "What date we are trading at"] = ""
-
 
     # Analyst step
     market_report: Annotated[str, "Report from the Market Analyst"] = ""
@@ -29,6 +34,22 @@ class AgentContext:
     def __init__(self):
         """Initialize AgentContext with default values."""
         self.trade_date = datetime.now().strftime("%Y-%m-%d")
+
+        # Model initialization
+        self.model = OpenAIChatModel(
+            model_name=DEFAULT_CONFIG["deep_think_llm"],
+            api_key=os.environ.get("DASHSCOPE_API_KEY"),
+            stream=True,
+            generate_kwargs={"temperature": 0, "extra_body": {"enable_thinking": False}},
+            client_kwargs={
+                "max_retries": 2,
+                "timeout": 120,
+            },
+        )
+
+        # Formatter initialization
+        self.chat_formatter = OpenAIChatFormatter()
+        self.multi_agent_formatter = OpenAIMultiAgentFormatter()
 
     def generate_analyst_reports_md(self) -> str:
         """Generate markdown formatted research reports section."""
@@ -237,7 +258,7 @@ class AgentContext:
         # If no explicit reasoning, extract from action context
         if not reasoning_parts:
             # Find sentences containing the action keyword
-            sentences = re.split(r'[。\.\n]', decision_text)
+            sentences = re.split(r"[。\.\n]", decision_text)
             action_keywords = ["买入", "卖出", "持有", "buy", "sell", "hold"]
             for sent in sentences:
                 if any(kw in sent.lower() for kw in action_keywords) and len(sent) > 20:
@@ -247,4 +268,3 @@ class AgentContext:
         result["reasoning"] = "".join(reasoning_parts)[:100] if reasoning_parts else "未提供详细理由"
 
         return result
-

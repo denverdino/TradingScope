@@ -1,16 +1,11 @@
 from __future__ import annotations
 
-import asyncio
-from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
 # 导入统一日志系统
 from agentscope import logger
 from agentscope.agent import ReActAgent
-from agentscope.formatter import OpenAIChatFormatter
 from agentscope.memory import InMemoryMemory
-from agentscope.message import Msg
-from agentscope.model import OpenAIChatModel
 from agentscope.tool import Toolkit
 
 from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT, get_company_name
@@ -22,7 +17,6 @@ if TYPE_CHECKING:
 
 
 def create_trader_agent(
-    model: OpenAIChatModel,
     context: AgentContext,
     name: str = "Trader",
     long_term_memory: Optional["ModelStudioLongTermMemory"] = None,
@@ -56,10 +50,8 @@ def create_trader_agent(
     logger.debug(f"💰 [DEBUG] 交易员检测股票类型: {company_of_interest} -> {market_info['market_name']}, 货币: {currency}")
     logger.debug(f"💰 [DEBUG] 货币符号: {currency_symbol}")
 
-
     # 构建系统提示词
-    # 获取当前日期
-    current_date = trade_date or datetime.now().strftime("%Y-%m-%d")
+    current_date = trade_date
 
     # 构建完整的系统提示 - 聚焦短期技术面交易
     system_prompt = f"""{COMPLIANCE_PROMPT}
@@ -165,14 +157,14 @@ def create_trader_agent(
 
 {context.generate_trader_context_md()}"""
 
-    formatter = OpenAIChatFormatter()
+    formatter = context.chat_formatter
     toolkit = Toolkit()
 
     # 创建ReActAgent with long-term memory
     agent = ReActAgent(
         name=name,
         sys_prompt=system_prompt,
-        model=model,
+        model=context.model,
         formatter=formatter,
         memory=InMemoryMemory(),
         long_term_memory=long_term_memory,

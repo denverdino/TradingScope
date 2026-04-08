@@ -28,6 +28,7 @@ try:
         SearchMemory,
         SearchMemoryInput,
     )
+
     MEMORY_API_AVAILABLE = True
 except ImportError:
     MEMORY_API_AVAILABLE = False
@@ -161,7 +162,8 @@ class ModelStudioLongTermMemory(LongTermMemoryBase):
         # memory node, preserving key analytical insights.
         if len(custom_content) > self._MAX_CONTENT_LENGTH:
             custom_content = await summarize_for_memory(
-                custom_content, max_chars=self._MAX_CONTENT_LENGTH,
+                custom_content,
+                max_chars=self._MAX_CONTENT_LENGTH,
             )
 
         chunks = self._split_content(custom_content)
@@ -174,9 +176,12 @@ class ModelStudioLongTermMemory(LongTermMemoryBase):
             }
             url = self._add_memory.config.get_add_memory_url()
             _debug_logger.debug(
-                "[%s] AddMemory request: url=%s, user_id=%s, "
-                "chunk_len=%d, chunk_preview=%.100r",
-                self.user_id, url, self.user_id, len(chunk), chunk,
+                "[%s] AddMemory request: url=%s, user_id=%s, chunk_len=%d, chunk_preview=%.100r",
+                self.user_id,
+                url,
+                self.user_id,
+                len(chunk),
+                chunk,
             )
             try:
                 result = await self._add_memory._request(
@@ -187,14 +192,15 @@ class ModelStudioLongTermMemory(LongTermMemoryBase):
                 request_id = result.get("request_id", "N/A")
                 _debug_logger.debug(
                     "[%s] AddMemory response (request_id=%s): %s",
-                    self.user_id, request_id, result,
+                    self.user_id,
+                    request_id,
+                    result,
                 )
                 logger.info(f"[{self.user_id}] AddMemory request_id: {request_id}")
                 total_saved += len(result.get("memory_nodes", []))
             except Exception as e:
                 logger.warning(
-                    f"[{self.user_id}] Failed to store chunk "
-                    f"({len(chunk)} chars): {e}",
+                    f"[{self.user_id}] Failed to store chunk ({len(chunk)} chars): {e}",
                 )
 
         return total_saved > 0
@@ -240,9 +246,7 @@ class ModelStudioLongTermMemory(LongTermMemoryBase):
                     # Paragraph too long, split on single newlines
                     lines = para.split("\n")
                     for line in lines:
-                        line_candidate = (
-                            f"{current}\n{line}" if current else line
-                        )
+                        line_candidate = f"{current}\n{line}" if current else line
                         if len(line_candidate) <= limit:
                             current = line_candidate
                         else:
@@ -370,33 +374,34 @@ class ModelStudioLongTermMemory(LongTermMemoryBase):
             if not content:
                 return ""
 
-            search_input = SearchMemoryInput(
-                user_id=self.user_id,
-                messages=[Message(role="user", content=content)],
-                top_k=self.top_k
-            )
+            search_input = SearchMemoryInput(user_id=self.user_id, messages=[Message(role="user", content=content)], top_k=self.top_k)
             _debug_logger.debug(
-                "[%s] SearchMemory request: user_id=%s, top_k=%d, "
-                "query_len=%d, query_preview=%.100r",
-                self.user_id, self.user_id, self.top_k, len(content), content,
+                "[%s] SearchMemory request: user_id=%s, top_k=%d, query_len=%d, query_preview=%.100r",
+                self.user_id,
+                self.user_id,
+                self.top_k,
+                len(content),
+                content,
             )
 
             result = await self._search_memory.arun(search_input)
 
-            request_id = getattr(result, 'request_id', None) or "N/A"
+            request_id = getattr(result, "request_id", None) or "N/A"
             _debug_logger.debug(
                 "[%s] SearchMemory response (request_id=%s): %s",
-                self.user_id, request_id, result,
+                self.user_id,
+                request_id,
+                result,
             )
             logger.info(f"[{self.user_id}] SearchMemory request_id: {request_id}")
 
-            if not result or not hasattr(result, 'memory_nodes') or not result.memory_nodes:
+            if not result or not hasattr(result, "memory_nodes") or not result.memory_nodes:
                 return ""
 
             # Format memories for prompt injection
             memories = []
             for node in result.memory_nodes:
-                node_content = node.content if hasattr(node, 'content') else str(node)
+                node_content = node.content if hasattr(node, "content") else str(node)
                 if node_content:
                     memories.append(node_content)
 
@@ -453,21 +458,19 @@ class ModelStudioLongTermMemory(LongTermMemoryBase):
             return "Memory system unavailable"
 
         try:
-            result = await self._search_memory.arun(SearchMemoryInput(
-                user_id=self.user_id,
-                messages=[Message(role="user", content=keywords)],
-                top_k=self.top_k
-            ))
+            result = await self._search_memory.arun(
+                SearchMemoryInput(user_id=self.user_id, messages=[Message(role="user", content=keywords)], top_k=self.top_k)
+            )
 
-            request_id = getattr(result, 'request_id', None) or "N/A"
+            request_id = getattr(result, "request_id", None) or "N/A"
             logger.info(f"[{self.user_id}] SearchMemory request_id: {request_id}")
 
-            if not result or not hasattr(result, 'memory_nodes') or not result.memory_nodes:
+            if not result or not hasattr(result, "memory_nodes") or not result.memory_nodes:
                 return "No relevant memories found"
 
             memories = []
             for node in result.memory_nodes:
-                node_content = node.content if hasattr(node, 'content') else str(node)
+                node_content = node.content if hasattr(node, "content") else str(node)
                 if node_content:
                     memories.append(node_content)
 
@@ -506,13 +509,7 @@ class ModelStudioLongTermMemory(LongTermMemoryBase):
 
         return "\n".join(lines)
 
-    async def add_trading_lesson(
-        self,
-        situation: str,
-        decision: str,
-        outcome: str,
-        lesson: str
-    ) -> bool:
+    async def add_trading_lesson(self, situation: str, decision: str, outcome: str, lesson: str) -> bool:
         """Add a trading lesson to memory (for future reflection loop).
 
         Args:
@@ -528,13 +525,7 @@ class ModelStudioLongTermMemory(LongTermMemoryBase):
             return False
 
         try:
-            content = (
-                f"交易情况回顾：\n"
-                f"市场情况：{situation}\n"
-                f"交易决策：{decision}\n"
-                f"实际结果：{outcome}\n"
-                f"经验教训：{lesson}"
-            )
+            content = f"交易情况回顾：\n市场情况：{situation}\n交易决策：{decision}\n实际结果：{outcome}\n经验教训：{lesson}"
             saved = await self._add_memory_raw(content)
 
             if saved:
@@ -572,22 +563,14 @@ class ModelStudioLongTermMemory(LongTermMemoryBase):
             # The lesson_content should already be formatted with metadata
             # If not, wrap it with weight information
             if "[元数据]" not in lesson_content:
-                content = (
-                    f"[元数据]\n"
-                    f"类型: {lesson_type}\n"
-                    f"权重: {weight:.1f}\n\n"
-                    f"[内容]\n"
-                    f"{lesson_content}"
-                )
+                content = f"[元数据]\n类型: {lesson_type}\n权重: {weight:.1f}\n\n[内容]\n{lesson_content}"
             else:
                 content = lesson_content
 
             saved = await self._add_memory_raw(content)
 
             if saved:
-                logger.info(
-                    f"[{self.user_id}] Added reflection lesson (weight={weight:.2f}, type={lesson_type})"
-                )
+                logger.info(f"[{self.user_id}] Added reflection lesson (weight={weight:.2f}, type={lesson_type})")
             return saved
 
         except Exception as e:

@@ -9,6 +9,8 @@ from agentscope import logger
 from agentscope.message import Msg
 from agentscope.pipeline import MsgHub
 
+from tradingscope.agents.utils.agent_utils import call_agent_with_retry
+
 
 class RiskDebateOrchestrator:
     """Orchestrates a multi-agent debate between risk management team members."""
@@ -157,9 +159,9 @@ class RiskDebateOrchestrator:
                 aggressive_prompt, conservative_prompt, neutral_prompt = self._get_round_prompts(round_num)
 
                 # Run all debators concurrently within the MsgHub context
-                await self.aggressive_agent(aggressive_prompt)
-                await self.conservative_agent(conservative_prompt)
-                await self.neutral_agent(neutral_prompt)
+                await call_agent_with_retry(self.aggressive_agent, aggressive_prompt)
+                await call_agent_with_retry(self.conservative_agent, conservative_prompt)
+                await call_agent_with_retry(self.neutral_agent, neutral_prompt)
 
                 logger.info(f"📝 Risk management debate round {round_num} completed")
 
@@ -186,7 +188,7 @@ class RiskDebateOrchestrator:
 """,
         )
 
-        final_decision = await self.portfolio_manager(portfolio_manager_prompt)
+        final_decision = await call_agent_with_retry(self.portfolio_manager, portfolio_manager_prompt)
 
         logger.info("✅ Risk management debate completed")
 

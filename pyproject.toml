@@ -51,7 +51,6 @@ dependencies = [
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
-    "black>=23.0",
     "ruff>=0.1.0",
     "mypy>=1.0.0",
     "pre-commit>=3.0.0",
@@ -74,10 +73,6 @@ include = ["tradingscope*"]
 
 [tool.setuptools.package-data]
 tradingscope = ["config/*.yaml", "dataflows/*.yaml"]
-
-[tool.black]
-line-length = 160
-target-version = ['py38']
 
 [tool.ruff]
 line-length = 160

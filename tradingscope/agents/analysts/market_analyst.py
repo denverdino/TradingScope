@@ -1,12 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime
-
 from agentscope import logger
 from agentscope.agent import ReActAgent
-from agentscope.formatter import OpenAIChatFormatter
 from agentscope.memory import InMemoryMemory
-from agentscope.model import OpenAIChatModel
 from agentscope.tool import Toolkit
 
 from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT, get_company_name
@@ -22,7 +18,6 @@ from tradingscope.agents.utils.technical_indicators_tools import get_indicators
 
 
 def create_market_analyst_agent(
-    model: OpenAIChatModel,
     context: AgentContext,
     name: str = "MarketAnalyst",
 ) -> ReActAgent:
@@ -38,7 +33,7 @@ def create_market_analyst_agent(
     company_name = get_company_name(ticker, market_info)
 
     # 工具注册
-    formatter = OpenAIChatFormatter()
+    formatter = context.chat_formatter
     toolkit = Toolkit()
     toolkit.register_tool_function(get_stock_info)
     toolkit.register_tool_function(get_stock_data)
@@ -49,13 +44,12 @@ def create_market_analyst_agent(
     # Get tool names from the toolkit
     tool_names = ", ".join(toolkit.tools.keys())
 
-    # Get current date if trade_date is not provided
-    current_date = trade_date or datetime.now().strftime("%Y-%m-%d")
+    current_date = trade_date
 
     # Build system prompt for short-term trading analysis
-    currency_name = market_info['currency_name']
-    currency_symbol = market_info['currency_symbol']
-    market_name = market_info['market_name']
+    currency_name = market_info["currency_name"]
+    currency_symbol = market_info["currency_symbol"]
+    market_name = market_info["market_name"]
 
     system_prompt = f"""{COMPLIANCE_PROMPT}
 
@@ -240,7 +234,7 @@ def create_market_analyst_agent(
     agent = ReActAgent(
         name=name,
         sys_prompt=system_prompt,
-        model=model,
+        model=context.model,
         formatter=formatter,
         toolkit=toolkit,
         memory=InMemoryMemory(),

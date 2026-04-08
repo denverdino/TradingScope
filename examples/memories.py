@@ -41,6 +41,7 @@ try:
         ListMemory,
         ListMemoryInput,
     )
+
     MEMORY_API_AVAILABLE = True
 except ImportError:
     MEMORY_API_AVAILABLE = False
@@ -55,12 +56,12 @@ async def view_role_memories(role: str, query: str, top_k: int, user_name: str) 
     )
 
     try:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"  Agent Role: {role}")
         print(f"  User ID:    {memory.user_id}")
         print(f"  Query:      {query}")
         print(f"  Top K:      {top_k}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         result = await memory.retrieve_from_memory(query)
         if result == "Memory system unavailable":
@@ -131,10 +132,10 @@ async def clear_role_memories(role: str, user_name: str, force: bool = False) ->
 
     user_id = f"{user_name}_{role}"
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  Clearing memories for: {role}")
     print(f"  User ID: {user_id}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     # List all memories first
     list_memory = ListMemory()
@@ -142,44 +143,50 @@ async def clear_role_memories(role: str, user_name: str, force: bool = False) ->
 
     try:
         # Get first page to check total count
-        result = await list_memory.arun(ListMemoryInput(
-            user_id=user_id,
-            page_size=100,
-        ))
+        result = await list_memory.arun(
+            ListMemoryInput(
+                user_id=user_id,
+                page_size=100,
+            )
+        )
 
-        if not result or not hasattr(result, 'memory_nodes') or not result.memory_nodes:
+        if not result or not hasattr(result, "memory_nodes") or not result.memory_nodes:
             print(f"  No memories found for {role}.")
             return True
 
-        total_count = getattr(result, 'total', len(result.memory_nodes))
+        total_count = getattr(result, "total", len(result.memory_nodes))
         print(f"  Found {total_count} memory node(s).")
 
         # Confirm deletion
         if not force:
             confirm = input(f"  Are you sure you want to delete all {total_count} memories? [y/N]: ")
-            if confirm.lower() != 'y':
+            if confirm.lower() != "y":
                 print("  Cancelled.")
                 return False
 
         # Delete all memories by repeatedly fetching page 1 and deleting
         deleted_count = 0
-        while result and hasattr(result, 'memory_nodes') and result.memory_nodes:
+        while result and hasattr(result, "memory_nodes") and result.memory_nodes:
             for node in result.memory_nodes:
                 try:
-                    memory_node_id = node.memory_node_id if hasattr(node, 'memory_node_id') else str(node)
-                    await delete_memory.arun(DeleteMemoryInput(
-                        user_id=user_id,
-                        memory_node_id=memory_node_id,
-                    ))
+                    memory_node_id = node.memory_node_id if hasattr(node, "memory_node_id") else str(node)
+                    await delete_memory.arun(
+                        DeleteMemoryInput(
+                            user_id=user_id,
+                            memory_node_id=memory_node_id,
+                        )
+                    )
                     deleted_count += 1
                 except Exception as e:
                     print(f"  Warning: Failed to delete memory {memory_node_id}: {e}")
 
             # Fetch next batch (always page 1 since previous ones were deleted)
-            result = await list_memory.arun(ListMemoryInput(
-                user_id=user_id,
-                page_size=100,
-            ))
+            result = await list_memory.arun(
+                ListMemoryInput(
+                    user_id=user_id,
+                    page_size=100,
+                )
+            )
 
         print(f"  Successfully deleted {deleted_count}/{total_count} memories.")
         return deleted_count == total_count
@@ -199,15 +206,15 @@ async def clear_all_memories(user_name: str, force: bool = False) -> None:
         user_name: User name prefix for memory namespace
         force: Skip confirmation if True
     """
-    print(f"\n{'#'*60}")
+    print(f"\n{'#' * 60}")
     print("  CLEARING ALL AGENT MEMORIES")
     print(f"  User name: {user_name}")
     print(f"  Roles: {', '.join(FinancialMemoryManager.AGENT_ROLES)}")
-    print(f"{'#'*60}")
+    print(f"{'#' * 60}")
 
     if not force:
         confirm = input("\n  WARNING: This will delete ALL memories for ALL roles!\n  Are you sure? [y/N]: ")
-        if confirm.lower() != 'y':
+        if confirm.lower() != "y":
             print("  Cancelled.")
             return
 
@@ -218,19 +225,17 @@ async def clear_all_memories(user_name: str, force: bool = False) -> None:
         results[role] = success
 
     # Summary
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("  CLEAR SUMMARY")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     for role, success in results.items():
         status = "OK" if success else "FAILED"
         print(f"    {role}: {status}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="View and manage long-term memories for TradingScope agent roles"
-    )
+    parser = argparse.ArgumentParser(description="View and manage long-term memories for TradingScope agent roles")
     parser.add_argument(
         "--role",
         choices=FinancialMemoryManager.AGENT_ROLES,
@@ -293,14 +298,16 @@ def main():
             parser.error("--role is required when adding a lesson")
         if not all([args.situation, args.decision, args.outcome, args.lesson]):
             parser.error("--situation, --decision, --outcome, --lesson are all required with --add")
-        asyncio.run(add_lesson(
-            role=args.role,
-            situation=args.situation,
-            decision=args.decision,
-            outcome=args.outcome,
-            lesson=args.lesson,
-            user_name=args.user_name,
-        ))
+        asyncio.run(
+            add_lesson(
+                role=args.role,
+                situation=args.situation,
+                decision=args.decision,
+                outcome=args.outcome,
+                lesson=args.lesson,
+                user_name=args.user_name,
+            )
+        )
     # View memories
     elif args.role:
         asyncio.run(view_role_memories(args.role, args.query, args.top_k, args.user_name))

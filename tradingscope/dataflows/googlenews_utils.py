@@ -55,13 +55,7 @@ def _extract_original_url(google_news_url: str) -> str:
         return google_news_url
 
     try:
-        headers = {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            )
-        }
+        headers = {"User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")}
         # Follow redirects to get the final URL
         response = requests.head(google_news_url, headers=headers, allow_redirects=True, timeout=10)
         return response.url
@@ -118,13 +112,7 @@ def getNewsData(query, start_date, end_date):
 
     logger.debug("Fetching Google News RSS: %s", rss_url)
 
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        )
-    }
+    headers = {"User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")}
 
     news_results = []
 
@@ -174,13 +162,15 @@ def getNewsData(query, start_date, end_date):
                     except Exception:
                         date_str = published
 
-                news_results.append({
-                    "link": original_link,
-                    "title": title,
-                    "snippet": summary,
-                    "date": date_str,
-                    "source": source,
-                })
+                news_results.append(
+                    {
+                        "link": original_link,
+                        "title": title,
+                        "snippet": summary,
+                        "date": date_str,
+                        "source": source,
+                    }
+                )
 
             except Exception as e:
                 logger.warning("Error processing RSS entry: %s", e)

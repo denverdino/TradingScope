@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
 from agentscope import logger
 
 # AgentScope imports
 from agentscope.agent import ReActAgent
-from agentscope.formatter import OpenAIMultiAgentFormatter
 from agentscope.memory import InMemoryMemory
-from agentscope.model import OpenAIChatModel
 from agentscope.tool import Toolkit
 
 # Local imports
@@ -23,7 +20,6 @@ if TYPE_CHECKING:
 
 
 def create_portfolio_manager_agent(
-    model: OpenAIChatModel,
     context: AgentContext,
     name: str = "PortfolioManager",
     long_term_memory: Optional["ModelStudioLongTermMemory"] = None,
@@ -98,14 +94,14 @@ def create_portfolio_manager_agent(
 
 {context.generate_risk_evaluation_context_md()}"""
 
-    formatter = OpenAIMultiAgentFormatter()
+    formatter = context.multi_agent_formatter
     toolkit = Toolkit()
 
     # 创建ReActAgent with long-term memory
     agent = ReActAgent(
         name=name,
         sys_prompt=system_message,
-        model=model,
+        model=context.model,
         formatter=formatter,
         memory=InMemoryMemory(),
         long_term_memory=long_term_memory,

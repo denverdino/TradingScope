@@ -104,6 +104,7 @@ def get_news(ticker, start_date, end_date) -> str:
     response_text = _make_api_request("NEWS_SENTIMENT", params)
     return _format_news_with_citations(response_text, ticker, start_date, end_date)
 
+
 def get_insider_transactions(symbol: str) -> dict[str, str] | str:
     """Returns latest and historical insider transactions by key stakeholders.
 

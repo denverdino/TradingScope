@@ -1,14 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Optional
-
 # 导入统一日志系统
 from agentscope import logger
 from agentscope.agent import ReActAgent
-from agentscope.formatter import OpenAIChatFormatter
 from agentscope.memory import InMemoryMemory
-from agentscope.model import OpenAIChatModel
 from agentscope.tool import Toolkit
 
 from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT, get_company_name
@@ -22,7 +17,6 @@ from tradingscope.agents.utils.stock_utils import StockUtils
 
 
 def create_news_analyst_agent(
-    model: OpenAIChatModel,
     context: AgentContext,
     name: str = "NewsAnalyst",
 ) -> ReActAgent:
@@ -32,7 +26,6 @@ def create_news_analyst_agent(
     - 输出中文与固定结构。
 
     Args:
-        model: OpenAIChatModel 实例
         context: AgentContext实例包含所有必要的上下文信息
         name: 代理名称
 
@@ -50,7 +43,7 @@ def create_news_analyst_agent(
     logger.info(f"[新闻分析师] 创建Agent - 股票: {ticker}, 公司: {company_name}, 市场: {market_info['market_name']}")
 
     # 工具注册
-    formatter = OpenAIChatFormatter()
+    formatter = context.chat_formatter
 
     # 如果没有传入toolkit，创建新的
     toolkit = Toolkit()
@@ -60,8 +53,7 @@ def create_news_analyst_agent(
     toolkit.register_tool_function(get_news)
     toolkit.register_tool_function(get_global_news)
 
-    # 获取当前日期
-    current_date = trade_date or datetime.now().strftime("%Y-%m-%d")
+    current_date = trade_date
 
     # 获取工具名称
     tool_names = ", ".join(toolkit.tools.keys())
@@ -93,8 +85,8 @@ def create_news_analyst_agent(
 **股票信息：**
 - 公司名称：{company_name}
 - 股票代码：{ticker}
-- 所属市场：{market_info['market_name']}
-- 计价货币：{market_info['currency_name']}（{market_info['currency_symbol']}）
+- 所属市场：{market_info["market_name"]}
+- 计价货币：{market_info["currency_name"]}（{market_info["currency_symbol"]}）
 - 当前日期：{current_date}
 
 
@@ -131,18 +123,18 @@ def create_news_analyst_agent(
 
 **特别注意：**
 ⚠️ 请使用中文，基于真实新闻数据进行详细分析。确保在分析中正确使用公司名称"{company_name}"和股票代码"{ticker}"。
-💵 所有价格数据使用{market_info['currency_name']}（{market_info['currency_symbol']}）表示
+💵 所有价格数据使用{market_info["currency_name"]}（{market_info["currency_symbol"]}）表示
 ⚠️ 如果新闻数据存在滞后（超过2小时），请在分析中明确说明时效性限制
 ✅ 优先分析最新的、高相关性的新闻事件
 📊 提供新闻对股价影响的量化评估和具体价格预期，如果包含盘前/盘后价格数据，请一并分析
 💰 必须包含基于新闻的价格影响分析和调整建议
-🌍 考虑{market_info['market_name']}市场特点进行分析
+🌍 考虑{market_info["market_name"]}市场特点进行分析
 
 **输出格式：**
 ### 股票基本信息
 - 公司名称：{company_name}
 - 股票代码：{ticker}
-- 所属市场：{market_info['market_name']}
+- 所属市场：{market_info["market_name"]}
 - 当前价格/收盘价格：xxx
 - 盘前/盘后价格：xxx
 
@@ -167,7 +159,7 @@ def create_news_analyst_agent(
     agent = ReActAgent(
         name=name,
         sys_prompt=system_prompt,
-        model=model,
+        model=context.model,
         formatter=formatter,
         toolkit=toolkit,
         memory=InMemoryMemory(),
