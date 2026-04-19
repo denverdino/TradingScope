@@ -26,7 +26,6 @@ async def main():
     context.sentiment_report = "Social media sentiment is positive with increasing mentions of the company."
     context.news_report = "Recent news indicates strong quarterly earnings and product launches."
     context.fundamentals_report = "The company has strong fundamentals with a P/E ratio of 25 and consistent revenue growth."
-    context.trade_date = "2025-10-05"
 
     # Create memory manager for long-term memory
     memory_manager = FinancialMemoryManager()

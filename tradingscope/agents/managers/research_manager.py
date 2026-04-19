@@ -58,6 +58,7 @@ def create_research_manager_agent(
     """
     company_of_interest = context.company_of_interest
     trade_date = context.trade_date
+    latest_trading_date = context.latest_trading_date
 
     # 构建系统提示词，鼓励结构化输出
     system_message = f"""{COMPLIANCE_PROMPT}
@@ -91,6 +92,7 @@ def create_research_manager_agent(
 ```
 - **股票代码**：{company_of_interest}
 - **交易日期**：{trade_date}
+- **最新美股交易日期**：{latest_trading_date}
 - **交易决策**：【买入/卖出/持有】
 ```
 

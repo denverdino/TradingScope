@@ -19,6 +19,7 @@ class EquityAnalyst(QwenDeepResearchAgent):
         name: str,
         ticker: str,
         trade_date: str,
+        latest_trading_date: str = "",
         sector: str = "Technology",
     ):
         """Initialize the Equity Analyst.
@@ -26,13 +27,15 @@ class EquityAnalyst(QwenDeepResearchAgent):
         Args:
             name: Name of the analyst
             ticker: Stock ticker symbol
-            trade_date: Date of the trade
+            trade_date: Current date
+            latest_trading_date: Latest US stock market trading date
         """
 
         super().__init__(name)
 
         self.ticker = ticker
         self.trade_date = trade_date
+        self.latest_trading_date = latest_trading_date or trade_date
         self.sector = sector
         self.verbose = True
 
@@ -74,7 +77,8 @@ class EquityAnalyst(QwenDeepResearchAgent):
 【核心约束（极其重要）】
 
 1️⃣ 时间与信息新鲜度（强约束）
-    * 当前日期为 {self.trade_date} ， 对于日度数据(股价、资金流向、机构报告、ETF flows、新闻等) 仅允许使用 {self.start_date} 到 {self.trade_date} 之间的信息进行分析
+    * 当前日期为 {self.trade_date}，最新美股交易日期为 {self.latest_trading_date}
+    * 对于日度数据(股价、资金流向、机构报告、ETF flows、新闻等) 仅允许使用 {self.start_date} 到 {self.trade_date} 之间的信息进行分析
     * 对于季度数据（季度财报、基金持仓、宏观正常与行业数据）等：
         * 必须采用最新可得数据（如最近一期年报/季报，且尚未更新）
         * 被明确标注为「历史背景信息」，不得作为核心论据
@@ -344,6 +348,7 @@ def create_equity_analyst_agent(
         name=name,
         ticker=context.company_of_interest,
         trade_date=context.trade_date,
+        latest_trading_date=context.latest_trading_date,
     )
 
     return agent

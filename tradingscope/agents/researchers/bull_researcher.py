@@ -40,6 +40,7 @@ def create_bull_researcher_agent(
     """
     company_of_interest = context.company_of_interest
     trade_date = context.trade_date
+    latest_trading_date = context.latest_trading_date
     company_name = company_of_interest
 
     # 获取市场信息
@@ -57,6 +58,7 @@ def create_bull_researcher_agent(
 ⚠️ 重要提醒：
 当前分析的是 {market_info["market_name"]}，所有价格和估值请使用 {currency}（{currency_symbol}）作为单位。
 当前日期是 {current_date}
+最新美股交易日期是 {latest_trading_date}
 
 
 你的任务是在辩论中担任正方角色，构建基于证据的强有力案例，强调增长潜力、竞争优势和积极的市场指标。你需要：

@@ -1,12 +1,54 @@
+import logging
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Annotated, Dict, Optional
 
+import yfinance as yf
 from agentscope.formatter import OpenAIChatFormatter, OpenAIMultiAgentFormatter
 from agentscope.model import OpenAIChatModel
+from yfinance.exceptions import YFRateLimitError
 
 from tradingscope.default_config import DEFAULT_CONFIG
+
+logger = logging.getLogger(__name__)
+
+
+def get_latest_us_trading_date() -> str:
+    """Get the latest US stock market trading date using Yahoo Finance.
+
+    Uses SPY (S&P 500 ETF) as a reference to determine the most recent
+    completed trading day, accounting for weekends and market holidays.
+
+    Returns:
+        str: Latest trading date in YYYY-MM-DD format
+    """
+    try:
+        spy = yf.Ticker("SPY")
+        hist = spy.history(period="5d")
+        if hist is not None and not hist.empty:
+            latest_date = hist.index[-1]
+            # Remove timezone info if present
+            if hasattr(latest_date, "tz") and latest_date.tz is not None:
+                latest_date = latest_date.tz_localize(None)
+            result = latest_date.strftime("%Y-%m-%d")
+            logger.info("Latest US trading date from Yahoo Finance: %s", result)
+            return result
+    except YFRateLimitError:
+        logger.warning("Yahoo Finance rate limited when fetching latest trading date")
+    except Exception as e:
+        logger.warning("Failed to get latest trading date from Yahoo Finance: %s", e)
+
+    # Fallback: weekday-based estimation (does not account for market holidays)
+    now = datetime.now()
+    weekday = now.weekday()
+    if weekday == 5:  # Saturday -> Friday
+        now -= timedelta(days=1)
+    elif weekday == 6:  # Sunday -> Friday
+        now -= timedelta(days=2)
+    result = now.strftime("%Y-%m-%d")
+    logger.info("Using fallback trading date (weekday-based): %s", result)
+    return result
 
 
 class AgentContext:
@@ -14,7 +56,8 @@ class AgentContext:
 
     # Core context information
     company_of_interest: Annotated[str, "Company that we are interested in trading"] = ""
-    trade_date: Annotated[str, "What date we are trading at"] = ""
+    trade_date: Annotated[str, "Current date"] = ""
+    latest_trading_date: Annotated[str, "Latest US stock market trading date"] = ""
 
     # Analyst step
     market_report: Annotated[str, "Report from the Market Analyst"] = ""
@@ -34,6 +77,7 @@ class AgentContext:
     def __init__(self):
         """Initialize AgentContext with default values."""
         self.trade_date = datetime.now().strftime("%Y-%m-%d")
+        self.latest_trading_date = get_latest_us_trading_date()
 
         # Model initialization
         self.model = OpenAIChatModel(
@@ -95,7 +139,7 @@ class AgentContext:
         Returns:
             Complete markdown report with all sections properly formatted
         """
-        sections = [f"# 股票分析报告: {self.company_of_interest} ({self.trade_date})"]
+        sections = [f"# 股票分析报告: {self.company_of_interest} ({self.trade_date} | 最新交易日: {self.latest_trading_date})"]
 
         if self.final_trade_decision:
             sections.append(f"## 最终交易决策\n\n{self.final_trade_decision}")
@@ -123,6 +167,7 @@ class AgentContext:
         summary_parts = [
             f"股票: {self.company_of_interest}",
             f"日期: {self.trade_date}",
+            f"最新交易日: {self.latest_trading_date}",
         ]
 
         # Extract key points from each report (first 500 chars as summary)

@@ -45,7 +45,10 @@ logger = logging.getLogger(__name__)
 TOOLS_CATEGORIES = {
     "core_stock_apis": {"description": "OHLCV stock price data", "tools": ["get_stock_data", "get_stock_info"]},
     "technical_indicators": {"description": "Technical analysis indicators", "tools": ["get_indicators"]},
-    "market_context": {"description": "Market and sector context data", "tools": ["get_sector_performance", "get_market_indices", "get_options_analysis", "get_volume_analysis"]},
+    "market_context": {
+        "description": "Market and sector context data",
+        "tools": ["get_sector_performance", "get_market_indices", "get_options_analysis", "get_volume_analysis"],
+    },
     "fundamental_data": {"description": "Company fundamentals", "tools": ["get_fundamentals", "get_balance_sheet", "get_cashflow", "get_income_statement"]},
     "news_data": {
         "description": "News (public/insiders, original/processed)",

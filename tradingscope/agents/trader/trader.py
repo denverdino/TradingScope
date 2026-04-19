@@ -37,6 +37,7 @@ def create_trader_agent(
     """
     company_of_interest = context.company_of_interest
     trade_date = context.trade_date
+    latest_trading_date = context.latest_trading_date
 
     # 使用统一的股票类型检测
     market_info = StockUtils.get_market_info(company_of_interest)
@@ -60,6 +61,7 @@ def create_trader_agent(
 
 ⚠️ 重要提醒：
 - 当前日期：{current_date}
+- 最新美股交易日期：{latest_trading_date}
 - 股票代码：{company_of_interest}
 - 公司名称：{company_name}
 - 货币单位：{currency}（{currency_symbol}）
@@ -82,6 +84,11 @@ def create_trader_agent(
 - **止损价位**：基于 ATR 倍数（建议 1-1.5x ATR）或关键支撑位下方
 - **目标价位**：基于阻力位、布林带上轨、或 2-3x ATR 盈利目标
 - **仓位建议**：基于风险评估和波动率
+- **盈亏比底线（强制！）**：
+  - 盈亏比 = (目标价位1 - 入场价) / (入场价 - 止损价位)，**最低不得低于 1.5:1**
+  - 若计算得到盈亏比 < 1.5:1，必须采取以下措施之一：(a) 调整止损至更近的结构位以缩小分母；(b) 将目标价位延伸至更远的阻力位以放大分子；(c) 建议"暂不入场，等待更好的风险回报窗口"
+  - 禁止在盈亏比 < 1:1 时仍给出买入建议——这意味着承担的风险大于潜在收益，违背基本交易纪律
+  - 若因市场结构限制（如阻力位近在眼前）无法达到 1.5:1，应如实说明并降低仓位或建议观望
 
 **4) 关注短期交易信号**
 - 盘前/盘后价格跳空方向
@@ -120,12 +127,12 @@ def create_trader_agent(
 - **目标价位1**（保守）：{currency_symbol}xxx（基于最近阻力位）
 - **目标价位2**（进取）：{currency_symbol}xxx（基于布林带上轨或2x ATR）
 - **预期盈利比例**：x%
-- **盈亏比**：x:1
+- **盈亏比**：x:1（**最低 1.5:1，否则须调整计划或建议观望**）
 
 ### 仓位建议
 
 - **建议仓位**：轻仓(10-20%) / 中等仓位(20-40%) / 重仓(40%+)
-- **仓位理由**：基于波动率和风险评估
+- **仓位理由**：综合考虑波动率（ATR/VIX）、个股风险因素、乖离率水平和盈亏比，不可仅凭单一变量决定仓位
 
 ### 交易信心与风险
 

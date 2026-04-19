@@ -37,6 +37,7 @@ def create_bear_researcher_agent(
     """
     company_of_interest = context.company_of_interest
     trade_date = context.trade_date
+    latest_trading_date = context.latest_trading_date
 
     company_name = company_of_interest
     market_info = StockUtils.get_market_info(company_name)
@@ -53,6 +54,7 @@ def create_bear_researcher_agent(
 ⚠️ 重要提醒：
 当前分析的是 {market_info["market_name"]}，所有价格和估值请使用 {currency}（{currency_symbol}）作为单位。
 当前日期是 {current_date}
+最新美股交易日期是 {latest_trading_date}
 
 你的目标是在辩论中担任反方角色，提出合理的论证，强调风险、挑战和负面指标。你需要：
 

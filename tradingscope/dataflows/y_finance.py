@@ -822,10 +822,10 @@ def get_options_analysis(ticker: Annotated[str, "ticker symbol of the company"])
             sentiment = "中性偏多（多空力量相对均衡，略偏看涨）"
         elif pcr_oi <= 1.5:
             pcr_oi_str = f"{pcr_oi:.2f}"
-            sentiment = "中性偏空（看跌占优，市场谨慎）"
+            sentiment = "中性偏空（看跌占优，市场偏谨慎，但也可能包含机构对冲需求）"
         else:
             pcr_oi_str = f"{pcr_oi:.2f}"
-            sentiment = "偏空/防御情绪（大量看跌期权，市场恐慌或机构对冲）"
+            sentiment = "偏空/防御情绪（大量看跌期权，可能反映市场恐慌或机构系统性对冲需求，需结合Put分布行权价判断是保护性建仓还是方向性看跌）"
 
         pcr_vol_str = f"{pcr_vol:.2f}" if pcr_vol != float("inf") else "N/A (Call Volume = 0)"
 
@@ -900,7 +900,7 @@ def get_options_analysis(ticker: Annotated[str, "ticker symbol of the company"])
             if current_price:
                 diff_pct = ((max_pain_price - current_price) / current_price) * 100
                 result += f"- Distance from current price: {diff_pct:+.2f}%\n"
-            result += "- Max Pain is the price at which the most options expire worthless, often acting as a gravitational anchor near expiration.\n"
+            result += "- Max Pain is the price where most options expire worthless. It serves as a reference anchor for near-term options activity — prices may show increased stickiness near this level approaching expiration, but it is not a high-probability price predictor.\n"
 
         return result
 
@@ -1069,13 +1069,13 @@ def get_volume_analysis(
 
                 # Cross-validation
                 if price_5d_change > 0 and obv_5d_change > 0:
-                    confirmation = "价量齐升，上涨趋势确认"
+                    confirmation = "价量齐升，上涨趋势得到量能确认"
                 elif price_5d_change < 0 and obv_5d_change < 0:
-                    confirmation = "价量齐跌，下跌趋势确认"
+                    confirmation = "价量齐跌，下跌趋势得到量能确认"
                 elif price_5d_change > 0 and obv_5d_change <= 0:
-                    confirmation = "价升量缩，上涨动能不足，警惕回调"
+                    confirmation = "价格微涨但OBV走弱，轻度顶背离，量价配合一般，短线增量买盘持续性不强"
                 elif price_5d_change < 0 and obv_5d_change >= 0:
-                    confirmation = "价跌量增，可能有资金吸筹"
+                    confirmation = "价格走弱但OBV未同步下降，轻度底背离，可能有逢低买盘介入"
                 else:
                     confirmation = "量价关系中性"
                 result += f"- OBV Confirmation: {confirmation}\n"

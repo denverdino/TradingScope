@@ -35,6 +35,7 @@ def create_news_analyst_agent(
     # Extract values from context
     ticker = context.company_of_interest
     trade_date = context.trade_date
+    latest_trading_date = context.latest_trading_date
 
     # 获取市场信息
     market_info = StockUtils.get_market_info(ticker)
@@ -88,6 +89,7 @@ def create_news_analyst_agent(
 - 所属市场：{market_info["market_name"]}
 - 计价货币：{market_info["currency_name"]}（{market_info["currency_symbol"]}）
 - 当前日期：{current_date}
+- 最新美股交易日期：{latest_trading_date}
 
 
 **主要职责包括：**

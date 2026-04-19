@@ -34,6 +34,7 @@ def create_fundamentals_analyst_agent(
     # Extract values from context
     ticker = context.company_of_interest
     current_date = context.trade_date
+    latest_trading_date = context.latest_trading_date
     logger.debug("📊 [DEBUG] ===== 基本面分析师 Agent 创建开始 =====")
 
     logger.info(f"📊 [基本面分析师] 正在分析股票: {ticker}")
@@ -69,6 +70,7 @@ def create_fundamentals_analyst_agent(
 - 市场：{market_name}
 - 股票代码：{ticker}
 - 当前日期：{current_date}
+- 最新美股交易日期：{latest_trading_date}
 - 货币：{currency_name}（{currency_symbol}）
 - 可用工具：{tool_names}
 
