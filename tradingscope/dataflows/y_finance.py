@@ -440,11 +440,17 @@ def get_sector_performance(
         "Communication Services": "XLC",
     }
 
+    # Tickers whose yfinance sector info is inaccurate and should be ignored.
+    # e.g. BABA is classified as "Consumer Cyclical" by yfinance, but as a
+    # Chinese ADR it should not be compared against the US sector ETF (XLY).
+    IGNORE_SECTOR_TICKERS = {"BABA"}
+
     try:
         ticker_obj = yf.Ticker(ticker.upper())
         info = yf_retry(lambda: ticker_obj.info)
 
-        sector = info.get("sector", "Unknown")
+        ignore_sector = ticker.upper() in IGNORE_SECTOR_TICKERS
+        sector = "Unknown" if ignore_sector else info.get("sector", "Unknown")
         industry = info.get("industry", "Unknown")
 
         # Get stock price performance
@@ -900,3 +906,260 @@ def get_options_analysis(ticker: Annotated[str, "ticker symbol of the company"])
 
     except Exception as e:
         return f"Error retrieving options analysis for {ticker}: {str(e)}"
+
+
+def get_volume_analysis(
+    ticker: Annotated[str, "ticker symbol of the company"],
+    look_back_days: Annotated[int, "how many days to look back"] = 30,
+) -> str:
+    """Get comprehensive volume analysis for a given ticker symbol.
+
+    Returns volume metrics, trend analysis, OBV trend, volume-price divergence,
+    and up/down day distribution statistics.
+    """
+    try:
+        ticker_obj = yf.Ticker(ticker.upper())
+        end_date = datetime.now()
+        # Extra buffer for moving average warm-up and non-trading day gaps
+        start_date = end_date - relativedelta(days=look_back_days + 40)
+
+        hist = yf_retry(
+            lambda: ticker_obj.history(
+                start=start_date.strftime("%Y-%m-%d"),
+                end=end_date.strftime("%Y-%m-%d"),
+            )
+        )
+
+        if hist.empty:
+            return f"No historical data found for symbol '{ticker}'"
+
+        # Remove timezone info from index
+        if hist.index.tz is not None:
+            hist.index = hist.index.tz_localize(None)
+
+        close = hist["Close"]
+        volume = hist["Volume"]
+        n = len(hist)
+
+        result = f"# Volume Analysis for {ticker.upper()}\n"
+        result += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        result += f"# Look back period: {look_back_days} days\n"
+        result += f"# Total trading days available: {n}\n\n"
+
+        # --- Section 1: Daily Volume Metrics ---
+        result += "## Daily Volume Metrics\n\n"
+
+        latest_volume = int(volume.iloc[-1])
+        avg_volume = int(volume.iloc[-look_back_days:].mean()) if n >= look_back_days else int(volume.mean())
+        volume_ratio = latest_volume / avg_volume if avg_volume > 0 else 0
+
+        if volume_ratio > 1.5:
+            vol_classification = "显著放量"
+        elif volume_ratio > 1.2:
+            vol_classification = "温和放量"
+        elif volume_ratio >= 0.8:
+            vol_classification = "正常水平"
+        elif volume_ratio >= 0.5:
+            vol_classification = "缩量"
+        else:
+            vol_classification = "显著缩量"
+
+        result += f"- Latest Volume: {latest_volume:,}\n"
+        result += f"- {look_back_days}-Day Average Volume: {avg_volume:,}\n"
+        result += f"- Volume Ratio: {volume_ratio:.2f}x ({vol_classification})\n\n"
+
+        # Recent 5-day volume table
+        recent_days = min(5, n)
+        result += "| Date | Volume | vs Avg |\n"
+        result += "|------|--------|--------|\n"
+        for i in range(-recent_days, 0):
+            date_str = hist.index[i].strftime("%Y-%m-%d")
+            day_vol = int(volume.iloc[i])
+            day_ratio = day_vol / avg_volume if avg_volume > 0 else 0
+            result += f"| {date_str} | {day_vol:,} | {day_ratio:.2f}x |\n"
+        result += "\n"
+
+        # --- Section 2: Volume Moving Average Comparison ---
+        result += "## Volume Moving Average Comparison\n\n"
+
+        vol_5d_avg = int(volume.iloc[-5:].mean()) if n >= 5 else None
+        vol_10d_avg = int(volume.iloc[-10:].mean()) if n >= 10 else None
+        vol_20d_avg = int(volume.iloc[-20:].mean()) if n >= 20 else None
+
+        if vol_5d_avg is not None:
+            result += f"- 5-Day Avg Volume: {vol_5d_avg:,}\n"
+        if vol_10d_avg is not None:
+            result += f"- 10-Day Avg Volume: {vol_10d_avg:,}\n"
+        if vol_20d_avg is not None:
+            result += f"- 20-Day Avg Volume: {vol_20d_avg:,}\n"
+
+        if vol_5d_avg is not None and vol_10d_avg is not None and vol_20d_avg is not None:
+            if vol_5d_avg > vol_10d_avg > vol_20d_avg:
+                vol_trend = "成交量递增趋势（放量）"
+            elif vol_5d_avg < vol_10d_avg < vol_20d_avg:
+                vol_trend = "成交量递减趋势（缩量）"
+            else:
+                vol_trend = "成交量震荡"
+            result += f"- Volume Trend: {vol_trend}\n"
+        result += "\n"
+
+        # --- Section 3: Volume Expansion/Contraction Phase ---
+        result += "## Volume Expansion/Contraction Phase\n\n"
+
+        if vol_20d_avg is not None and n >= 5:
+            expansion_days = 0
+            contraction_days = 0
+            result += "| Date | Volume | vs 20D Avg | Status |\n"
+            result += "|------|--------|------------|--------|\n"
+            for i in range(-min(5, n), 0):
+                date_str = hist.index[i].strftime("%Y-%m-%d")
+                day_vol = int(volume.iloc[i])
+                ratio = day_vol / vol_20d_avg if vol_20d_avg > 0 else 0
+                if day_vol > vol_20d_avg:
+                    expansion_days += 1
+                    status = "放量"
+                else:
+                    contraction_days += 1
+                    status = "缩量"
+                result += f"| {date_str} | {day_vol:,} | {ratio:.2f}x | {status} |\n"
+            result += "\n"
+
+            if expansion_days >= 4:
+                phase = "放量阶段"
+            elif contraction_days >= 4:
+                phase = "缩量阶段"
+            else:
+                phase = "量能过渡阶段"
+            result += f"- Recent 5-Day: {expansion_days} expansion / {contraction_days} contraction days\n"
+            result += f"- Phase: {phase}\n"
+        else:
+            result += "- Insufficient data for phase analysis (need >= 20 trading days)\n"
+        result += "\n"
+
+        # --- Section 4: OBV Trend Analysis ---
+        result += "## OBV Trend Analysis\n\n"
+
+        if n >= 2:
+            obv = [0] * n
+            for i in range(1, n):
+                if close.iloc[i] > close.iloc[i - 1]:
+                    obv[i] = obv[i - 1] + int(volume.iloc[i])
+                elif close.iloc[i] < close.iloc[i - 1]:
+                    obv[i] = obv[i - 1] - int(volume.iloc[i])
+                else:
+                    obv[i] = obv[i - 1]
+
+            obv_latest = obv[-1]
+
+            # OBV 5-day trend
+            if n >= 6:
+                obv_5d_ago = obv[-6]
+                obv_5d_change = obv_latest - obv_5d_ago
+                obv_direction = "上升" if obv_5d_change > 0 else ("下降" if obv_5d_change < 0 else "持平")
+                result += f"- OBV Current: {obv_latest:,}\n"
+                result += f"- OBV 5-Day Change: {obv_5d_change:+,}\n"
+                result += f"- OBV 5-Day Direction: {obv_direction}\n"
+
+            # Price direction for cross-validation
+            if n >= 6:
+                price_5d_change = close.iloc[-1] - close.iloc[-6]
+                price_direction = "上涨" if price_5d_change > 0 else ("下跌" if price_5d_change < 0 else "持平")
+
+                result += f"- Price 5-Day Direction: {price_direction} ({price_5d_change:+.2f})\n"
+
+                # Cross-validation
+                if price_5d_change > 0 and obv_5d_change > 0:
+                    confirmation = "价量齐升，上涨趋势确认"
+                elif price_5d_change < 0 and obv_5d_change < 0:
+                    confirmation = "价量齐跌，下跌趋势确认"
+                elif price_5d_change > 0 and obv_5d_change <= 0:
+                    confirmation = "价升量缩，上涨动能不足，警惕回调"
+                elif price_5d_change < 0 and obv_5d_change >= 0:
+                    confirmation = "价跌量增，可能有资金吸筹"
+                else:
+                    confirmation = "量价关系中性"
+                result += f"- OBV Confirmation: {confirmation}\n"
+        else:
+            result += "- Insufficient data for OBV analysis\n"
+        result += "\n"
+
+        # --- Section 5: Volume-Price Divergence ---
+        result += "## Volume-Price Divergence\n\n"
+
+        if n >= 6 and vol_20d_avg is not None and vol_5d_avg is not None:
+            price_5d_pct = ((close.iloc[-1] / close.iloc[-6]) - 1) * 100
+            vol_ratio_change = vol_5d_avg / vol_20d_avg if vol_20d_avg > 0 else 1
+
+            result += f"- 5-Day Price Change: {price_5d_pct:+.2f}%\n"
+            result += f"- 5D Avg Vol / 20D Avg Vol: {vol_ratio_change:.2f}x\n"
+
+            if price_5d_pct < -1 and vol_ratio_change > 1.1:
+                divergence = "看涨背离（底部放量）- 价格下跌但成交量增加，可能有资金进场"
+            elif price_5d_pct > 1 and vol_ratio_change < 0.9:
+                divergence = "看跌背离（顶部缩量）- 价格上涨但成交量萎缩，上涨动能可能衰竭"
+            else:
+                divergence = "无明显背离 - 量价方向一致或变化幅度不显著"
+            result += f"- Divergence: {divergence}\n"
+        else:
+            result += "- Insufficient data for divergence analysis\n"
+        result += "\n"
+
+        # --- Section 6: Volume Distribution (Up/Down Days) ---
+        result += "## Volume Distribution (Up/Down Days)\n\n"
+
+        period = min(look_back_days, n - 1)
+        if period >= 2:
+            up_volume = 0
+            down_volume = 0
+            up_days = 0
+            down_days = 0
+
+            for i in range(-period, 0):
+                if close.iloc[i] > close.iloc[i - 1]:
+                    up_volume += int(volume.iloc[i])
+                    up_days += 1
+                elif close.iloc[i] < close.iloc[i - 1]:
+                    down_volume += int(volume.iloc[i])
+                    down_days += 1
+
+            result += f"- Up Days: {up_days} (Total Volume: {up_volume:,})\n"
+            result += f"- Down Days: {down_days} (Total Volume: {down_volume:,})\n"
+
+            if up_days > 0:
+                result += f"- Avg Volume on Up Days: {up_volume // up_days:,}\n"
+            if down_days > 0:
+                result += f"- Avg Volume on Down Days: {down_volume // down_days:,}\n"
+
+            if down_volume > 0:
+                up_down_ratio = up_volume / down_volume
+                if up_down_ratio > 1.5:
+                    dist_interpretation = "多头主导（上涨日成交量远大于下跌日）"
+                elif up_down_ratio >= 1.0:
+                    dist_interpretation = "略偏多头"
+                elif up_down_ratio >= 0.67:
+                    dist_interpretation = "略偏空头"
+                else:
+                    dist_interpretation = "空头主导（下跌日成交量远大于上涨日）"
+                result += f"- Up/Down Volume Ratio: {up_down_ratio:.2f} ({dist_interpretation})\n"
+            elif up_volume > 0:
+                result += "- Up/Down Volume Ratio: N/A (no down-day volume)\n"
+            else:
+                result += "- Up/Down Volume Ratio: N/A (insufficient data)\n"
+        else:
+            result += "- Insufficient data for distribution analysis\n"
+        result += "\n"
+
+        # --- Summary ---
+        result += "## Volume Analysis Summary\n\n"
+        result += f"- 整体成交量状态: {vol_classification}（量比 {volume_ratio:.2f}x）\n"
+        if vol_5d_avg is not None and vol_10d_avg is not None and vol_20d_avg is not None:
+            result += f"- 均量趋势: {vol_trend}\n"
+        if n >= 6:
+            result += f"- OBV 趋势确认: {confirmation}\n"
+        if n >= 6 and vol_20d_avg is not None and vol_5d_avg is not None:
+            result += f"- 量价关系: {divergence}\n"
+
+        return result
+
+    except Exception as e:
+        return f"Error retrieving volume analysis for {ticker}: {str(e)}"

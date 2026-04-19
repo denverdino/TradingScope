@@ -81,3 +81,21 @@ def get_options_analysis(
         str: A formatted string containing options chain analysis including Put/Call ratio, support/resistance levels, and max pain price.
     """
     return route_to_vendor("get_options_analysis", symbol)
+
+
+@agentscope_tool
+def get_volume_analysis(
+    symbol: Annotated[str, "ticker symbol of the company"],
+    look_back_days: Annotated[int, "how many days to look back"] = 30,
+) -> str:
+    """
+    Retrieve comprehensive volume analysis for a given ticker symbol, including
+    daily volume metrics, volume trend, OBV analysis, volume-price divergence
+    detection, and up/down day distribution statistics.
+    Args:
+        symbol (str): Ticker symbol of the company, e.g. AAPL, TSM
+        look_back_days (int): How many days to look back, default is 30
+    Returns:
+        str: A formatted string containing comprehensive volume analysis.
+    """
+    return route_to_vendor("get_volume_analysis", symbol, look_back_days)
