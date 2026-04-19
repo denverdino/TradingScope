@@ -760,3 +760,143 @@ def get_market_indices(
 
     except Exception as e:
         return f"Error retrieving market indices: {str(e)}"
+
+
+def get_options_analysis(ticker: Annotated[str, "ticker symbol of the company"]):
+    """Get options chain analysis for the nearest expiration date.
+
+    Returns Put/Call ratio, support/resistance levels from open interest,
+    and max pain price. Primarily available for US-listed stocks.
+    """
+    try:
+        ticker_obj = yf.Ticker(ticker.upper())
+
+        # Get available expiration dates
+        expirations = yf_retry(lambda: ticker_obj.options)
+        if not expirations:
+            return f"No options data available for symbol '{ticker}'. Options data is typically only available for US-listed stocks."
+
+        nearest_exp = expirations[0]
+
+        # Fetch options chain
+        opt = yf_retry(lambda: ticker_obj.option_chain(nearest_exp))
+        calls_df = opt.calls
+        puts_df = opt.puts
+
+        if calls_df.empty and puts_df.empty:
+            return f"Options chain is empty for symbol '{ticker}' (expiration: {nearest_exp})."
+
+        # Get current stock price for context
+        info = yf_retry(lambda: ticker_obj.info)
+        current_price = info.get("currentPrice") or info.get("regularMarketPrice") or 0
+
+        # Calculate days to expiration
+        exp_date = datetime.strptime(nearest_exp, "%Y-%m-%d")
+        today = datetime.now()
+        days_to_exp = (exp_date - today).days + 1  # +1 because expiration is end of day
+
+        # --- Put/Call Ratio ---
+        total_call_oi = calls_df["openInterest"].fillna(0).sum()
+        total_put_oi = puts_df["openInterest"].fillna(0).sum()
+        total_call_vol = calls_df["volume"].fillna(0).sum()
+        total_put_vol = puts_df["volume"].fillna(0).sum()
+
+        pcr_oi = total_put_oi / total_call_oi if total_call_oi > 0 else float("inf")
+        pcr_vol = total_put_vol / total_call_vol if total_call_vol > 0 else float("inf")
+
+        # PCR sentiment interpretation
+        if pcr_oi == float("inf"):
+            pcr_oi_str = "N/A (Call OI = 0)"
+            sentiment = "无法判断（Call 未平仓量为零）"
+        elif pcr_oi < 0.7:
+            pcr_oi_str = f"{pcr_oi:.2f}"
+            sentiment = "偏多情绪（看涨占主导，市场乐观）"
+        elif pcr_oi <= 1.0:
+            pcr_oi_str = f"{pcr_oi:.2f}"
+            sentiment = "中性偏多（多空力量相对均衡，略偏看涨）"
+        elif pcr_oi <= 1.5:
+            pcr_oi_str = f"{pcr_oi:.2f}"
+            sentiment = "中性偏空（看跌占优，市场谨慎）"
+        else:
+            pcr_oi_str = f"{pcr_oi:.2f}"
+            sentiment = "偏空/防御情绪（大量看跌期权，市场恐慌或机构对冲）"
+
+        pcr_vol_str = f"{pcr_vol:.2f}" if pcr_vol != float("inf") else "N/A (Call Volume = 0)"
+
+        # --- Support Levels (Top Put OI) ---
+        puts_sorted = puts_df[puts_df["openInterest"].fillna(0) > 0].sort_values("openInterest", ascending=False).head(5)
+
+        # --- Resistance Levels (Top Call OI) ---
+        calls_sorted = calls_df[calls_df["openInterest"].fillna(0) > 0].sort_values("openInterest", ascending=False).head(5)
+
+        # --- Max Pain Calculation ---
+        all_strikes = sorted(set(calls_df["strike"].tolist() + puts_df["strike"].tolist()))
+        call_oi_map = dict(zip(calls_df["strike"], calls_df["openInterest"].fillna(0)))
+        put_oi_map = dict(zip(puts_df["strike"], puts_df["openInterest"].fillna(0)))
+
+        max_pain_price = None
+        min_total_pain = float("inf")
+        for test_price in all_strikes:
+            total_pain = 0
+            # Pain for call holders: if test_price > strike, call is ITM, holder profits, writer loses
+            for strike, oi in call_oi_map.items():
+                if test_price > strike:
+                    total_pain += (test_price - strike) * oi
+            # Pain for put holders: if test_price < strike, put is ITM, holder profits, writer loses
+            for strike, oi in put_oi_map.items():
+                if test_price < strike:
+                    total_pain += (strike - test_price) * oi
+            if total_pain < min_total_pain:
+                min_total_pain = total_pain
+                max_pain_price = test_price
+
+        # --- Build Result String ---
+        result = f"# Options Chain Analysis for {ticker.upper()}\n"
+        result += f"# Expiration Date: {nearest_exp}\n"
+        result += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+
+        result += "## Current Price Context\n"
+        if current_price:
+            result += f"- Current Price: ${current_price:.2f}\n"
+        result += f"- Nearest Expiration: {nearest_exp} ({days_to_exp} calendar days away)\n"
+        result += f"- Total Call Open Interest: {int(total_call_oi):,}\n"
+        result += f"- Total Put Open Interest: {int(total_put_oi):,}\n\n"
+
+        result += "## Put/Call Ratio\n"
+        result += f"- PCR (Open Interest): {pcr_oi_str}\n"
+        result += f"- PCR (Volume): {pcr_vol_str}\n"
+        result += f"- Sentiment: {sentiment}\n\n"
+
+        result += "## Support Levels (Top Put Open Interest)\n"
+        if not puts_sorted.empty:
+            result += "| Rank | Strike | Open Interest | Implied Volatility |\n"
+            result += "|------|--------|---------------|--------------------|\n"
+            for rank, (_, row) in enumerate(puts_sorted.iterrows(), 1):
+                iv = f"{row['impliedVolatility']:.1%}" if pd.notna(row.get("impliedVolatility")) else "N/A"
+                result += f"| {rank} | ${row['strike']:.2f} | {int(row['openInterest']):,} | {iv} |\n"
+        else:
+            result += "- No significant put open interest found.\n"
+        result += "\n"
+
+        result += "## Resistance Levels (Top Call Open Interest)\n"
+        if not calls_sorted.empty:
+            result += "| Rank | Strike | Open Interest | Implied Volatility |\n"
+            result += "|------|--------|---------------|--------------------|\n"
+            for rank, (_, row) in enumerate(calls_sorted.iterrows(), 1):
+                iv = f"{row['impliedVolatility']:.1%}" if pd.notna(row.get("impliedVolatility")) else "N/A"
+                result += f"| {rank} | ${row['strike']:.2f} | {int(row['openInterest']):,} | {iv} |\n"
+        else:
+            result += "- No significant call open interest found.\n"
+        result += "\n"
+
+        if max_pain_price is not None:
+            result += f"## Max Pain Price: ${max_pain_price:.2f}\n"
+            if current_price:
+                diff_pct = ((max_pain_price - current_price) / current_price) * 100
+                result += f"- Distance from current price: {diff_pct:+.2f}%\n"
+            result += "- Max Pain is the price at which the most options expire worthless, often acting as a gravitational anchor near expiration.\n"
+
+        return result
+
+    except Exception as e:
+        return f"Error retrieving options analysis for {ticker}: {str(e)}"

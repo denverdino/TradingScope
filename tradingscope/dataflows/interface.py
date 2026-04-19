@@ -34,6 +34,7 @@ from .y_finance import get_fundamentals as get_yfinance_fundamentals
 from .y_finance import get_income_statement as get_yfinance_income_statement
 from .y_finance import get_insider_transactions as get_yfinance_insider_transactions
 from .y_finance import get_market_indices as get_yfinance_market_indices
+from .y_finance import get_options_analysis as get_yfinance_options_analysis
 from .y_finance import get_sector_performance as get_yfinance_sector_performance
 from .y_finance import get_stock_stats_indicators_window, get_YFin_data_online, get_YFin_stock_info
 
@@ -43,7 +44,7 @@ logger = logging.getLogger(__name__)
 TOOLS_CATEGORIES = {
     "core_stock_apis": {"description": "OHLCV stock price data", "tools": ["get_stock_data", "get_stock_info"]},
     "technical_indicators": {"description": "Technical analysis indicators", "tools": ["get_indicators"]},
-    "market_context": {"description": "Market and sector context data", "tools": ["get_sector_performance", "get_market_indices"]},
+    "market_context": {"description": "Market and sector context data", "tools": ["get_sector_performance", "get_market_indices", "get_options_analysis"]},
     "fundamental_data": {"description": "Company fundamentals", "tools": ["get_fundamentals", "get_balance_sheet", "get_cashflow", "get_income_statement"]},
     "news_data": {
         "description": "News (public/insiders, original/processed)",
@@ -74,6 +75,9 @@ VENDOR_METHODS = {
     },
     "get_market_indices": {
         "yfinance": get_yfinance_market_indices,
+    },
+    "get_options_analysis": {
+        "yfinance": get_yfinance_options_analysis,
     },
     # technical_indicators
     "get_indicators": {

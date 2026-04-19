@@ -65,3 +65,19 @@ def get_market_indices(
         str: A formatted string containing performance data for major market indices.
     """
     return route_to_vendor("get_market_indices", look_back_days)
+
+
+@agentscope_tool
+def get_options_analysis(
+    symbol: Annotated[str, "ticker symbol of the company"],
+) -> str:
+    """
+    Retrieve options chain analysis for a given ticker symbol, including Put/Call ratio,
+    support/resistance levels from open interest, and max pain price for the nearest
+    expiration date. Primarily available for US-listed stocks.
+    Args:
+        symbol (str): Ticker symbol of the company, e.g. AAPL, TSM
+    Returns:
+        str: A formatted string containing options chain analysis including Put/Call ratio, support/resistance levels, and max pain price.
+    """
+    return route_to_vendor("get_options_analysis", symbol)
