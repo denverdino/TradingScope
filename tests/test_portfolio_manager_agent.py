@@ -23,6 +23,17 @@ class MockModel:
         return MockResponse()
 
 
+def _setup_context(context):
+    """Populate context with test data."""
+    context.company_of_interest = "AAPL"
+    context.market_report = "Market data"
+    context.sentiment_report = "Sentiment data"
+    context.news_report = "News data"
+    context.fundamentals_report = "Fundamentals data"
+    context.trader_investment_plan = "Trader plan"
+    return context
+
+
 class TestPortfolioManagerAgent:
     """Test cases for the Portfolio Manager Agent."""
 
@@ -31,21 +42,11 @@ class TestPortfolioManagerAgent:
         self.mock_model = MockModel()
         self.agent_name = "TestPortfolioManager"
 
-    def test_create_portfolio_manager_agent_success(self):
+    def test_create_portfolio_manager_agent_success(self, mock_context):
         """Test that portfolio manager agent can be created successfully."""
-        # Create AgentContext
-        from tradingscope.agents.utils.context import AgentContext
-
-        context = AgentContext()
-        context.company_of_interest = "AAPL"
-        context.market_report = "Market data"
-        context.sentiment_report = "Sentiment data"
-        context.news_report = "News data"
-        context.fundamentals_report = "Fundamentals data"
-        context.trader_investment_plan = "Trader plan"
+        context = _setup_context(mock_context)
 
         agent = create_portfolio_manager_agent(
-            model=self.mock_model,
             context=context,
             name=self.agent_name,
         )
@@ -56,21 +57,11 @@ class TestPortfolioManagerAgent:
         assert agent.name == self.agent_name
         assert hasattr(agent, "memory")
 
-    def test_portfolio_manager_agent_system_prompt_content(self):
+    def test_portfolio_manager_agent_system_prompt_content(self, mock_context):
         """Test that the portfolio manager agent has the correct system prompt content."""
-        # Create AgentContext
-        from tradingscope.agents.utils.context import AgentContext
-
-        context = AgentContext()
-        context.company_of_interest = "AAPL"
-        context.market_report = "Market data"
-        context.sentiment_report = "Sentiment data"
-        context.news_report = "News data"
-        context.fundamentals_report = "Fundamentals data"
-        context.trader_investment_plan = "Trader plan"
+        context = _setup_context(mock_context)
 
         agent = create_portfolio_manager_agent(
-            model=self.mock_model,
             context=context,
             name=self.agent_name,
         )
@@ -82,21 +73,11 @@ class TestPortfolioManagerAgent:
         assert "买入、卖出或持有" in agent.sys_prompt
         assert "辩论" in agent.sys_prompt
 
-    def test_portfolio_manager_agent_configuration(self):
+    def test_portfolio_manager_agent_configuration(self, mock_context):
         """Test that the portfolio manager agent has the correct configuration."""
-        # Create AgentContext
-        from tradingscope.agents.utils.context import AgentContext
-
-        context = AgentContext()
-        context.company_of_interest = "AAPL"
-        context.market_report = "Market data"
-        context.sentiment_report = "Sentiment data"
-        context.news_report = "News data"
-        context.fundamentals_report = "Fundamentals data"
-        context.trader_investment_plan = "Trader plan"
+        context = _setup_context(mock_context)
 
         agent = create_portfolio_manager_agent(
-            model=self.mock_model,
             context=context,
             name=self.agent_name,
         )

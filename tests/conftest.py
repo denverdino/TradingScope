@@ -2,6 +2,7 @@
 
 import os
 import sys
+from unittest.mock import patch
 
 import pytest
 
@@ -27,6 +28,16 @@ class MockModel:
 def mock_model():
     """Fixture that provides a mock model for testing."""
     return MockModel()
+
+
+@pytest.fixture
+def mock_context():
+    """Fixture that provides a mock AgentContext without requiring API keys."""
+    from tradingscope.agents.utils.context import AgentContext
+
+    with patch("tradingscope.agents.utils.context.OpenAIChatModel", return_value=MockModel()):
+        context = AgentContext()
+    return context
 
 
 @pytest.fixture

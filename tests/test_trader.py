@@ -3,16 +3,13 @@
 from unittest.mock import patch
 
 
-def test_trader_agent_creation(mock_model, sample_company_data):
+def test_trader_agent_creation(mock_model, mock_context, sample_company_data):
     """Test that the trader agent can be created."""
     try:
         # Import our agent
         from tradingscope.agents.trader.trader import create_trader_agent
 
-        # Create AgentContext
-        from tradingscope.agents.utils.context import AgentContext
-
-        context = AgentContext()
+        context = mock_context
         context.company_of_interest = sample_company_data["company_of_interest"]
         context.investment_plan = sample_company_data["investment_plan"]
         context.market_report = sample_company_data["market_research_report"]
@@ -22,7 +19,6 @@ def test_trader_agent_creation(mock_model, sample_company_data):
 
         # Test creating the trader agent
         agent = create_trader_agent(
-            model=mock_model,
             context=context,
         )
 
@@ -39,7 +35,7 @@ def test_trader_agent_creation(mock_model, sample_company_data):
 
 @patch("tradingscope.agents.utils.agent_utils.get_company_name")
 @patch("tradingscope.agents.utils.stock_utils.StockUtils.get_market_info")
-def test_trader_agent_with_china_stock(mock_get_market_info, mock_get_company_name, mock_model, sample_company_data):
+def test_trader_agent_with_china_stock(mock_get_market_info, mock_get_company_name, mock_model, mock_context, sample_company_data):
     """Test that the trader agent works with China stocks."""
     # Setup mocks for China stock
     mock_get_market_info.return_value = {"market_name": "Shanghai Stock Exchange", "currency_name": "Chinese Yuan", "currency_symbol": "¥"}
@@ -49,10 +45,7 @@ def test_trader_agent_with_china_stock(mock_get_market_info, mock_get_company_na
         # Import our agent
         from tradingscope.agents.trader.trader import create_trader_agent
 
-        # Create AgentContext
-        from tradingscope.agents.utils.context import AgentContext
-
-        context = AgentContext()
+        context = mock_context
         context.company_of_interest = "600000"  # China stock code
         context.investment_plan = sample_company_data["investment_plan"]
         context.market_report = sample_company_data["market_research_report"]
@@ -62,7 +55,6 @@ def test_trader_agent_with_china_stock(mock_get_market_info, mock_get_company_na
 
         # Test creating the trader agent with China stock
         agent = create_trader_agent(
-            model=mock_model,
             context=context,
         )
 
