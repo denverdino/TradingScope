@@ -34,19 +34,19 @@ async def main():
         # Create the research agents with long-term memory
         bull_researcher = create_bull_researcher_agent(
             context=context,
-            long_term_memory=memory_manager.bull_researcher_memory,
+            long_term_memory=memory_manager.get_readonly_memory(),
             long_term_memory_mode="static_control",
         )
 
         bear_researcher = create_bear_researcher_agent(
             context=context,
-            long_term_memory=memory_manager.bear_researcher_memory,
+            long_term_memory=memory_manager.get_readonly_memory(),
             long_term_memory_mode="static_control",
         )
 
         research_manager = create_research_manager_agent(
             context=context,
-            long_term_memory=memory_manager.research_manager_memory,
+            long_term_memory=memory_manager.get_readonly_memory(),
             long_term_memory_mode="static_control",
         )
 

@@ -33,7 +33,7 @@ async def main():
         # Create the trader agent with long-term memory
         agent = create_trader_agent(
             context=context,
-            long_term_memory=memory_manager.trader_memory,
+            long_term_memory=memory_manager.get_readonly_memory(),
             long_term_memory_mode="static_control",
         )
 

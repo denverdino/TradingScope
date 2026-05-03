@@ -1,140 +1,76 @@
 """Memory Manager for TradingScope agents.
 
-This module provides a centralized manager for creating and managing
-ModelStudioLongTermMemory instances for all decision-making agents.
+This module provides a centralized manager for the shared Lessons Learned
+memory namespace. Decision agents receive a read-only wrapper so they can
+retrieve past lessons without recording their own outputs.
 """
 
 from __future__ import annotations
 
-import asyncio
-from typing import Dict, Optional
+from typing import Optional
 
 from agentscope import logger
 
 from .memory import ModelStudioLongTermMemory
+from .readonly_memory import ReadOnlyLongTermMemory
 
 
 class FinancialMemoryManager:
-    """Manages ModelStudioLongTermMemory instances for all decision agents.
+    """Manages a shared Lessons Learned memory namespace.
 
-    This class creates and manages long-term memory instances for the 6 core
-    roles:
-    - bull_researcher: Bullish analysis memory
-    - bear_researcher: Bearish analysis memory
-    - trader: Trading decision memory
-    - research_manager: Research synthesis memory
-    - portfolio_manager: Portfolio assessment memory
-    - prediction_store: Prediction records storage for reflection loop
+    The evaluation process writes scored lessons into the ``lessons_learned``
+    namespace.  Decision agents receive a :class:`ReadOnlyLongTermMemory`
+    wrapper that delegates retrieval to the same namespace but silently
+    drops any record() calls.
 
     Usage:
         memory_manager = FinancialMemoryManager()
 
-        # Get memory for specific agent
-        bull_memory = memory_manager.get_memory("bull_researcher")
-
-        # Use in ReActAgent
+        # For agents (read-only access to lessons)
         agent = ReActAgent(
-            name="BullResearcher",
-            long_term_memory=bull_memory,
+            name="Trader",
+            long_term_memory=memory_manager.get_readonly_memory(),
             long_term_memory_mode="static_control",
         )
 
-        # Store prediction for reflection
-        prediction_memory = memory_manager.prediction_store_memory
-        await prediction_memory.record_to_memory("...", prediction_content)
+        # For evaluation process (write access)
+        await memory_manager.lessons_memory.add_reflection_lesson(...)
 
-        # Cleanup when done
+        # Cleanup
         await memory_manager.close()
     """
 
-    # Agent roles that have memory capability
-    AGENT_ROLES = [
-        "bull_researcher",
-        "bear_researcher",
-        "trader",
-        "research_manager",
-        "portfolio_manager",
-        "prediction_store",  # For reflection loop prediction storage
-    ]
-
     def __init__(self, user_name: str = "tradingscope", top_k: int = 5):
-        """Initialize FinancialMemoryManager.
-
-        Args:
-            user_name: User identifier prefix for memory namespace isolation
-            top_k: Default number of memories to retrieve
-        """
         self._user_name = user_name
         self._top_k = top_k
-        self._memories: Dict[str, ModelStudioLongTermMemory] = {}
+        self._lessons_memory = ModelStudioLongTermMemory(
+            agent_name="lessons_learned",
+            user_name=user_name,
+            top_k=top_k,
+        )
+        self._readonly_memory: Optional[ReadOnlyLongTermMemory] = None
 
-        # Create memory instances for each role
-        for role in self.AGENT_ROLES:
-            self._memories[role] = ModelStudioLongTermMemory(agent_name=role, user_name=user_name, top_k=top_k)
+        logger.info("FinancialMemoryManager created with shared lessons_learned namespace")
 
-        logger.info(f"FinancialMemoryManager created with {len(self._memories)} memory instances")
+    @property
+    def lessons_memory(self) -> ModelStudioLongTermMemory:
+        """Raw lessons memory (for evaluation process to write lessons)."""
+        return self._lessons_memory
+
+    def get_readonly_memory(self) -> ReadOnlyLongTermMemory:
+        """Read-only wrapper for agents (retrieve lessons, no recording)."""
+        if self._readonly_memory is None:
+            self._readonly_memory = ReadOnlyLongTermMemory(self._lessons_memory)
+        return self._readonly_memory
 
     async def close(self) -> None:
-        """Close all memory instances.
-
-        Properly closes all API connections.
-        """
+        """Close memory API connections."""
         logger.info("Closing FinancialMemoryManager...")
-
-        # Close all memories concurrently
-        close_tasks = [memory.close() for memory in self._memories.values()]
-        await asyncio.gather(*close_tasks, return_exceptions=True)
-
+        await self._lessons_memory.close()
         logger.info("FinancialMemoryManager closed")
 
-    def get_memory(self, role: str) -> Optional[ModelStudioLongTermMemory]:
-        """Get memory instance for a specific agent role.
-
-        Args:
-            role: Agent role name (e.g., "bull_researcher", "trader")
-
-        Returns:
-            ModelStudioLongTermMemory instance for the role, or None if not found
-        """
-        if role not in self._memories:
-            logger.warning(f"Unknown agent role: {role}. Available roles: {self.AGENT_ROLES}")
-            return None
-        return self._memories.get(role)
-
-    @property
-    def bull_researcher_memory(self) -> Optional[ModelStudioLongTermMemory]:
-        """Get memory for bull researcher agent."""
-        return self.get_memory("bull_researcher")
-
-    @property
-    def bear_researcher_memory(self) -> Optional[ModelStudioLongTermMemory]:
-        """Get memory for bear researcher agent."""
-        return self.get_memory("bear_researcher")
-
-    @property
-    def trader_memory(self) -> Optional[ModelStudioLongTermMemory]:
-        """Get memory for trader agent."""
-        return self.get_memory("trader")
-
-    @property
-    def research_manager_memory(self) -> Optional[ModelStudioLongTermMemory]:
-        """Get memory for research manager agent."""
-        return self.get_memory("research_manager")
-
-    @property
-    def portfolio_manager_memory(self) -> Optional[ModelStudioLongTermMemory]:
-        """Get memory for portfolio manager agent."""
-        return self.get_memory("portfolio_manager")
-
-    @property
-    def prediction_store_memory(self) -> Optional[ModelStudioLongTermMemory]:
-        """Get memory for prediction storage (reflection loop)."""
-        return self.get_memory("prediction_store")
-
     async def __aenter__(self) -> "FinancialMemoryManager":
-        """Async context manager entry."""
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
-        """Async context manager exit."""
         await self.close()

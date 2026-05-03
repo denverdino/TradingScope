@@ -4,3 +4,4 @@ logs/
 tradingscope/dataflows/data_cache/
 .coverage
 /*.html
+results

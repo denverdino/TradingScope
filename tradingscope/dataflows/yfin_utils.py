@@ -48,11 +48,6 @@ class YFinanceUtils:
         """Fetches and returns latest stock information."""
         ticker = symbol
         stock_info = ticker.info
-        stock_info["targetHighPrice"] = None
-        stock_info["targetLowPrice"] = None
-        stock_info["targetMeanPrice"] = None
-        stock_info["recommendationKey"] = None
-        stock_info["recommendationMean"] = None
         return stock_info
 
     def get_company_info(

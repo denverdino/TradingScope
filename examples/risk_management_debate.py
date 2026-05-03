@@ -69,7 +69,7 @@ async def main():
         # Portfolio manager with long-term memory
         portfolio_manager = create_portfolio_manager_agent(
             context=context,
-            long_term_memory=memory_manager.portfolio_manager_memory,
+            long_term_memory=memory_manager.get_readonly_memory(),
             long_term_memory_mode="static_control",
         )
 

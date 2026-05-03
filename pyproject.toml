@@ -66,6 +66,7 @@ Repository = "https://github.com/denverdino/tradingscope"
 
 [project.scripts]
 tradingscope = "tradingscope.main:main"
+tradingscope-evaluate = "tradingscope.agents.evaluation.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

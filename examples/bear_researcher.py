@@ -24,7 +24,7 @@ async def main():
         # Create the bear researcher agent with long-term memory
         agent = create_bear_researcher_agent(
             context=context,
-            long_term_memory=memory_manager.bear_researcher_memory,
+            long_term_memory=memory_manager.get_readonly_memory(),
             long_term_memory_mode="static_control",
         )
 

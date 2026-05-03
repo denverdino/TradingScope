@@ -310,6 +310,15 @@ class AgentContext:
                     reasoning_parts.append(sent.strip()[:100])
                     break
 
-        result["reasoning"] = "".join(reasoning_parts)[:100] if reasoning_parts else "未提供详细理由"
+        result["reasoning"] = _clean_markdown("".join(reasoning_parts)[:100]) if reasoning_parts else "未提供详细理由"
 
         return result
+
+
+def _clean_markdown(text: str) -> str:
+    """Strip markdown formatting from text."""
+    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)  # bold
+    text = re.sub(r"\*(.+?)\*", r"\1", text)  # italic
+    text = re.sub(r"^#+\s*", "", text, flags=re.MULTILINE)  # headings
+    text = re.sub(r"^[-*]\s+", "", text, flags=re.MULTILINE)  # list markers
+    return text.strip()

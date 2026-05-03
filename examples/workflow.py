@@ -7,7 +7,7 @@ from tradingscope.agents.workflow import analyze
 
 
 async def main():
-    report = await analyze("AAPL")
+    report = await analyze("MSFT")
     print("Final Report")
     print(report)
 

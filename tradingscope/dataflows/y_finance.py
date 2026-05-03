@@ -14,8 +14,20 @@ logger = logging.getLogger(__name__)
 
 def get_YFin_stock_info(symbol: Annotated[str, "ticker symbol of the company"]):
     info = yf_retry(lambda: yf.Ticker(symbol.upper()).info)
-    info.pop("longBusinessSummary", None)
-    info.pop("companyOfficers", None)
+    # 移除分析师长期目标价与推荐评级，短期交易场景不应依赖这些数据
+    for key in (
+        "longBusinessSummary",
+        "companyOfficers",
+        "targetHighPrice",
+        "targetLowPrice",
+        "targetMeanPrice",
+        "targetMedianPrice",
+        "recommendationMean",
+        "recommendationKey",
+        "numberOfAnalystOpinions",
+        "averageAnalystRating",
+    ):
+        info.pop(key, None)
     return info
 
 
@@ -1149,6 +1161,114 @@ def get_volume_analysis(
             result += "- Insufficient data for distribution analysis\n"
         result += "\n"
 
+        # --- Section 7: Previous Trading Day Volume Impact ---
+        result += "## Previous Trading Day Volume Impact Analysis\n\n"
+
+        if n >= 3 and avg_volume > 0:
+            prev_volume = int(volume.iloc[-2])
+            prev_close = close.iloc[-2]
+            prev_open = hist["Open"].iloc[-2]
+            prev_high = hist["High"].iloc[-2]
+            prev_low = hist["Low"].iloc[-2]
+            prev_vol_ratio = prev_volume / avg_volume
+
+            # Previous day price change
+            prev_prev_close = close.iloc[-3]
+            prev_day_return = ((prev_close / prev_prev_close) - 1) * 100
+            prev_day_direction = "上涨" if prev_day_return > 0 else ("下跌" if prev_day_return < 0 else "持平")
+
+            # Previous day volume classification
+            if prev_vol_ratio > 1.5:
+                prev_vol_class = "显著放量"
+            elif prev_vol_ratio > 1.2:
+                prev_vol_class = "温和放量"
+            elif prev_vol_ratio >= 0.8:
+                prev_vol_class = "正常水平"
+            elif prev_vol_ratio >= 0.5:
+                prev_vol_class = "缩量"
+            else:
+                prev_vol_class = "显著缩量"
+
+            # Current day (latest) metrics
+            curr_close = close.iloc[-1]
+            curr_day_return = ((curr_close / prev_close) - 1) * 100
+            curr_day_direction = "上涨" if curr_day_return > 0 else ("下跌" if curr_day_return < 0 else "持平")
+
+            result += f"- Previous Trading Day Date: {hist.index[-2].strftime('%Y-%m-%d')}\n"
+            result += f"- Previous Day Volume: {prev_volume:,}\n"
+            result += f"- Previous Day Volume Ratio: {prev_vol_ratio:.2f}x ({prev_vol_class})\n"
+            result += f"- Previous Day Price Change: {prev_day_return:+.2f}% ({prev_day_direction})\n"
+            result += f"- Previous Day OHLC: O={prev_open:.2f} / H={prev_high:.2f} / L={prev_low:.2f} / C={prev_close:.2f}\n"
+            result += f"- Current Day Price Change: {curr_day_return:+.2f}% ({curr_day_direction})\n\n"
+
+            # Volume-to-price impact pattern
+            result += "### Previous Day Volume-Price Impact Pattern\n\n"
+
+            if prev_vol_ratio > 1.5 and prev_day_return > 1:
+                pattern = "前日放量大涨"
+                impact = "短期存在惯性上冲动能，但也可能因获利盘涌出而出现冲高回落；需关注当日能否继续放量维持涨势"
+            elif prev_vol_ratio > 1.5 and prev_day_return < -1:
+                pattern = "前日放量大跌"
+                impact = "短期抛压较重，可能延续调整；若当日缩量企稳则恐慌情绪消退，反弹概率增加"
+            elif prev_vol_ratio > 1.5 and abs(prev_day_return) <= 1:
+                pattern = "前日放量滞涨/滞跌"
+                impact = "大量换手但价格变动不大，多空博弈激烈；通常预示短期方向选择临近，需警惕突破方向"
+            elif prev_vol_ratio > 1.2 and prev_day_return > 0:
+                pattern = "前日温和放量上涨"
+                impact = "量价配合健康，短期上行动能较为扎实；若当日能维持量能则趋势延续性较好"
+            elif prev_vol_ratio > 1.2 and prev_day_return < 0:
+                pattern = "前日温和放量下跌"
+                impact = "下行有一定量能支撑，短期偏空；关注是否在关键支撑位附近出现缩量企稳信号"
+            elif prev_vol_ratio < 0.8 and prev_day_return > 0:
+                pattern = "前日缩量上涨"
+                impact = "上涨缺乏量能确认，持续性存疑；若当日继续缩量则警惕回调，放量则可能确认突破"
+            elif prev_vol_ratio < 0.8 and prev_day_return < 0:
+                pattern = "前日缩量下跌"
+                impact = "下跌动能不足，恐慌性抛售有限；若当日放量反弹则可能是短期底部信号"
+            else:
+                pattern = "前日量价平稳"
+                impact = "无明显量能异动，市场观望情绪为主；短期走势更依赖其他催化因素"
+
+            result += f"- Pattern: {pattern}\n"
+            result += f"- Impact Assessment: {impact}\n\n"
+
+            # Volume continuity check: previous vs current day
+            curr_volume = int(volume.iloc[-1])
+            vol_continuity = curr_volume / prev_volume if prev_volume > 0 else 0
+
+            result += "### Volume Continuity (Previous → Current Day)\n\n"
+            result += f"- Previous Day Volume: {prev_volume:,}\n"
+            result += f"- Current Day Volume: {curr_volume:,}\n"
+            result += f"- Continuity Ratio: {vol_continuity:.2f}x\n"
+
+            if vol_continuity > 1.2:
+                continuity_signal = "量能放大延续，趋势动能增强"
+            elif vol_continuity >= 0.8:
+                continuity_signal = "量能基本持平，市场参与度稳定"
+            elif vol_continuity >= 0.5:
+                continuity_signal = "量能萎缩，参与度下降，趋势持续性减弱"
+            else:
+                continuity_signal = "量能大幅萎缩，市场观望情绪明显加重"
+
+            result += f"- Continuity Signal: {continuity_signal}\n"
+
+            # Direction continuity
+            if prev_day_return > 0 and curr_day_return > 0 and vol_continuity > 1:
+                result += "- Direction Signal: 连续上涨且量能放大，多头动能强劲\n"
+            elif prev_day_return > 0 and curr_day_return > 0 and vol_continuity < 0.8:
+                result += "- Direction Signal: 连续上涨但量能萎缩，上涨持续性存疑\n"
+            elif prev_day_return < 0 and curr_day_return < 0 and vol_continuity > 1:
+                result += "- Direction Signal: 连续下跌且量能放大，空头压力加剧\n"
+            elif prev_day_return < 0 and curr_day_return < 0 and vol_continuity < 0.8:
+                result += "- Direction Signal: 连续下跌但量能萎缩，抛压或在减弱\n"
+            elif prev_day_return * curr_day_return < 0:
+                result += f"- Direction Signal: 价格方向反转（前日{prev_day_direction} → 当日{curr_day_direction}），关注反转量能是否充分\n"
+            else:
+                result += "- Direction Signal: 价格变动不大，方向不明朗\n"
+        else:
+            result += "- Insufficient data for previous day volume impact analysis (need >= 3 trading days)\n"
+        result += "\n"
+
         # --- Summary ---
         result += "## Volume Analysis Summary\n\n"
         result += f"- 整体成交量状态: {vol_classification}（量比 {volume_ratio:.2f}x）\n"
@@ -1158,6 +1278,8 @@ def get_volume_analysis(
             result += f"- OBV 趋势确认: {confirmation}\n"
         if n >= 6 and vol_20d_avg is not None and vol_5d_avg is not None:
             result += f"- 量价关系: {divergence}\n"
+        if n >= 3 and avg_volume > 0:
+            result += f"- 前一交易日量能影响: {pattern}，{continuity_signal}\n"
 
         return result
 

@@ -24,7 +24,7 @@ async def main():
         # Create the bull researcher agent with long-term memory
         agent = create_bull_researcher_agent(
             context=context,
-            long_term_memory=memory_manager.bull_researcher_memory,
+            long_term_memory=memory_manager.get_readonly_memory(),
             long_term_memory_mode="static_control",
         )
 

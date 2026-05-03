@@ -20,7 +20,7 @@ async def main():
         # Create the research manager agent with long-term memory
         agent = create_research_manager_agent(
             context=context,
-            long_term_memory=memory_manager.research_manager_memory,
+            long_term_memory=memory_manager.get_readonly_memory(),
             long_term_memory_mode="static_control",
         )
 

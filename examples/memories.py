@@ -1,38 +1,46 @@
 #!/usr/bin/env python3
-"""Example script to view and manage long-term memories for each agent role.
+"""Example script to view and manage long-term memories.
 
 Usage:
-    # View all agent memories
-    python examples.memories
-
-    # View memories for a specific role
-    python examples.memories --role trader
+    # View lessons learned memories
+    python -m examples.memories
 
     # Search memories with a specific query
-    python examples.memories --role bull_researcher --query "技术面强但基本面疲软"
+    python -m examples.memories --query "技术面强但基本面疲软"
 
-    # Add a trading lesson to a role's memory
-    python examples.memories --role trader --add \
+    # Add a trading lesson to memory
+    python -m examples.memories --add \
         --situation "RSI超卖，MACD金叉" \
         --decision "买入" \
         --outcome "盈利8%" \
         --lesson "RSI超卖配合MACD金叉是较强的买入信号"
 
-    # Clear memories for a specific role (requires confirmation)
-    python examples.memories --role trader --clear
-
-    # Clear memories for ALL roles (requires confirmation)
-    python examples.memories --clear-all
+    # Clear all lessons learned memories (requires confirmation)
+    python -m examples.memories --clear
 
     # Force clear without confirmation (use with caution!)
-    python examples.memories --clear-all --force
+    python -m examples.memories --clear --force
+
+    # Manage a specific memory namespace by name
+    python -m examples.memories --namespace trader --clear
+
+    # Review saved analysis records for a stock
+    python -m examples.memories --review AAPL
+
+    # Review analysis records for a stock on a specific date
+    python -m examples.memories --review AAPL --date 2026-05-01
+
+    # Review all saved analysis records
+    python -m examples.memories --review all
 """
 
 import argparse
 import asyncio
+import json
+import os
 
 from tradingscope.agents.utils.memory import ModelStudioLongTermMemory
-from tradingscope.agents.utils.memory_manager import FinancialMemoryManager
+from tradingscope.default_config import DEFAULT_CONFIG
 
 try:
     from agentscope_runtime.tools.modelstudio_memory import (
@@ -46,28 +54,31 @@ try:
 except ImportError:
     MEMORY_API_AVAILABLE = False
 
+# Default namespace after refactoring
+DEFAULT_NAMESPACE = "lessons_learned"
 
-async def view_role_memories(role: str, query: str, top_k: int, user_name: str) -> None:
-    """Search and display memories for a specific agent role."""
+
+async def view_memories(namespace: str, query: str, top_k: int, user_name: str) -> None:
+    """Search and display memories for a namespace."""
     memory = ModelStudioLongTermMemory(
-        agent_name=role,
+        agent_name=namespace,
         user_name=user_name,
         top_k=top_k,
     )
 
     try:
         print(f"\n{'=' * 60}")
-        print(f"  Agent Role: {role}")
-        print(f"  User ID:    {memory.user_id}")
-        print(f"  Query:      {query}")
-        print(f"  Top K:      {top_k}")
+        print(f"  Namespace: {namespace}")
+        print(f"  User ID:   {memory.user_id}")
+        print(f"  Query:     {query}")
+        print(f"  Top K:     {top_k}")
         print(f"{'=' * 60}")
 
         result = await memory.retrieve_from_memory(query)
         if result == "Memory system unavailable":
             print("\n  [ERROR] Memory API not available. Check DASHSCOPE_API_KEY.")
         elif result == "No relevant memories found":
-            print("\n  No memories found for this role.")
+            print("\n  No memories found.")
         else:
             print(f"\n{result}")
 
@@ -75,32 +86,22 @@ async def view_role_memories(role: str, query: str, top_k: int, user_name: str) 
         await memory.close()
 
 
-async def view_all_memories(query: str, top_k: int, user_name: str) -> None:
-    """Search and display memories for all agent roles."""
-    print("\nSearching memories for all agent roles...")
-    print(f"Query: '{query}'")
-    print(f"Top K: {top_k}")
-
-    for role in FinancialMemoryManager.AGENT_ROLES:
-        await view_role_memories(role, query, top_k, user_name)
-
-
 async def add_lesson(
-    role: str,
+    namespace: str,
     situation: str,
     decision: str,
     outcome: str,
     lesson: str,
     user_name: str,
 ) -> None:
-    """Add a trading lesson to a specific agent's memory."""
+    """Add a trading lesson to memory."""
     memory = ModelStudioLongTermMemory(
-        agent_name=role,
+        agent_name=namespace,
         user_name=user_name,
     )
 
     try:
-        print(f"\nAdding trading lesson to {role}'s memory...")
+        print(f"\nAdding trading lesson to '{namespace}' memory...")
         success = await memory.add_trading_lesson(
             situation=situation,
             decision=decision,
@@ -115,11 +116,11 @@ async def add_lesson(
         await memory.close()
 
 
-async def clear_role_memories(role: str, user_name: str, force: bool = False) -> bool:
-    """Clear all memories for a specific agent role.
+async def clear_memories(namespace: str, user_name: str, force: bool = False) -> bool:
+    """Clear all memories for a namespace.
 
     Args:
-        role: Agent role name
+        namespace: Memory namespace name
         user_name: User name prefix for memory namespace
         force: Skip confirmation if True
 
@@ -130,19 +131,17 @@ async def clear_role_memories(role: str, user_name: str, force: bool = False) ->
         print("  [ERROR] Memory API not available. Check DASHSCOPE_API_KEY.")
         return False
 
-    user_id = f"{user_name}_{role}"
+    user_id = f"{user_name}_{namespace}"
 
     print(f"\n{'=' * 60}")
-    print(f"  Clearing memories for: {role}")
+    print(f"  Clearing memories for namespace: {namespace}")
     print(f"  User ID: {user_id}")
     print(f"{'=' * 60}")
 
-    # List all memories first
     list_memory = ListMemory()
     delete_memory = DeleteMemory()
 
     try:
-        # Get first page to check total count
         result = await list_memory.arun(
             ListMemoryInput(
                 user_id=user_id,
@@ -151,20 +150,18 @@ async def clear_role_memories(role: str, user_name: str, force: bool = False) ->
         )
 
         if not result or not hasattr(result, "memory_nodes") or not result.memory_nodes:
-            print(f"  No memories found for {role}.")
+            print(f"  No memories found for '{namespace}'.")
             return True
 
         total_count = getattr(result, "total", len(result.memory_nodes))
         print(f"  Found {total_count} memory node(s).")
 
-        # Confirm deletion
         if not force:
             confirm = input(f"  Are you sure you want to delete all {total_count} memories? [y/N]: ")
             if confirm.lower() != "y":
                 print("  Cancelled.")
                 return False
 
-        # Delete all memories by repeatedly fetching page 1 and deleting
         deleted_count = 0
         while result and hasattr(result, "memory_nodes") and result.memory_nodes:
             for node in result.memory_nodes:
@@ -180,7 +177,6 @@ async def clear_role_memories(role: str, user_name: str, force: bool = False) ->
                 except Exception as e:
                     print(f"  Warning: Failed to delete memory {memory_node_id}: {e}")
 
-            # Fetch next batch (always page 1 since previous ones were deleted)
             result = await list_memory.arun(
                 ListMemoryInput(
                     user_id=user_id,
@@ -199,47 +195,85 @@ async def clear_role_memories(role: str, user_name: str, force: bool = False) ->
         await delete_memory.close()
 
 
-async def clear_all_memories(user_name: str, force: bool = False) -> None:
-    """Clear memories for all agent roles.
+def review_records(ticker: str | None, date: str | None, results_dir: str | None) -> None:
+    """Review saved analysis records for a stock.
 
     Args:
-        user_name: User name prefix for memory namespace
-        force: Skip confirmation if True
+        ticker: Stock symbol to filter, or None to show all
+        date: Specific date to filter (YYYY-MM-DD), or None for all dates
+        results_dir: Path to results directory
     """
-    print(f"\n{'#' * 60}")
-    print("  CLEARING ALL AGENT MEMORIES")
-    print(f"  User name: {user_name}")
-    print(f"  Roles: {', '.join(FinancialMemoryManager.AGENT_ROLES)}")
-    print(f"{'#' * 60}")
+    base_dir = os.path.join(results_dir or DEFAULT_CONFIG["results_dir"], "analysis_records")
 
-    if not force:
-        confirm = input("\n  WARNING: This will delete ALL memories for ALL roles!\n  Are you sure? [y/N]: ")
-        if confirm.lower() != "y":
-            print("  Cancelled.")
-            return
+    if not os.path.isdir(base_dir):
+        print(f"\n  No analysis records found (directory not found: {base_dir})")
+        return
 
-    results = {}
-    for role in FinancialMemoryManager.AGENT_ROLES:
-        # Force=True for individual roles since we already confirmed above
-        success = await clear_role_memories(role, user_name, force=True)
-        results[role] = success
+    records = []
+    for date_dir in sorted(os.listdir(base_dir)):
+        if date and date_dir != date:
+            continue
+        date_path = os.path.join(base_dir, date_dir)
+        if not os.path.isdir(date_path):
+            continue
+        for filename in sorted(os.listdir(date_path)):
+            if not filename.endswith(".json"):
+                continue
+            file_ticker = filename[:-5]  # remove .json
+            if ticker and file_ticker.upper() != ticker.upper():
+                continue
+            filepath = os.path.join(date_path, filename)
+            try:
+                with open(filepath, encoding="utf-8") as f:
+                    data = json.load(f)
+                records.append(data)
+            except Exception as e:
+                print(f"  Warning: Failed to load {filepath}: {e}")
 
-    # Summary
-    print(f"\n{'=' * 60}")
-    print("  CLEAR SUMMARY")
-    print(f"{'=' * 60}")
-    for role, success in results.items():
-        status = "OK" if success else "FAILED"
-        print(f"    {role}: {status}")
-    print(f"{'=' * 60}")
+    if not records:
+        filter_desc = []
+        if ticker:
+            filter_desc.append(f"ticker={ticker}")
+        if date:
+            filter_desc.append(f"date={date}")
+        filter_str = ", ".join(filter_desc) if filter_desc else "no filter"
+        print(f"\n  No analysis records found ({filter_str})")
+        return
+
+    print(f"\n{'=' * 70}")
+    print(f"  Analysis Records ({len(records)} found)")
+    print(f"{'=' * 70}")
+
+    for i, rec in enumerate(records):
+        if i > 0:
+            print(f"\n{'-' * 70}")
+        print(f"\n  [{rec.get('trade_date', '?')}] {rec.get('ticker', '?')}")
+        print(f"  Direction:   {rec.get('direction', '?')}")
+        print(f"  Action:      {rec.get('action', '?')}")
+        print(f"  Confidence:  {rec.get('confidence', '?')}")
+        if rec.get("entry_price") is not None:
+            print(f"  Entry Price: {rec['entry_price']}")
+        if rec.get("target_price") is not None:
+            print(f"  Target:      {rec['target_price']}")
+        if rec.get("stop_loss") is not None:
+            print(f"  Stop Loss:   {rec['stop_loss']}")
+        if rec.get("reasoning"):
+            print(f"  Reasoning:   {rec['reasoning']}")
+        print(f"  Status:      {rec.get('status', '?')}")
+        print(f"  Created:     {rec.get('created_at', '?')}")
+        if rec.get("final_decision_summary"):
+            print("\n  --- Decision Summary ---")
+            print(f"  {rec['final_decision_summary']}")
+
+    print(f"\n{'=' * 70}")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="View and manage long-term memories for TradingScope agent roles")
+    parser = argparse.ArgumentParser(description="View and manage long-term memories for TradingScope")
     parser.add_argument(
-        "--role",
-        choices=FinancialMemoryManager.AGENT_ROLES,
-        help="Specific agent role to query (default: all roles)",
+        "--namespace",
+        default=DEFAULT_NAMESPACE,
+        help=f"Memory namespace to operate on (default: '{DEFAULT_NAMESPACE}')",
     )
     parser.add_argument(
         "--query",
@@ -250,7 +284,7 @@ def main():
         "--top-k",
         type=int,
         default=5,
-        help="Max number of memories to retrieve per role (default: 5)",
+        help="Max number of memories to retrieve (default: 5)",
     )
     parser.add_argument(
         "--user-name",
@@ -269,38 +303,38 @@ def main():
     parser.add_argument(
         "--clear",
         action="store_true",
-        help="Clear memories for a specific role (requires --role)",
-    )
-    parser.add_argument(
-        "--clear-all",
-        action="store_true",
-        help="Clear memories for ALL agent roles",
+        help="Clear memories for the specified namespace",
     )
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Skip confirmation prompt (use with --clear or --clear-all)",
+        help="Skip confirmation prompt (use with --clear)",
     )
+
+    # Review analysis records
+    parser.add_argument(
+        "--review",
+        nargs="?",
+        const="all",
+        metavar="TICKER",
+        help="Review saved analysis records. Use 'all' or omit ticker to show all.",
+    )
+    parser.add_argument("--date", help="Filter analysis records by date (YYYY-MM-DD)")
+    parser.add_argument("--results-dir", help="Path to results directory")
 
     args = parser.parse_args()
 
-    # Handle clear-all first
-    if args.clear_all:
-        asyncio.run(clear_all_memories(args.user_name, args.force))
-    # Handle clear for specific role
+    if args.review is not None:
+        ticker = None if args.review.lower() == "all" else args.review
+        review_records(ticker=ticker, date=args.date, results_dir=args.results_dir)
     elif args.clear:
-        if not args.role:
-            parser.error("--role is required when using --clear")
-        asyncio.run(clear_role_memories(args.role, args.user_name, args.force))
-    # Handle add lesson
+        asyncio.run(clear_memories(args.namespace, args.user_name, args.force))
     elif args.add:
-        if not args.role:
-            parser.error("--role is required when adding a lesson")
         if not all([args.situation, args.decision, args.outcome, args.lesson]):
             parser.error("--situation, --decision, --outcome, --lesson are all required with --add")
         asyncio.run(
             add_lesson(
-                role=args.role,
+                namespace=args.namespace,
                 situation=args.situation,
                 decision=args.decision,
                 outcome=args.outcome,
@@ -308,11 +342,8 @@ def main():
                 user_name=args.user_name,
             )
         )
-    # View memories
-    elif args.role:
-        asyncio.run(view_role_memories(args.role, args.query, args.top_k, args.user_name))
     else:
-        asyncio.run(view_all_memories(args.query, args.top_k, args.user_name))
+        asyncio.run(view_memories(args.namespace, args.query, args.top_k, args.user_name))
 
 
 if __name__ == "__main__":

@@ -17,6 +17,7 @@ help:
 	@echo "  make imports     - Order imports with ruff"
 	@echo "  make test        - Run tests with pytest"
 	@echo "  make test-cov    - Run tests with coverage report"
+	@echo "  make evaluate    - Run post-market analysis evaluation"
 	@echo "  make clean       - Clean build artifacts"
 
 # Install dependencies
@@ -58,6 +59,11 @@ test:
 .PHONY: test-cov
 test-cov:
 	pytest --cov=tradingscope --cov-report=html --cov-report=term
+
+# Post-market evaluation
+.PHONY: evaluate
+evaluate:
+	$(PYTHON) -m tradingscope.agents.evaluation.cli
 
 # Clean build artifacts
 .PHONY: clean

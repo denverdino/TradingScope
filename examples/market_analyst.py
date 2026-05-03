@@ -9,7 +9,7 @@ from tradingscope.agents.utils.context import AgentContext
 
 async def main():
     context = AgentContext()
-    context.company_of_interest = "BABA"
+    context.company_of_interest = "NVDA"
 
     agent = create_market_analyst_agent(context=context)
     await agent(None)
