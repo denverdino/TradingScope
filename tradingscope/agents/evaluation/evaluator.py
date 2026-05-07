@@ -10,16 +10,13 @@ import os
 from datetime import datetime, timedelta
 from typing import List, Optional
 
+import dashscope
 from agentscope import logger
-from openai import AsyncOpenAI
 
 from tradingscope.default_config import DEFAULT_CONFIG
 
 from .models import AnalysisRecord
 from .oss_store import OSSAnalysisStore
-
-# DashScope OpenAI-compatible endpoint
-_DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 
 def calculate_lesson_weight(
@@ -334,22 +331,25 @@ class AnalysisEvaluator:
             accuracy_score=accuracy_score,
         )
 
-        client = AsyncOpenAI(api_key=api_key, base_url=_DASHSCOPE_BASE_URL)
         try:
-            response = await client.chat.completions.create(
+            response = await dashscope.AioGeneration.call(
+                api_key=api_key,
                 model=DEFAULT_CONFIG["quick_think_llm"],
                 messages=[{"role": "user", "content": prompt}],
+                result_format="message",
                 max_tokens=1024,
                 temperature=0.1,
             )
-            lesson = (response.choices[0].message.content or "").strip()
+            if response.status_code != 200:
+                logger.warning("[Evaluator] DashScope API returned status %s", response.status_code)
+                return self._template_lesson(record, accuracy_score, actual_return, direction_correct)
+
+            lesson = (response.output.choices[0].message.content or "").strip()
             # Enforce 500-char limit for Memory API
             return lesson[:500] if lesson else None
         except Exception as e:
             logger.warning("[Evaluator] LLM call failed: %s", e)
             return self._template_lesson(record, accuracy_score, actual_return, direction_correct)
-        finally:
-            await client.close()
 
     @staticmethod
     def _template_lesson(
