@@ -77,15 +77,15 @@ The system follows a comprehensive multi-stage workflow defined in `workflow.py`
 
 ```python
 from tradingscope.agents.workflow import analyze
-from agentscope.model import OpenAIChatModel
+from agentscope.model import DashScopeChatModel
 
 # Model configuration
 model_config = {
-    "model_name": "gpt-4o-mini",
-    "api_key": "your-api-key",
+    "model_name": "qwen-plus",
+    "api_key": "your-dashscope-api-key",
 }
 
-model = OpenAIChatModel(**model_config)
+model = DashScopeChatModel(**model_config)
 
 # Run complete analysis
 report = await analyze(model=model, ticker="TSLA", trade_date="2025-10-16")
