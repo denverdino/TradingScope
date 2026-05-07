@@ -81,11 +81,13 @@ class AnalysisOutput:
     """Combined output from the analysis workflow.
 
     Contains both the Markdown report (for human consumption)
-    and the structured AnalysisResult (for downstream systems).
+    and the structured AnalysisResult (for downstream systems),
+    plus individual agent structured outputs for independent persistence.
     """
 
     report_md: str
     structured: AnalysisResult
+    individual_structured: dict | None = None
 
 
 async def analyze(ticker: str, trade_date: str | None = None) -> AnalysisOutput:
@@ -343,7 +345,21 @@ async def analyze(ticker: str, trade_date: str | None = None) -> AnalysisOutput:
             {"full_report": structured_result.to_json()},
         )
 
-        return AnalysisOutput(report_md=full_report, structured=structured_result)
+        # Collect individual structured outputs for local persistence
+        individual_structured = {}
+        for name, data in [
+            ("market_analyst", market_structured),
+            ("fundamentals_analyst", fundamentals_structured),
+            ("news_analyst", news_structured),
+            ("social_media_analyst", social_media_structured),
+            ("research_manager", research_structured),
+            ("trader", trader_structured),
+            ("portfolio_manager", portfolio_structured),
+        ]:
+            if data:
+                individual_structured[name] = json.dumps(data, ensure_ascii=False, indent=2)
+
+        return AnalysisOutput(report_md=full_report, structured=structured_result, individual_structured=individual_structured)
 
     finally:
         # 确保内存管理器正确关闭

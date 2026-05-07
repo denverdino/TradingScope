@@ -108,9 +108,9 @@ def main():
     # Save outputs based on --output flag
     output_mode = args.output
 
-    # Determine local data directory
-    data_dir = DEFAULT_CONFIG["data_dir"]
-    ticker_data_dir = os.path.join(data_dir, trade_date, ticker)
+    # Determine local data directory under results_dir
+    results_dir = DEFAULT_CONFIG["results_dir"]
+    ticker_data_dir = os.path.join(results_dir, "data", trade_date, ticker)
     os.makedirs(ticker_data_dir, exist_ok=True)
 
     if output_mode in ("markdown", "both"):
@@ -176,12 +176,20 @@ def main():
                 send_html_email(subject, html_with_style, recipient_list, sender_email, sender_password)
 
     if output_mode in ("json", "both"):
-        # Save JSON structured output to local data directory
+        # Save each individual structured output as a separate JSON file
+        if output.individual_structured:
+            for agent_name, json_content in output.individual_structured.items():
+                agent_json_filename = os.path.join(ticker_data_dir, f"{agent_name}.json")
+                with open(agent_json_filename, "w", encoding="utf-8") as f:
+                    f.write(json_content)
+                logger.info("Structured output saved to: %s", agent_json_filename)
+
+        # Save combined structured result
         json_filename = os.path.join(ticker_data_dir, f"{ticker}_report_{trade_date}.json")
         json_content = structured_result.to_json()
         with open(json_filename, "w", encoding="utf-8") as f:
             f.write(json_content)
-        logger.info("JSON structured report saved to: %s", json_filename)
+        logger.info("Combined JSON structured report saved to: %s", json_filename)
 
     if output_mode == "json":
         # When only JSON output is requested, also print it to stdout
