@@ -9,10 +9,10 @@ DEFAULT_CONFIG = {
         "dataflows/data_cache",
     ),
     # LLM settings
-    "llm_provider": "openai",
+    "llm_provider": "dashscope",
     "deep_think_llm": "qwen3.6-plus",
     "quick_think_llm": "qwen3.5-flash",
-    "backend_url": "https://api.openai.com/v1",
+    "backend_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
     # Debate and discussion settings
     "max_debate_rounds": 1,
     "max_risk_discuss_rounds": 1,

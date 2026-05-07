@@ -61,7 +61,7 @@ TOOLS_CATEGORIES = {
     },
 }
 
-VENDOR_LIST = ["local", "yfinance", "openai", "google"]
+VENDOR_LIST = ["local", "yfinance", "openai", "google"]  # "openai" = data vendor (web search via OpenAI Responses API), NOT LLM backend
 
 # Mapping of methods to their vendor-specific implementations
 VENDOR_METHODS = {

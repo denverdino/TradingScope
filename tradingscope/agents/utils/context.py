@@ -86,6 +86,7 @@ class AgentContext:
             stream=True,
             generate_kwargs={"temperature": 0, "extra_body": {"enable_thinking": False}},
             client_kwargs={
+                "base_url": DEFAULT_CONFIG["backend_url"],
                 "max_retries": 2,
                 "timeout": 120,
             },
