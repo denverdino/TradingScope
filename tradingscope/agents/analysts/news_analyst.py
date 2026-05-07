@@ -21,7 +21,7 @@ def create_news_analyst_agent(
     name: str = "NewsAnalyst",
 ) -> ReActAgent:
     """
-    创建用于新闻分析的新闻分析师 ReActAgent（OpenAIChatModel）。
+    创建用于新闻分析的新闻分析师 ReActAgent（DashScopeChatModel）。
     - 自动调用统一新闻工具获取新闻数据。
     - 输出中文与固定结构。
 

@@ -25,7 +25,7 @@ requires-python = ">=3.8"
 dependencies = [
     "agentscope>=1.0.15",
     "agentscope-runtime>=1.1.0",
-    "openai>=2.3.0",
+    "dashscope>=1.20.0",
     "yfinance>=0.2.66",
     "pandas>=2.3.3",
     "numpy>=2.3.3",
