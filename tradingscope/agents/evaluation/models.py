@@ -12,13 +12,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from openai import AsyncOpenAI
+import dashscope
 
 from tradingscope.default_config import DEFAULT_CONFIG
 
 logger = logging.getLogger(__name__)
-
-_DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 _SUMMARY_PROMPT = (
     "你是一位专业的股票分析师。请从以下交易决策文本中提炼关键影响因素摘要。\n"
@@ -140,17 +138,22 @@ async def _summarize_decision(content: str, max_chars: int = 500) -> str:
         return content[:max_chars].strip()
 
     model = DEFAULT_CONFIG.get("quick_think_llm", "qwen-plus")
-    client = AsyncOpenAI(api_key=api_key, base_url=_DASHSCOPE_BASE_URL)
     prompt = _SUMMARY_PROMPT.format(content=content)
 
     try:
-        response = await client.chat.completions.create(
+        response = await dashscope.AioGeneration.call(
+            api_key=api_key,
             model=model,
             messages=[{"role": "user", "content": prompt}],
+            result_format="message",
             max_tokens=1024,
             temperature=0.1,
         )
-        summary = (response.choices[0].message.content or "").strip()
+        if response.status_code != 200:
+            logger.warning("[summary] DashScope API returned status %s, falling back to truncation", response.status_code)
+            return content[:max_chars].strip()
+
+        summary = (response.output.choices[0].message.content or "").strip()
         if not summary:
             logger.warning("[summary] LLM returned empty, falling back to truncation")
             return content[:max_chars].strip()
@@ -161,5 +164,3 @@ async def _summarize_decision(content: str, max_chars: int = 500) -> str:
     except Exception as e:
         logger.warning("[summary] LLM call failed: %s, falling back to truncation", e)
         return content[:max_chars].strip()
-    finally:
-        await client.close()
