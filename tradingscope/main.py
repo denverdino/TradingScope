@@ -13,6 +13,7 @@ from agentscope import logger
 
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.workflow import analyze
+from tradingscope.default_config import DEFAULT_CONFIG
 
 
 def _configure_memory_debug() -> None:
@@ -107,6 +108,11 @@ def main():
     # Save outputs based on --output flag
     output_mode = args.output
 
+    # Determine local data directory
+    data_dir = DEFAULT_CONFIG["data_dir"]
+    ticker_data_dir = os.path.join(data_dir, trade_date, ticker)
+    os.makedirs(ticker_data_dir, exist_ok=True)
+
     if output_mode in ("markdown", "both"):
         # Generate HTML output from Markdown with table extension
         html_output = markdown.markdown(final_report, extensions=["tables"])
@@ -151,8 +157,8 @@ def main():
 </html>
 """
 
-        # Save HTML output to a file
-        html_filename = f"{ticker}_report_{trade_date}.html"
+        # Save HTML output to local data directory
+        html_filename = os.path.join(ticker_data_dir, f"{ticker}_report_{trade_date}.html")
         with open(html_filename, "w", encoding="utf-8") as f:
             f.write(html_with_style)
         logger.info("HTML report saved to: %s", html_filename)
@@ -170,8 +176,8 @@ def main():
                 send_html_email(subject, html_with_style, recipient_list, sender_email, sender_password)
 
     if output_mode in ("json", "both"):
-        # Save JSON structured output to a file
-        json_filename = f"{ticker}_report_{trade_date}.json"
+        # Save JSON structured output to local data directory
+        json_filename = os.path.join(ticker_data_dir, f"{ticker}_report_{trade_date}.json")
         json_content = structured_result.to_json()
         with open(json_filename, "w", encoding="utf-8") as f:
             f.write(json_content)

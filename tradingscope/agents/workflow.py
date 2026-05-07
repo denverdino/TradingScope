@@ -1,4 +1,5 @@
 import asyncio
+import json
 from dataclasses import dataclass
 
 from agentscope import logger
@@ -17,6 +18,7 @@ from tradingscope.agents.output import (
     TraderStructuredOutput,
 )
 from tradingscope.utils.oss_report_uploader import upload_reports
+from tradingscope.utils.oss_structured_output_uploader import upload_structured_outputs
 
 # Analyst imports
 from .analysts.equity_analyst import create_equity_analyst_agent
@@ -146,6 +148,18 @@ async def analyze(ticker: str, trade_date: str | None = None) -> AnalysisOutput:
             },
         )
 
+        # Upload analyst structured outputs to OSS
+        analyst_structured_outputs = {}
+        for name, data in [
+            ("market_analyst", market_structured),
+            ("fundamentals_analyst", fundamentals_structured),
+            ("news_analyst", news_structured),
+            ("social_media_analyst", social_media_structured),
+        ]:
+            if data:
+                analyst_structured_outputs[name] = json.dumps(data, ensure_ascii=False)
+        await upload_structured_outputs(context.trade_date, ticker, analyst_structured_outputs)
+
         # 创建研究员代理（只读 Lessons Learned 记忆）
         bear_researcher = create_bear_researcher_agent(
             context=context,
@@ -197,6 +211,14 @@ async def analyze(ticker: str, trade_date: str | None = None) -> AnalysisOutput:
             },
         )
 
+        # Upload research manager structured output to OSS
+        if research_structured:
+            await upload_structured_outputs(
+                context.trade_date,
+                ticker,
+                {"research_manager": json.dumps(research_structured, ensure_ascii=False)},
+            )
+
         # 交易员基于研究经理的决策做出最终交易决策
         logger.info("=== 交易员最终决策 ===")
         # 创建交易员代理（只读 Lessons Learned 记忆）
@@ -226,6 +248,14 @@ async def analyze(ticker: str, trade_date: str | None = None) -> AnalysisOutput:
                 "trader": trader_plan,
             },
         )
+
+        # Upload trader structured output to OSS
+        if trader_structured:
+            await upload_structured_outputs(
+                context.trade_date,
+                ticker,
+                {"trader": json.dumps(trader_structured, ensure_ascii=False)},
+            )
 
         # 风险管理团队对交易员决策进行辩论和评估
         logger.info("=== 风险管理团队辩论 ===")
@@ -274,6 +304,14 @@ async def analyze(ticker: str, trade_date: str | None = None) -> AnalysisOutput:
             },
         )
 
+        # Upload portfolio manager structured output to OSS
+        if portfolio_structured:
+            await upload_structured_outputs(
+                context.trade_date,
+                ticker,
+                {"portfolio_manager": json.dumps(portfolio_structured, ensure_ascii=False)},
+            )
+
         # 生成完整报告
         full_report = context.generate_full_report_md()
 
@@ -295,8 +333,14 @@ async def analyze(ticker: str, trade_date: str | None = None) -> AnalysisOutput:
             ticker,
             {
                 "full_report": full_report,
-                "full_report_json": structured_result.to_json(),
             },
+        )
+
+        # Upload full structured result (JSON) to OSS
+        await upload_structured_outputs(
+            context.trade_date,
+            ticker,
+            {"full_report": structured_result.to_json()},
         )
 
         return AnalysisOutput(report_md=full_report, structured=structured_result)
