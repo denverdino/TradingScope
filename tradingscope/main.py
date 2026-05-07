@@ -86,8 +86,9 @@ def main():
     parser = argparse.ArgumentParser(description="TradingScope - Multi-Agents trading framework")
     parser.add_argument("ticker", nargs="?", default="AAPL", help="Stock ticker symbol (e.g., AAPL, BABA)")
     parser.add_argument("--email_to", help="Email address to send the report to")
-    parser.add_argument("--output", choices=["markdown", "json", "both"], default="both",
-                        help="Output format: markdown (HTML only), json (JSON only), both (default)")
+    parser.add_argument(
+        "--output", choices=["markdown", "json", "both"], default="both", help="Output format: markdown (HTML only), json (JSON only), both (default)"
+    )
     parser.add_argument("--version", action="version", version="%(prog)s 0.1.0")
 
     # Parse arguments

@@ -60,6 +60,7 @@ def calculate_lesson_weight(
 
     return min(1.0, max(0.1, base_weight))
 
+
 _LESSON_PROMPT = """你是一位客观的投资分析评测专家。请根据以下信息评估前一天的交易分析记录，并生成经验教训。
 
 ## 分析记录
@@ -151,9 +152,7 @@ class AnalysisEvaluator:
             List of generated lesson strings
         """
         today = datetime.now().strftime("%Y-%m-%d")
-        pending = await self._record_store.list_pending(
-            before_date=today, ticker=ticker, date=date
-        )
+        pending = await self._record_store.list_pending(before_date=today, ticker=ticker, date=date)
 
         logger.info("[Evaluator] Found %d pending records", len(pending))
 

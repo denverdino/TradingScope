@@ -42,8 +42,11 @@ async def main():
 
     # Create the debate orchestrator with structured output
     orchestrator = create_research_debate_orchestrator(
-        bull_researcher=bull_researcher, bear_researcher=bear_researcher, research_manager=research_manager,
-        max_rounds=3, research_structured_model=ResearchManagerStructuredOutput,
+        bull_researcher=bull_researcher,
+        bear_researcher=bear_researcher,
+        research_manager=research_manager,
+        max_rounds=3,
+        research_structured_model=ResearchManagerStructuredOutput,
     )
 
     print(f"Starting research debate for {context.company_of_interest}")
@@ -59,7 +62,9 @@ async def main():
     print(final_decision.content)
     print("=" * 60)
 
-    structured = final_decision.metadata if final_decision.metadata and ("direction" in final_decision.metadata or "action" in final_decision.metadata) else None
+    structured = (
+        final_decision.metadata if final_decision.metadata and ("direction" in final_decision.metadata or "action" in final_decision.metadata) else None
+    )
     if structured:
         print("\nStructured Output:")
         model = ResearchManagerStructuredOutput.model_validate(structured)

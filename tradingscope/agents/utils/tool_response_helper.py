@@ -5,7 +5,7 @@ from typing import Any, Callable, TypeVar
 
 from agentscope import logger
 from agentscope.message import TextBlock
-from agentscope.tool import ToolResponse
+from agentscope.tool import ToolResponse, execute_python_code
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -46,3 +46,20 @@ def _fmt_args(args: tuple, kwargs: dict) -> str:
     parts = [repr(a) for a in args]
     parts += [f"{k}={v!r}" for k, v in kwargs.items()]
     return ", ".join(parts)
+
+
+async def code_interpreter(code: str, timeout: float = 30) -> ToolResponse:
+    """Execute Python code for precise numerical calculations (deviation rates, risk-reward ratios, ATR multiples, etc.).
+
+    Use this tool when you need exact arithmetic that LLMs often miscalculate.
+    Write Python code with print() statements to output results.
+
+    Args:
+        code: Python code to execute. Must use print() to see output.
+        timeout: Maximum execution time in seconds (default 30, capped at 60).
+
+    Returns:
+        ToolResponse containing stdout, stderr, and return code from execution.
+    """
+    timeout = min(timeout, 60)
+    return await execute_python_code(code=code, timeout=timeout)

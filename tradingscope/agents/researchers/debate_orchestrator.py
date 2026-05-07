@@ -153,7 +153,8 @@ class ResearchDebateOrchestrator:
         )
 
         final_decision = await call_agent_with_retry(
-            self.research_manager, research_manager_prompt,
+            self.research_manager,
+            research_manager_prompt,
             structured_model=self.research_structured_model,
         )
         logger.info("✅ Research debate completed")
@@ -181,7 +182,9 @@ def create_research_debate_orchestrator(
         Configured ResearchDebateOrchestrator instance
     """
     return ResearchDebateOrchestrator(
-        bull_researcher, bear_researcher, research_manager,
+        bull_researcher,
+        bear_researcher,
+        research_manager,
         max_rounds=max_rounds,
         research_structured_model=research_structured_model,
     )

@@ -195,7 +195,8 @@ class RiskDebateOrchestrator:
         )
 
         final_decision = await call_agent_with_retry(
-            self.portfolio_manager, portfolio_manager_prompt,
+            self.portfolio_manager,
+            portfolio_manager_prompt,
             structured_model=self.portfolio_structured_model,
         )
 

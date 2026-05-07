@@ -333,8 +333,11 @@ class TestMarketAnalystStructuredOutput:
 
     def test_model_dump(self):
         m = MarketAnalystStructuredOutput(
-            direction="bullish", action="buy", confidence=0.7,
-            signal_strength="强", invalidation_conditions="收盘跌破10EMA",
+            direction="bullish",
+            action="buy",
+            confidence=0.7,
+            signal_strength="强",
+            invalidation_conditions="收盘跌破10EMA",
         )
         d = m.model_dump()
         assert d["signal_strength"] == "强"
@@ -350,8 +353,12 @@ class TestFundamentalsAnalystStructuredOutput:
 
     def test_model_dump(self):
         f = FundamentalsAnalystStructuredOutput(
-            direction="bullish", action="buy", confidence=0.6,
-            valuation_assessment="合理", key_catalysts=["财报超预期"], key_risks=["竞争加剧"],
+            direction="bullish",
+            action="buy",
+            confidence=0.6,
+            valuation_assessment="合理",
+            key_catalysts=["财报超预期"],
+            key_risks=["竞争加剧"],
         )
         d = f.model_dump()
         assert d["valuation_assessment"] == "合理"
@@ -367,8 +374,11 @@ class TestNewsAnalystStructuredOutput:
 
     def test_model_dump(self):
         n = NewsAnalystStructuredOutput(
-            direction="bearish", action="sell", confidence=0.6,
-            sentiment="negative", key_events=["监管调查", "高管离职"],
+            direction="bearish",
+            action="sell",
+            confidence=0.6,
+            sentiment="negative",
+            key_events=["监管调查", "高管离职"],
         )
         d = n.model_dump()
         assert d["sentiment"] == "negative"
@@ -388,8 +398,11 @@ class TestSocialMediaAnalystStructuredOutput:
 
     def test_model_dump(self):
         s = SocialMediaAnalystStructuredOutput(
-            direction="bullish", action="buy", confidence=0.7,
-            sentiment="positive", sentiment_score=8.5,
+            direction="bullish",
+            action="buy",
+            confidence=0.7,
+            sentiment="positive",
+            sentiment_score=8.5,
         )
         d = s.model_dump()
         assert d["sentiment"] == "positive"
@@ -417,8 +430,11 @@ class TestResearchManagerStructuredOutput:
 
     def test_model_dump(self):
         r = ResearchManagerStructuredOutput(
-            direction="bullish", action="buy", confidence=0.75,
-            bull_viewpoints="增长潜力大", bear_viewpoints="估值偏高",
+            direction="bullish",
+            action="buy",
+            confidence=0.75,
+            bull_viewpoints="增长潜力大",
+            bear_viewpoints="估值偏高",
             adopted_reasoning="增长前景更重要",
         )
         d = r.model_dump()
@@ -432,8 +448,11 @@ class TestResearchManagerStructuredOutput:
 class TestAnalystDecision:
     def test_from_structured_output(self):
         data = MarketAnalystStructuredOutput(
-            direction="bullish", action="buy", confidence=0.7,
-            signal_strength="强", invalidation_conditions="跌破10EMA",
+            direction="bullish",
+            action="buy",
+            confidence=0.7,
+            signal_strength="强",
+            invalidation_conditions="跌破10EMA",
         ).model_dump()
         ad = AnalystDecision.from_structured_output(data)
         assert ad.prediction.action == "buy"
@@ -452,8 +471,11 @@ class TestAnalystDecision:
 class TestResearchDecision:
     def test_from_structured_output(self):
         data = ResearchManagerStructuredOutput(
-            direction="bullish", action="buy", confidence=0.75,
-            bull_viewpoints="增长潜力大", bear_viewpoints="估值偏高",
+            direction="bullish",
+            action="buy",
+            confidence=0.75,
+            bull_viewpoints="增长潜力大",
+            bear_viewpoints="估值偏高",
             adopted_reasoning="增长前景更重要",
         ).model_dump()
         rd = ResearchDecision.from_structured_output(data)
@@ -504,22 +526,32 @@ class TestAnalysisResultExtended:
         result = AnalysisResult.from_context(
             ctx,
             market_structured=MarketAnalystStructuredOutput(
-                direction="bullish", action="buy", confidence=0.7,
+                direction="bullish",
+                action="buy",
+                confidence=0.7,
                 signal_strength="强",
             ).model_dump(),
             fundamentals_structured=FundamentalsAnalystStructuredOutput(
-                direction="bullish", action="buy", confidence=0.6,
+                direction="bullish",
+                action="buy",
+                confidence=0.6,
             ).model_dump(),
             news_structured=NewsAnalystStructuredOutput(
-                direction="neutral", action="hold", confidence=0.5,
+                direction="neutral",
+                action="hold",
+                confidence=0.5,
                 sentiment="neutral",
             ).model_dump(),
             social_media_structured=SocialMediaAnalystStructuredOutput(
-                direction="bullish", action="buy", confidence=0.65,
+                direction="bullish",
+                action="buy",
+                confidence=0.65,
                 sentiment_score=7.5,
             ).model_dump(),
             research_structured=ResearchManagerStructuredOutput(
-                direction="bullish", action="buy", confidence=0.75,
+                direction="bullish",
+                action="buy",
+                confidence=0.75,
                 bull_viewpoints="增长潜力大",
             ).model_dump(),
         )

@@ -184,8 +184,11 @@ async def analyze(ticker: str, trade_date: str | None = None) -> AnalysisOutput:
 
         # 创建研究辩论协调器（带结构化输出）
         research_orchestrator = create_research_debate_orchestrator(
-            bull_researcher=bull_researcher, bear_researcher=bear_researcher, research_manager=research_manager,
-            max_rounds=2, research_structured_model=ResearchManagerStructuredOutput,
+            bull_researcher=bull_researcher,
+            bear_researcher=bear_researcher,
+            research_manager=research_manager,
+            max_rounds=2,
+            research_structured_model=ResearchManagerStructuredOutput,
         )
 
         # 运行研究辩论
@@ -276,7 +279,10 @@ async def analyze(ticker: str, trade_date: str | None = None) -> AnalysisOutput:
 
         # 创建风险辩论协调器（带结构化输出）
         risk_orchestrator = create_debate_orchestrator(
-            aggressive_agent, conservative_agent, neutral_agent, portfolio_manager,
+            aggressive_agent,
+            conservative_agent,
+            neutral_agent,
+            portfolio_manager,
             max_rounds=2,
             portfolio_structured_model=PortfolioStructuredOutput,
         )

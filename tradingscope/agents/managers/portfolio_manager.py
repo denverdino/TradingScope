@@ -14,6 +14,7 @@ from agentscope.tool import Toolkit
 # Local imports
 from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT
 from tradingscope.agents.utils.context import AgentContext
+from tradingscope.agents.utils.tool_response_helper import code_interpreter
 
 if TYPE_CHECKING:
     from tradingscope.agents.utils.memory import ModelStudioLongTermMemory
@@ -97,6 +98,7 @@ def create_portfolio_manager_agent(
 
     formatter = context.multi_agent_formatter
     toolkit = Toolkit()
+    toolkit.register_tool_function(code_interpreter)
 
     # 创建ReActAgent with long-term memory
     agent = ReActAgent(

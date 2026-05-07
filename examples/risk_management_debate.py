@@ -90,7 +90,9 @@ async def main():
     print(final_decision.content)
     print("=" * 60)
 
-    structured = final_decision.metadata if final_decision.metadata and ("direction" in final_decision.metadata or "action" in final_decision.metadata) else None
+    structured = (
+        final_decision.metadata if final_decision.metadata and ("direction" in final_decision.metadata or "action" in final_decision.metadata) else None
+    )
     if structured:
         print("\nStructured Output:")
         model = PortfolioStructuredOutput.model_validate(structured)

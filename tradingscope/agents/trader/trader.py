@@ -11,6 +11,7 @@ from agentscope.tool import Toolkit
 from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT, get_company_name
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.stock_utils import StockUtils
+from tradingscope.agents.utils.tool_response_helper import code_interpreter
 
 if TYPE_CHECKING:
     from tradingscope.agents.utils.memory import ModelStudioLongTermMemory
@@ -114,6 +115,7 @@ def create_trader_agent(
 - **目标价位**：基于阻力位、布林带上轨、或 2-3x ATR 盈利目标
 - **仓位建议**：基于风险评估和波动率
 - **时间止损**：短期交易必须设定时间限制
+- **精确计算规则（强制）**：凡涉及盈亏比、止损宽度、ATR 倍数、百分比变化等数值计算，必须使用 `code_interpreter` 执行 Python 代码完成，不得依赖 LLM 直接计算。LLM 常在除法、比值、百分比等运算中出现数值错误，使用 code_interpreter 确保计算准确。
 
 **6) 关注短期交易信号**
 - 盘前/盘后价格跳空方向
@@ -279,6 +281,7 @@ def create_trader_agent(
 
     formatter = context.chat_formatter
     toolkit = Toolkit()
+    toolkit.register_tool_function(code_interpreter)
 
     # 创建ReActAgent with long-term memory
     agent = ReActAgent(
