@@ -5,8 +5,8 @@ from datetime import datetime, timedelta
 from typing import Annotated, Dict, Optional
 
 import yfinance as yf
-from agentscope.formatter import OpenAIChatFormatter, OpenAIMultiAgentFormatter
-from agentscope.model import OpenAIChatModel
+from agentscope.formatter import DashScopeChatFormatter, DashScopeMultiAgentFormatter
+from agentscope.model import DashScopeChatModel
 from yfinance.exceptions import YFRateLimitError
 
 from tradingscope.default_config import DEFAULT_CONFIG
@@ -80,20 +80,17 @@ class AgentContext:
         self.latest_trading_date = get_latest_us_trading_date()
 
         # Model initialization
-        self.model = OpenAIChatModel(
+        self.model = DashScopeChatModel(
             model_name=DEFAULT_CONFIG["deep_think_llm"],
             api_key=os.environ.get("DASHSCOPE_API_KEY"),
             stream=True,
-            generate_kwargs={"temperature": 0, "extra_body": {"enable_thinking": False}},
-            client_kwargs={
-                "max_retries": 2,
-                "timeout": 120,
-            },
+            enable_thinking=False,
+            generate_kwargs={"temperature": 0},
         )
 
         # Formatter initialization
-        self.chat_formatter = OpenAIChatFormatter()
-        self.multi_agent_formatter = OpenAIMultiAgentFormatter()
+        self.chat_formatter = DashScopeChatFormatter()
+        self.multi_agent_formatter = DashScopeMultiAgentFormatter()
 
     def generate_analyst_reports_md(self) -> str:
         """Generate markdown formatted research reports section."""
