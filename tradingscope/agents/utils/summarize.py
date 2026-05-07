@@ -9,13 +9,10 @@ from __future__ import annotations
 
 import os
 
+import dashscope
 from agentscope import logger
-from openai import AsyncOpenAI
 
 from tradingscope.default_config import DEFAULT_CONFIG
-
-# DashScope OpenAI-compatible endpoint
-_DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 # Use a fast, cheap model for summarization
 _DEFAULT_MODEL = DEFAULT_CONFIG["quick_think_llm"]
@@ -65,21 +62,22 @@ async def summarize_for_memory(
 
     resolved_model = model or _DEFAULT_MODEL
 
-    client = AsyncOpenAI(
-        api_key=resolved_key,
-        base_url=_DASHSCOPE_BASE_URL,
-    )
-
     prompt = _SUMMARIZE_PROMPT.format(max_chars=max_chars, content=content)
 
     try:
-        response = await client.chat.completions.create(
+        response = await dashscope.AioGeneration.call(
+            api_key=resolved_key,
             model=resolved_model,
             messages=[{"role": "user", "content": prompt}],
+            result_format="message",
             max_tokens=1024,
             temperature=0.1,
         )
-        summary = response.choices[0].message.content or ""
+        if response.status_code != 200:
+            logger.warning("[summarize] DashScope API returned status %s, falling back to truncation", response.status_code)
+            return content[:max_chars]
+
+        summary = response.output.choices[0].message.content or ""
         summary = summary.strip()
 
         # Enforce hard limit in case the model overshoots
@@ -96,5 +94,3 @@ async def summarize_for_memory(
     except Exception as e:
         logger.warning(f"[summarize] LLM call failed: {e}, falling back to truncation")
         return content[:max_chars]
-    finally:
-        await client.close()
