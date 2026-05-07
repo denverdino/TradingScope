@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Example script demonstrating how to use the Trader Agent with long-term memory."""
+"""Example script demonstrating how to use the Trader Agent with structured output."""
 
 import asyncio
 
+from tradingscope.agents.output import TraderStructuredOutput
 from tradingscope.agents.trader.trader import create_trader_agent
 from tradingscope.agents.utils.context import AgentContext
-from tradingscope.agents.utils.memory_manager import FinancialMemoryManager
 
 
 async def main():
@@ -26,22 +26,37 @@ async def main():
     context.news_report = news_report
     context.fundamentals_report = fundamentals_report
 
-    # Create memory manager for long-term memory
-    memory_manager = FinancialMemoryManager()
+    # Create the trader agent
+    agent = create_trader_agent(
+        context=context,
+    )
 
-    try:
-        # Create the trader agent with long-term memory
-        agent = create_trader_agent(
-            context=context,
-            long_term_memory=memory_manager.get_readonly_memory(),
-            long_term_memory_mode="static_control",
-        )
+    # Run the agent with structured output
+    response = await agent(None, structured_model=TraderStructuredOutput)
 
-        # Run the agent
-        response = await agent(None)
-        print(f"Trader Response: {response.content}")
-    finally:
-        await memory_manager.close()
+    print("=" * 60)
+    print("Trader Response:")
+    print(response.content)
+    print("=" * 60)
+
+    structured = response.metadata if response.metadata and ("direction" in response.metadata or "action" in response.metadata) else None
+    if structured:
+        print("\nStructured Output:")
+        model = TraderStructuredOutput.model_validate(structured)
+        print(f"  Direction:          {model.direction}")
+        print(f"  Action:             {model.action}")
+        print(f"  Confidence:         {model.confidence}")
+        print(f"  Entry Price:        {model.entry_price}")
+        print(f"  Target Price:       {model.target_price}")
+        print(f"  Stop Loss:          {model.stop_loss}")
+        print(f"  Risk Reward Ratio:  {model.risk_reward_ratio}")
+        print(f"  Position Advice:    {model.position_advice}")
+        print(f"  Risk Score:         {model.risk_score}")
+        print(f"  Time Stop Days:     {model.time_stop_days}")
+        print(f"  Invalidation:       {model.invalidation_conditions}")
+        print(f"  Reasoning:          {model.reasoning}")
+    else:
+        print("\nNo structured output available (agent did not produce structured data).")
 
 
 if __name__ == "__main__":

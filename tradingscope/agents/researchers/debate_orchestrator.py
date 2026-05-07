@@ -21,6 +21,7 @@ class ResearchDebateOrchestrator:
         bear_researcher,
         research_manager,
         max_rounds: int = 3,
+        research_structured_model=None,
     ):
         """Initialize the debate orchestrator.
 
@@ -29,11 +30,13 @@ class ResearchDebateOrchestrator:
             bear_researcher: Bear researcher agent
             research_manager: Research manager agent
             max_rounds: Maximum number of debate rounds
+            research_structured_model: Optional Pydantic BaseModel for research structured output
         """
         self.bull_researcher = bull_researcher
         self.bear_researcher = bear_researcher
         self.research_manager = research_manager
         self.max_rounds = max_rounds
+        self.research_structured_model = research_structured_model
 
         logger.info("✅ Research Debate Orchestrator initialized with bull researcher, bear researcher and research manager")
 
@@ -149,7 +152,10 @@ class ResearchDebateOrchestrator:
 """,
         )
 
-        final_decision = await call_agent_with_retry(self.research_manager, research_manager_prompt)
+        final_decision = await call_agent_with_retry(
+            self.research_manager, research_manager_prompt,
+            structured_model=self.research_structured_model,
+        )
         logger.info("✅ Research debate completed")
 
         return final_decision
@@ -160,6 +166,7 @@ def create_research_debate_orchestrator(
     bear_researcher,
     research_manager,
     max_rounds: int = 3,
+    research_structured_model=None,
 ) -> ResearchDebateOrchestrator:
     """Create a research debate orchestrator.
 
@@ -168,8 +175,13 @@ def create_research_debate_orchestrator(
         bear_researcher: Bear researcher agent
         research_manager: Research manager agent
         max_rounds: Maximum number of debate rounds
+        research_structured_model: Optional Pydantic BaseModel for research structured output
 
     Returns:
         Configured ResearchDebateOrchestrator instance
     """
-    return ResearchDebateOrchestrator(bull_researcher, bear_researcher, research_manager, max_rounds)
+    return ResearchDebateOrchestrator(
+        bull_researcher, bear_researcher, research_manager,
+        max_rounds=max_rounds,
+        research_structured_model=research_structured_model,
+    )

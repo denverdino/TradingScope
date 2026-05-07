@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Example script demonstrating how to use the Research Manager Agent with long-term memory."""
+"""Example script demonstrating how to use the Research Manager Agent with structured output."""
 
 import asyncio
 
+from agentscope.message import Msg
+
 from tradingscope.agents.managers.research_manager import create_research_manager_agent
+from tradingscope.agents.output import ResearchManagerStructuredOutput
 from tradingscope.agents.utils.context import AgentContext
-from tradingscope.agents.utils.memory_manager import FinancialMemoryManager
 
 
 async def main():
@@ -13,19 +15,16 @@ async def main():
     context = AgentContext()
     context.company_of_interest = "AAPL"
 
-    # Create memory manager for long-term memory
-    memory_manager = FinancialMemoryManager()
+    # Create the research manager agent
+    agent = create_research_manager_agent(
+        context=context,
+    )
 
-    try:
-        # Create the research manager agent with long-term memory
-        agent = create_research_manager_agent(
-            context=context,
-            long_term_memory=memory_manager.get_readonly_memory(),
-            long_term_memory_mode="static_control",
-        )
-
-        # Example usage with sample data
-        sample_prompt = """作为投资组合经理和辩论主持人，您的职责是批判性地评估这轮辩论并做出明确决策：支持看跌分析师、看涨分析师，或者仅在基于所提出论点有强有力理由时选择持有。
+    # Example usage with sample data (prompt must be a Msg object)
+    prompt = Msg(
+        name="user",
+        role="user",
+        content="""作为投资组合经理和辩论主持人，您的职责是批判性地评估这轮辩论并做出明确决策：支持看跌分析师、看涨分析师，或者仅在基于所提出论点有强有力理由时选择持有。
 
 请基于以下信息做出决策：
 
@@ -41,13 +40,33 @@ async def main():
 看涨分析师：基于强劲的业绩和行业发展趋势，建议买入。
 看跌分析师：考虑到高估值和潜在的监管风险，建议卖出。
 
-请用中文撰写所有分析内容和建议。"""
+请用中文撰写所有分析内容和建议。""",
+    )
 
-        # Run the agent with the sample prompt
-        response = await agent(sample_prompt)
-        print("Investment Decision:", response.content)
-    finally:
-        await memory_manager.close()
+    # Run the agent with structured output
+    response = await agent(prompt, structured_model=ResearchManagerStructuredOutput)
+
+    print("=" * 60)
+    print("Investment Decision:")
+    print(response.content)
+    print("=" * 60)
+
+    structured = response.metadata if response.metadata and ("direction" in response.metadata or "action" in response.metadata) else None
+    if structured:
+        print("\nStructured Output:")
+        model = ResearchManagerStructuredOutput.model_validate(structured)
+        print(f"  Direction:         {model.direction}")
+        print(f"  Action:            {model.action}")
+        print(f"  Confidence:        {model.confidence}")
+        print(f"  Entry Price:       {model.entry_price}")
+        print(f"  Target Price:      {model.target_price}")
+        print(f"  Stop Loss:         {model.stop_loss}")
+        print(f"  Bull Viewpoints:   {model.bull_viewpoints}")
+        print(f"  Bear Viewpoints:   {model.bear_viewpoints}")
+        print(f"  Adopted Reasoning: {model.adopted_reasoning}")
+        print(f"  Reasoning:         {model.reasoning}")
+    else:
+        print("\nNo structured output available (agent did not produce structured data).")
 
 
 if __name__ == "__main__":

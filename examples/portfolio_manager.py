@@ -1,35 +1,34 @@
 #!/usr/bin/env python3
-"""Example showing how to use the PortfolioManagerAgent with long-term memory."""
+"""Example showing how to use the PortfolioManagerAgent with structured output."""
 
 import asyncio
 
+from agentscope.message import Msg
+
 from tradingscope.agents.managers.portfolio_manager import create_portfolio_manager_agent
+from tradingscope.agents.output import PortfolioStructuredOutput
 from tradingscope.agents.utils.context import AgentContext
-from tradingscope.agents.utils.memory_manager import FinancialMemoryManager
 
 
 async def main():
-    """Example of using the PortfolioManagerAgent with long-term memory."""
+    """Example of using the PortfolioManagerAgent with structured output."""
     # Create AgentContext with sample data
     context = AgentContext()
     context.company_of_interest = "AAPL"
 
-    # Create memory manager for long-term memory
-    memory_manager = FinancialMemoryManager()
+    # Create the portfolio manager agent
+    portfolio_manager = create_portfolio_manager_agent(
+        context=context,
+        name="PortfolioManager",
+    )
 
-    try:
-        # Create the portfolio manager agent with long-term memory
-        portfolio_manager = create_portfolio_manager_agent(
-            context=context,
-            name="PortfolioManager",
-            long_term_memory=memory_manager.get_readonly_memory(),
-            long_term_memory_mode="static_control",
-        )
+    print(f"PortfolioManagerAgent created: {portfolio_manager.name}")
 
-        print(f"PortfolioManagerAgent created: {portfolio_manager.name}")
-
-        # Example usage with sample data
-        sample_prompt = """作为风险管理委员会主席和辩论主持人，您的目标是评估三位风险分析师——激进、中性和安全/保守——之间的辩论，并确定交易员的最佳行动方案。您的决策必须产生明确的建议：买入、卖出或持有。只有在有具体论据强烈支持时才选择持有，而不是在所有方面都似乎有效时作为后备选择。力求清晰和果断。
+    # Example usage with sample data (prompt must be a Msg object)
+    prompt = Msg(
+        name="user",
+        role="user",
+        content="""作为风险管理委员会主席和辩论主持人，您的目标是评估三位风险分析师——激进、中性和安全/保守——之间的辩论，并确定交易员的最佳行动方案。您的决策必须产生明确的建议：买入、卖出或持有。只有在有具体论据强烈支持时才选择持有，而不是在所有方面都似乎有效时作为后备选择。力求清晰和果断。
 
 请基于以下信息做出决策：
 
@@ -48,13 +47,38 @@ async def main():
 保守分析师：考虑到高估值和潜在的监管风险，建议卖出。
 中性分析师：建议持有观察，等待更明确的市场信号。
 
-请用中文撰写所有分析内容和建议。"""
+请用中文撰写所有分析内容和建议。""",
+    )
 
-        # Call the agent
-        response = await portfolio_manager(sample_prompt)
-        print(f"Response: {response.content}")
-    finally:
-        await memory_manager.close()
+    # Call the agent with structured output
+    response = await portfolio_manager(prompt, structured_model=PortfolioStructuredOutput)
+
+    print("=" * 60)
+    print("Portfolio Manager Response:")
+    print(response.content)
+    print("=" * 60)
+
+    structured = response.metadata if response.metadata and ("direction" in response.metadata or "action" in response.metadata) else None
+    if structured:
+        print("\nStructured Output:")
+        model = PortfolioStructuredOutput.model_validate(structured)
+        print(f"  Direction:             {model.direction}")
+        print(f"  Action:                {model.action}")
+        print(f"  Confidence:            {model.confidence}")
+        print(f"  Entry Price:           {model.entry_price}")
+        print(f"  Target Price:          {model.target_price}")
+        print(f"  Stop Loss:             {model.stop_loss}")
+        print(f"  Position Advice:       {model.position_advice}")
+        print(f"  Risk Score:            {model.risk_score}")
+        print(f"  Aggressive Viewpoint:  {model.aggressive_viewpoint}")
+        print(f"  Conservative Viewpoint:{model.conservative_viewpoint}")
+        print(f"  Neutral Viewpoint:     {model.neutral_viewpoint}")
+        print(f"  Adopted Reasoning:     {model.adopted_reasoning}")
+        print(f"  Risk Control Measures: {model.risk_control_measures}")
+        print(f"  Invalidation:          {model.invalidation_conditions}")
+        print(f"  Reasoning:             {model.reasoning}")
+    else:
+        print("\nNo structured output available (agent did not produce structured data).")
 
 
 if __name__ == "__main__":

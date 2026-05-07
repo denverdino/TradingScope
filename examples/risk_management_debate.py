@@ -1,4 +1,4 @@
-"""Example script demonstrating the risk management multi-agent debate system with long-term memory."""
+"""Example script demonstrating the risk management multi-agent debate system with structured output."""
 
 import asyncio
 import os
@@ -8,16 +8,16 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from tradingscope.agents.managers.portfolio_manager import create_portfolio_manager_agent
+from tradingscope.agents.output import PortfolioStructuredOutput
 from tradingscope.agents.risk_mgmt.aggressive_debator import create_aggressive_debator_agent
 from tradingscope.agents.risk_mgmt.conservative_debator import create_conservative_debator_agent
 from tradingscope.agents.risk_mgmt.debate_orchestrator import create_debate_orchestrator
 from tradingscope.agents.risk_mgmt.neutral_debator import create_neutral_debator_agent
 from tradingscope.agents.utils.context import AgentContext
-from tradingscope.agents.utils.memory_manager import FinancialMemoryManager
 
 
 async def main():
-    """Example usage of the risk management debate system with long-term memory."""
+    """Example usage of the risk management debate system with structured output."""
 
     # Example data for a stock analysis
     company_name = "TSLA"
@@ -56,51 +56,61 @@ async def main():
     context.fundamentals_report = fundamentals_report
     context.trader_investment_plan = trader_plan
 
-    # Create memory manager for long-term memory
-    memory_manager = FinancialMemoryManager()
+    # Create the risk management agents
+    aggressive_agent = create_aggressive_debator_agent(context=context)
+    conservative_agent = create_conservative_debator_agent(context=context)
+    neutral_agent = create_neutral_debator_agent(context=context)
 
-    try:
-        # Create the risk management agents
-        # Debators don't use long-term memory, only the portfolio manager does
-        aggressive_agent = create_aggressive_debator_agent(context=context)
-        conservative_agent = create_conservative_debator_agent(context=context)
-        neutral_agent = create_neutral_debator_agent(context=context)
+    # Portfolio manager
+    portfolio_manager = create_portfolio_manager_agent(
+        context=context,
+    )
 
-        # Portfolio manager with long-term memory
-        portfolio_manager = create_portfolio_manager_agent(
-            context=context,
-            long_term_memory=memory_manager.get_readonly_memory(),
-            long_term_memory_mode="static_control",
-        )
+    # Create the debate orchestrator with structured output
+    orchestrator = create_debate_orchestrator(
+        aggressive_agent=aggressive_agent,
+        conservative_agent=conservative_agent,
+        neutral_agent=neutral_agent,
+        portfolio_manager=portfolio_manager,
+        max_rounds=3,
+        portfolio_structured_model=PortfolioStructuredOutput,
+    )
 
-        # Create the debate orchestrator
-        orchestrator = create_debate_orchestrator(
-            aggressive_agent=aggressive_agent,
-            conservative_agent=conservative_agent,
-            neutral_agent=neutral_agent,
-            portfolio_manager=portfolio_manager,
-            max_rounds=3,
-        )
+    print(f"Starting risk management debate for {company_name}")
+    print(f"Trader plan: {trader_plan}")
+    print("=" * 60)
 
-        print(f"Starting risk management debate for {company_name}")
-        print(f"Trader plan: {trader_plan}")
-        print("=" * 60)
+    # Run the debate
+    final_decision = await orchestrator.run_debate(
+        company_name=company_name,
+    )
 
-        # Run the debate
-        final_decision = await orchestrator.run_debate(
-            company_name=company_name,
-        )
+    print("=" * 60)
+    print("Final Decision from Portfolio Manager:")
+    print(final_decision.content)
+    print("=" * 60)
 
-        print("=" * 60)
-        print("Final Decision from Portfolio Manager:")
-        print(final_decision.content)
-        print("=" * 60)
-
-    except Exception as e:
-        print(f"Error during debate: {e}")
-        print("Please ensure you have a valid DASHSCOPE_API_KEY set.")
-    finally:
-        await memory_manager.close()
+    structured = final_decision.metadata if final_decision.metadata and ("direction" in final_decision.metadata or "action" in final_decision.metadata) else None
+    if structured:
+        print("\nStructured Output:")
+        model = PortfolioStructuredOutput.model_validate(structured)
+        print(f"  Direction:             {model.direction}")
+        print(f"  Action:                {model.action}")
+        print(f"  Confidence:            {model.confidence}")
+        print(f"  Entry Price:           {model.entry_price}")
+        print(f"  Target Price:          {model.target_price}")
+        print(f"  Stop Loss:             {model.stop_loss}")
+        print(f"  Position Advice:       {model.position_advice}")
+        print(f"  Risk Score:            {model.risk_score}")
+        print(f"  Aggressive Viewpoint:  {model.aggressive_viewpoint}")
+        print(f"  Conservative Viewpoint:{model.conservative_viewpoint}")
+        print(f"  Neutral Viewpoint:     {model.neutral_viewpoint}")
+        print(f"  Adopted Reasoning:     {model.adopted_reasoning}")
+        print(f"  Risk Control Measures: {model.risk_control_measures}")
+        print(f"  Invalidation:          {model.invalidation_conditions}")
+        print(f"  Reasoning:             {model.reasoning}")
+    else:
+        print("\nNo structured output available (agent did not produce structured data).")
 
 
 if __name__ == "__main__":

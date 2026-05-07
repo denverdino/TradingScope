@@ -85,6 +85,8 @@ def main():
     parser = argparse.ArgumentParser(description="TradingScope - Multi-Agents trading framework")
     parser.add_argument("ticker", nargs="?", default="AAPL", help="Stock ticker symbol (e.g., AAPL, BABA)")
     parser.add_argument("--email_to", help="Email address to send the report to")
+    parser.add_argument("--output", choices=["markdown", "json", "both"], default="both",
+                        help="Output format: markdown (HTML only), json (JSON only), both (default)")
     parser.add_argument("--version", action="version", version="%(prog)s 0.1.0")
 
     # Parse arguments
@@ -95,14 +97,22 @@ def main():
 
     # Use AgentContext as the single source of truth for trade_date
     trade_date = AgentContext().trade_date
-    final_report = asyncio.run(analyze(ticker))
+    output = asyncio.run(analyze(ticker))
+    final_report = output.report_md
+    structured_result = output.structured
 
-    # Generate HTML output from Markdown with table extension
-    html_output = markdown.markdown(final_report, extensions=["tables"])
+    logger.info("******************************* Final Report *******************************")
+    logger.info(final_report)
 
-    # Add CSS styling for tables with grid lines
-    html_with_style = f"""
-<!DOCTYPE html>
+    # Save outputs based on --output flag
+    output_mode = args.output
+
+    if output_mode in ("markdown", "both"):
+        # Generate HTML output from Markdown with table extension
+        html_output = markdown.markdown(final_report, extensions=["tables"])
+
+        # Add CSS styling for tables with grid lines
+        html_with_style = f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
@@ -141,26 +151,35 @@ def main():
 </html>
 """
 
-    logger.info("******************************* Final Report *******************************")
-    logger.info(final_report)
+        # Save HTML output to a file
+        html_filename = f"{ticker}_report_{trade_date}.html"
+        with open(html_filename, "w", encoding="utf-8") as f:
+            f.write(html_with_style)
+        logger.info("HTML report saved to: %s", html_filename)
 
-    # Save HTML output to a file
-    html_filename = f"{ticker}_report_{trade_date}.html"
-    with open(html_filename, "w", encoding="utf-8") as f:
-        f.write(html_with_style)
-    logger.info("HTML report saved to: %s", html_filename)
+        # Send email if email address is provided
+        if args.email_to:
+            sender_email = os.getenv("EMAIL_FROM")
+            sender_password = os.getenv("EMAIL_PASSWORD")
 
-    # Send email if email address is provided
-    if args.email_to:
-        sender_email = os.getenv("EMAIL_FROM")
-        sender_password = os.getenv("EMAIL_PASSWORD")
+            if not sender_email or not sender_password:
+                logger.error("EMAIL_FROM and EMAIL_PASSWORD environment variables must be set to send email.")
+            else:
+                subject = f"Stock Analysis Report: {ticker} ({trade_date})"
+                recipient_list = [email.strip() for email in args.email_to.split(",")]
+                send_html_email(subject, html_with_style, recipient_list, sender_email, sender_password)
 
-        if not sender_email or not sender_password:
-            logger.error("EMAIL_FROM and EMAIL_PASSWORD environment variables must be set to send email.")
-        else:
-            subject = f"Stock Analysis Report: {ticker} ({trade_date})"
-            recipient_list = [email.strip() for email in args.email_to.split(",")]
-            send_html_email(subject, html_with_style, recipient_list, sender_email, sender_password)
+    if output_mode in ("json", "both"):
+        # Save JSON structured output to a file
+        json_filename = f"{ticker}_report_{trade_date}.json"
+        json_content = structured_result.to_json()
+        with open(json_filename, "w", encoding="utf-8") as f:
+            f.write(json_content)
+        logger.info("JSON structured report saved to: %s", json_filename)
+
+    if output_mode == "json":
+        # When only JSON output is requested, also print it to stdout
+        print(json_content)
 
 
 if __name__ == "__main__":

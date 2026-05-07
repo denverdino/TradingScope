@@ -1,9 +1,21 @@
 import asyncio
+from dataclasses import dataclass
 
 from agentscope import logger
 from agentscope.message import Msg
 
 from tradingscope.agents.managers.portfolio_manager import create_portfolio_manager_agent
+from tradingscope.agents.output import (
+    AnalysisResult,
+    AnalystReports,
+    FundamentalsAnalystStructuredOutput,
+    MarketAnalystStructuredOutput,
+    NewsAnalystStructuredOutput,
+    PortfolioStructuredOutput,
+    ResearchManagerStructuredOutput,
+    SocialMediaAnalystStructuredOutput,
+    TraderStructuredOutput,
+)
 from tradingscope.utils.oss_report_uploader import upload_reports
 
 # Analyst imports
@@ -43,7 +55,38 @@ def get_content(result: Msg | Exception) -> str:
     return str(result)
 
 
-async def analyze(ticker: str, trade_date: str | None = None) -> str:
+def get_structured_output(result: Msg | Exception) -> dict | None:
+    """从 AgentScope 响应中提取结构化输出。
+
+    AgentScope ReActAgent 将结构化输出直接存储在 Msg.metadata 中
+    （而非嵌套在 metadata["structured_output"] 下），因此需要检查
+    metadata 是否包含结构化输出的特征字段（direction/action）。
+    """
+    if not isinstance(result, Msg):
+        return None
+    if not result.metadata:
+        return None
+    # AgentScope stores structured output directly in metadata (flat dict)
+    # with keys like "direction", "action", "confidence"
+    if isinstance(result.metadata, dict) and ("direction" in result.metadata or "action" in result.metadata):
+        return result.metadata
+    # Also support nested "structured_output" key for backward compatibility
+    return result.metadata.get("structured_output")
+
+
+@dataclass
+class AnalysisOutput:
+    """Combined output from the analysis workflow.
+
+    Contains both the Markdown report (for human consumption)
+    and the structured AnalysisResult (for downstream systems).
+    """
+
+    report_md: str
+    structured: AnalysisResult
+
+
+async def analyze(ticker: str, trade_date: str | None = None) -> AnalysisOutput:
     """运行并发智能体并执行多轮辩论，返回综合报告。"""
     # 创建AgentContext
     context = AgentContext()
@@ -62,12 +105,12 @@ async def analyze(ticker: str, trade_date: str | None = None) -> str:
         news_analyst = create_news_analyst_agent(context=context)
         social_media_analyst = create_social_media_analyst_agent(context=context)
 
-        # 并发运行分析师代理并获取结果
+        # 并发运行分析师代理并获取结果（带结构化输出）
         analyst_results = await asyncio.gather(
-            market_analyst(None),
-            fundamentals_analyst(None),
-            news_analyst(None),
-            social_media_analyst(None),
+            call_agent_with_retry(market_analyst, None, structured_model=MarketAnalystStructuredOutput),
+            call_agent_with_retry(fundamentals_analyst, None, structured_model=FundamentalsAnalystStructuredOutput),
+            call_agent_with_retry(news_analyst, None, structured_model=NewsAnalystStructuredOutput),
+            call_agent_with_retry(social_media_analyst, None, structured_model=SocialMediaAnalystStructuredOutput),
             return_exceptions=True,
         )
 
@@ -76,6 +119,12 @@ async def analyze(ticker: str, trade_date: str | None = None) -> str:
         fundamentals_report = get_content(analyst_results[1])
         news_report = get_content(analyst_results[2])
         sentiment_report = get_content(analyst_results[3])
+
+        # 提取分析师结构化输出
+        market_structured = get_structured_output(analyst_results[0])
+        fundamentals_structured = get_structured_output(analyst_results[1])
+        news_structured = get_structured_output(analyst_results[2])
+        social_media_structured = get_structured_output(analyst_results[3])
 
         # 更新context中的报告内容
         context.market_report = market_research_report
@@ -117,9 +166,10 @@ async def analyze(ticker: str, trade_date: str | None = None) -> str:
             long_term_memory_mode="static_control",
         )
 
-        # 创建研究辩论协调器
+        # 创建研究辩论协调器（带结构化输出）
         research_orchestrator = create_research_debate_orchestrator(
-            bull_researcher=bull_researcher, bear_researcher=bear_researcher, research_manager=research_manager, max_rounds=2
+            bull_researcher=bull_researcher, bear_researcher=bear_researcher, research_manager=research_manager,
+            max_rounds=2, research_structured_model=ResearchManagerStructuredOutput,
         )
 
         # 运行研究辩论
@@ -130,6 +180,10 @@ async def analyze(ticker: str, trade_date: str | None = None) -> str:
         # Extract manager content
         researcher_investment_plan = get_content(manager_response)
         logger.info("投资决策:\n%s", researcher_investment_plan)
+
+        # 提取结构化输出
+        research_structured = get_structured_output(manager_response)
+        logger.debug("研究经理结构化输出: %s", research_structured)
 
         # 更新context中的投资计划
         context.researcher_investment_plan = researcher_investment_plan
@@ -152,10 +206,14 @@ async def analyze(ticker: str, trade_date: str | None = None) -> str:
             long_term_memory_mode="static_control",
         )
 
-        # 交易员做出交易决策
-        trader_response = await call_agent_with_retry(trader, None)
+        # 交易员做出交易决策（带结构化输出）
+        trader_response = await call_agent_with_retry(trader, None, structured_model=TraderStructuredOutput)
         trader_plan = get_content(trader_response)
         logger.info("交易决策:\n%s", trader_plan)
+
+        # 提取结构化输出
+        trader_structured = get_structured_output(trader_response)
+        logger.debug("交易员结构化输出: %s", trader_structured)
 
         # 更新context中的交易员计划
         context.trader_investment_plan = trader_plan
@@ -184,8 +242,12 @@ async def analyze(ticker: str, trade_date: str | None = None) -> str:
             long_term_memory_mode="static_control",
         )
 
-        # 创建风险辩论协调器
-        risk_orchestrator = create_debate_orchestrator(aggressive_agent, conservative_agent, neutral_agent, portfolio_manager, max_rounds=2)
+        # 创建风险辩论协调器（带结构化输出）
+        risk_orchestrator = create_debate_orchestrator(
+            aggressive_agent, conservative_agent, neutral_agent, portfolio_manager,
+            max_rounds=2,
+            portfolio_structured_model=PortfolioStructuredOutput,
+        )
 
         # 运行风险辩论
         risk_decision = await risk_orchestrator.run_debate(
@@ -195,6 +257,10 @@ async def analyze(ticker: str, trade_date: str | None = None) -> str:
         # Extract manager content
         final_trade_decision = get_content(risk_decision)
         logger.info("最终交易决策:\n%s", final_trade_decision)
+
+        # 提取结构化输出
+        portfolio_structured = get_structured_output(risk_decision)
+        logger.debug("投资组合经理结构化输出: %s", portfolio_structured)
 
         # 更新context中的最终决策
         context.final_trade_decision = final_trade_decision
@@ -211,16 +277,29 @@ async def analyze(ticker: str, trade_date: str | None = None) -> str:
         # 生成完整报告
         full_report = context.generate_full_report_md()
 
+        # 生成结构化输出
+        structured_result = AnalysisResult.from_context(
+            context,
+            trader_structured=trader_structured,
+            portfolio_structured=portfolio_structured,
+            research_structured=research_structured,
+            market_structured=market_structured,
+            fundamentals_structured=fundamentals_structured,
+            news_structured=news_structured,
+            social_media_structured=social_media_structured,
+        )
+
         # Upload full report to OSS
         await upload_reports(
             context.trade_date,
             ticker,
             {
                 "full_report": full_report,
+                "full_report_json": structured_result.to_json(),
             },
         )
 
-        return full_report
+        return AnalysisOutput(report_md=full_report, structured=structured_result)
 
     finally:
         # 确保内存管理器正确关闭

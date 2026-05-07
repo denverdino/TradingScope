@@ -73,8 +73,8 @@ def parse_prediction_from_report(text: str) -> Dict[str, Any]:
 
     # Extract entry price
     entry_patterns = [
-        r"入场价[：:位]\s*\$?(\d+\.?\d*)",
-        r"建议入场[：:价]\s*\$?(\d+\.?\d*)",
+        r"入场价(?:位)?[：:]\s*\$?(\d+\.?\d*)",
+        r"建议入场(?:价)?[：:]\s*\$?(\d+\.?\d*)",
         r"entry[：:\s]+\$?(\d+\.?\d*)",
     ]
     for pattern in entry_patterns:
@@ -85,7 +85,7 @@ def parse_prediction_from_report(text: str) -> Dict[str, Any]:
 
     # Extract target price
     target_patterns = [
-        r"目标价[：:位]\s*\$?(\d+\.?\d*)",
+        r"目标价(?:位)?[：:]\s*\$?(\d+\.?\d*)",
         r"目标[：:\s]+\$?(\d+\.?\d*)",
         r"target[：:\s]+\$?(\d+\.?\d*)",
     ]
@@ -97,7 +97,7 @@ def parse_prediction_from_report(text: str) -> Dict[str, Any]:
 
     # Extract stop loss
     stop_patterns = [
-        r"止损[价位]*[：:\s]+\$?(\d+\.?\d*)",
+        r"止损(?:价位)?[：:]\s*\$?(\d+\.?\d*)",
         r"stop.?loss[：:\s]+\$?(\d+\.?\d*)",
     ]
     for pattern in stop_patterns:

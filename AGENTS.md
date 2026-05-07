@@ -31,4 +31,5 @@ When implementing this project, consider:
 ## Refactoring Guidelines
 
 - Minimize code updates, focus on required changes
+- Run "make lint-fix" after code changes
 

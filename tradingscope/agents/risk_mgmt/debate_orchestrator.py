@@ -22,14 +22,20 @@ class RiskDebateOrchestrator:
         neutral_agent,
         portfolio_manager,
         max_rounds: int,
+        portfolio_structured_model=None,
     ):
         """Initialize the debate orchestrator.
 
         Args:
-            model_config: Configuration for the language model
+            aggressive_agent: Aggressive debator agent
+            conservative_agent: Conservative debator agent
+            neutral_agent: Neutral debator agent
+            portfolio_manager: Portfolio manager agent
             max_rounds: Maximum number of debate rounds
+            portfolio_structured_model: Optional Pydantic BaseModel for portfolio structured output
         """
         self.max_rounds = max_rounds
+        self.portfolio_structured_model = portfolio_structured_model
 
         # Create the debator agents
         self.aggressive_agent = aggressive_agent
@@ -188,7 +194,10 @@ class RiskDebateOrchestrator:
 """,
         )
 
-        final_decision = await call_agent_with_retry(self.portfolio_manager, portfolio_manager_prompt)
+        final_decision = await call_agent_with_retry(
+            self.portfolio_manager, portfolio_manager_prompt,
+            structured_model=self.portfolio_structured_model,
+        )
 
         logger.info("✅ Risk management debate completed")
 
@@ -201,12 +210,17 @@ def create_debate_orchestrator(
     neutral_agent,
     portfolio_manager,
     max_rounds: int = 3,
+    portfolio_structured_model=None,
 ) -> RiskDebateOrchestrator:
     """Create a risk management debate orchestrator.
 
     Args:
-        model: The language model to use
+        aggressive_agent: Aggressive debator agent
+        conservative_agent: Conservative debator agent
+        neutral_agent: Neutral debator agent
+        portfolio_manager: Portfolio manager agent
         max_rounds: Maximum number of debate rounds
+        portfolio_structured_model: Optional Pydantic BaseModel for portfolio structured output
 
     Returns:
         Configured RiskDebateOrchestrator instance
@@ -217,4 +231,5 @@ def create_debate_orchestrator(
         neutral_agent=neutral_agent,
         portfolio_manager=portfolio_manager,
         max_rounds=max_rounds,
+        portfolio_structured_model=portfolio_structured_model,
     )

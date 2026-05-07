@@ -138,6 +138,7 @@ _RETRIABLE_EXCEPTIONS = (
 async def call_agent_with_retry(
     agent,
     prompt,
+    structured_model=None,
     max_retries: int = 3,
     base_delay: float = 2.0,
 ):
@@ -149,6 +150,7 @@ async def call_agent_with_retry(
     Args:
         agent: AgentScope agent to call
         prompt: Message prompt to pass to the agent
+        structured_model: Optional Pydantic BaseModel class for structured output
         max_retries: Maximum number of retry attempts
         base_delay: Base delay in seconds for exponential backoff
 
@@ -161,7 +163,7 @@ async def call_agent_with_retry(
     last_exc = None
     for attempt in range(max_retries + 1):
         try:
-            return await agent(prompt)
+            return await agent(prompt, structured_model=structured_model)
         except _RETRIABLE_EXCEPTIONS as e:
             last_exc = e
             if attempt < max_retries:

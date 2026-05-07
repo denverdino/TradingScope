@@ -189,7 +189,7 @@ class AgentContext:
 
         return "\n".join(summary_parts)
 
-    def extract_prediction_data(self) -> Dict[str, Optional[str]]:
+    def extract_prediction_data(self, source: str | None = None) -> Dict[str, Optional[str]]:
         """Extract structured prediction data from final trade decision.
 
         Parses the final_trade_decision text to extract:
@@ -200,6 +200,10 @@ class AgentContext:
         - target_price: price target
         - stop_loss: stop loss price
         - reasoning: core reasoning (compressed)
+
+        Args:
+            source: Text to parse. Defaults to final_trade_decision,
+                falling back to trader_investment_plan.
 
         Returns:
             Dictionary with extracted prediction fields
@@ -214,7 +218,7 @@ class AgentContext:
             "reasoning": "",
         }
 
-        decision_text = self.final_trade_decision
+        decision_text = source if source is not None else self.final_trade_decision
         if not decision_text:
             decision_text = self.trader_investment_plan
 
@@ -252,8 +256,8 @@ class AgentContext:
 
         # Extract entry price
         entry_patterns = [
-            r"入场价[：:位]\s*\$?(\d+\.?\d*)",
-            r"建议入场[：:价]\s*\$?(\d+\.?\d*)",
+            r"入场价(?:位)?[：:]\s*\$?(\d+\.?\d*)",
+            r"建议入场(?:价)?[：:]\s*\$?(\d+\.?\d*)",
             r"entry[：:\s]+\$?(\d+\.?\d*)",
         ]
         for pattern in entry_patterns:
@@ -264,7 +268,7 @@ class AgentContext:
 
         # Extract target price
         target_patterns = [
-            r"目标价[：:位]\s*\$?(\d+\.?\d*)",
+            r"目标价(?:位)?[：:]\s*\$?(\d+\.?\d*)",
             r"目标[：:\s]+\$?(\d+\.?\d*)",
             r"target[：:\s]+\$?(\d+\.?\d*)",
         ]
@@ -276,7 +280,7 @@ class AgentContext:
 
         # Extract stop loss
         stop_patterns = [
-            r"止损[价位：:]\s*\$?(\d+\.?\d*)",
+            r"止损(?:价位)?[：:]\s*\$?(\d+\.?\d*)",
             r"stop.?loss[：:\s]+\$?(\d+\.?\d*)",
         ]
         for pattern in stop_patterns:
