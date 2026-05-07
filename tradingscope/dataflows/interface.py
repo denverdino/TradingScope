@@ -14,6 +14,7 @@ from .alpha_vantage_common import AlphaVantageRateLimitError
 
 # Configuration and routing logic
 from .config import get_config
+from .dashscope import get_fundamentals_dashscope, get_global_news_dashscope, get_stock_news_dashscope
 from .google import get_google_news
 from .local import (
     get_finnhub_company_insider_sentiment,
@@ -26,7 +27,6 @@ from .local import (
     get_simfin_income_statements,
     get_YFin_data,
 )
-from .openai import get_fundamentals_openai, get_global_news_openai, get_stock_news_openai
 from .perplexity import get_fundamentals_perplexity, get_global_news_perplexity, get_stock_news_perplexity
 from .y_finance import get_balance_sheet as get_yfinance_balance_sheet
 from .y_finance import get_cashflow as get_yfinance_cashflow
@@ -61,7 +61,7 @@ TOOLS_CATEGORIES = {
     },
 }
 
-VENDOR_LIST = ["local", "yfinance", "openai", "google"]
+VENDOR_LIST = ["local", "yfinance", "dashscope", "google"]
 
 # Mapping of methods to their vendor-specific implementations
 VENDOR_METHODS = {
@@ -95,7 +95,7 @@ VENDOR_METHODS = {
     "get_fundamentals": {
         "alpha_vantage": get_alpha_vantage_fundamentals,
         "yfinance": get_yfinance_fundamentals,
-        # "openai": get_fundamentals_openai,
+        # "dashscope": get_fundamentals_dashscope,
         "perplexity": get_fundamentals_perplexity,
     },
     "get_balance_sheet": {
@@ -115,11 +115,11 @@ VENDOR_METHODS = {
         "google": get_google_news,
         "alpha_vantage": get_alpha_vantage_news,
         "perplexity": get_stock_news_perplexity,
-        # "openai": get_stock_news_openai,
+        # "dashscope": get_stock_news_dashscope,
     },
     "get_global_news": {
         "perplexity": get_global_news_perplexity,
-        # "openai": get_global_news_openai,
+        # "dashscope": get_global_news_dashscope,
     },
     "get_insider_sentiment": {"local": get_finnhub_company_insider_sentiment},
     "get_insider_transactions": {
