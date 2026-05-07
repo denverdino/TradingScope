@@ -29,15 +29,16 @@ make test-cov    # Run tests with coverage
 
 To run the fundamentals analyst agent example:
 
-1. Set your OpenAI API key as an environment variable:
+1. Set your API keys as environment variables:
    ```bash
    export DASHSCOPE_API_KEY='your-api-key-here'
-   export OPENAI_API_KEY='your-api-key-here'
-   export OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
    export ALPHA_VANTAGE_API_KEY='your-api-key-here'
-  
+
    # Optional
    export PERPLEXITY_API_KEY='your-api-key-here'
+   ```
+
+   NOTE: This project uses the DashScope SDK for Qwen models as its LLM provider. No OpenAI API key is required.
 
    # Optional: OSS report storage
    export OSS_ACCESS_KEY_ID='your-access-key-id'

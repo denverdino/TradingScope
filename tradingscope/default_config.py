@@ -19,14 +19,14 @@ DEFAULT_CONFIG = {
     "max_recur_limit": 100,
     "data_vendors": {
         "core_stock_apis": "yfinance",  # Options: yfinance, alpha_vantage, local
-        "fundamental_data": "yfinance",  # Options: openai, alpha_vantage, local
-        "news_data": "alpha_vantage",  # Options: perplexity, openai, alpha_vantage, google, local
+        "fundamental_data": "yfinance",  # Options: yfinance, alpha_vantage, local (dashscope: experimental, not yet wired)
+        "news_data": "alpha_vantage",  # Options: perplexity, alpha_vantage, google, local (dashscope: experimental)
         "technical_indicators": "yfinance",
         "market_context": "yfinance",  # Options: yfinance (sector performance, market indices)
     },
     # Tool-level configuration (takes precedence over category-level)
     "tool_vendors": {
         # Example: "get_stock_data": "alpha_vantage",  # Override category default
-        # Example: "get_news": "openai",               # Override category default
+        # Example: "get_news": "dashscope",               # Override category default
     },
 }
