@@ -84,8 +84,8 @@ class AgentContext:
             model_name=DEFAULT_CONFIG["deep_think_llm"],
             api_key=os.environ.get("DASHSCOPE_API_KEY"),
             stream=True,
-            enable_thinking=False,
-            generate_kwargs={"temperature": 0},
+            enable_thinking=True,
+            multimodality=True
         )
 
         # Formatter initialization
