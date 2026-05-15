@@ -49,7 +49,7 @@ def create_conservative_debator_agent(
     agent = ReActAgent(
         name=name,
         sys_prompt=prompt,
-        model=context.model,
+        model=context.non_thinking_model,
         formatter=formatter,
         memory=InMemoryMemory(),
         toolkit=toolkit,

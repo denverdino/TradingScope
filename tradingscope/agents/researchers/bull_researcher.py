@@ -93,7 +93,7 @@ def create_bull_researcher_agent(
     agent = ReActAgent(
         name=name,
         sys_prompt=system_message,
-        model=context.model,
+        model=context.non_thinking_model,
         formatter=formatter,
         toolkit=toolkit,
         memory=InMemoryMemory(),

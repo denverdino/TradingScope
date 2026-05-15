@@ -6,6 +6,7 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+import agentscope
 import markdown
 
 # 导入日志模块
@@ -81,6 +82,11 @@ def main():
     """Main entry point for the TradingScope application."""
     _configure_memory_debug()
     _configure_tool_debug()
+
+    agentscope.init(
+        studio_url=os.getenv("AGENTSCOPE_STUDIO_URL")
+    )
+
 
     # Create argument parser
     parser = argparse.ArgumentParser(description="TradingScope - Multi-Agents trading framework")
