@@ -65,7 +65,7 @@ Repository = "https://github.com/denverdino/tradingscope"
 
 [project.scripts]
 tradingscope = "tradingscope.main:main"
-tradingscope-evaluate = "tradingscope.agents.evaluation.cli:main"
+tradingscope-evaluate = "tradingscope.evaluate:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["tradingscope"]

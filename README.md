@@ -32,9 +32,9 @@ To run the fundamentals analyst agent example:
 1. Set your API keys as environment variables:
    ```bash
    export DASHSCOPE_API_KEY='your-api-key-here'
-   export ALPHA_VANTAGE_API_KEY='your-api-key-here'
 
    # Optional
+   export ALPHA_VANTAGE_API_KEY='your-api-key-here'
    export PERPLEXITY_API_KEY='your-api-key-here'
    ```
 

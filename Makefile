@@ -59,7 +59,7 @@ test-cov:
 # Post-market evaluation
 .PHONY: evaluate
 evaluate:
-	uv run python -m tradingscope.agents.evaluation.cli
+	uv run python -m tradingscope.evaluate
 
 # Clean build artifacts
 .PHONY: clean
