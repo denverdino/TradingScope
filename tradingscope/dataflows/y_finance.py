@@ -849,8 +849,8 @@ def get_options_analysis(ticker: Annotated[str, "ticker symbol of the company"])
 
         # --- Max Pain Calculation ---
         all_strikes = sorted(set(calls_df["strike"].tolist() + puts_df["strike"].tolist()))
-        call_oi_map = dict(zip(calls_df["strike"], calls_df["openInterest"].fillna(0)))
-        put_oi_map = dict(zip(puts_df["strike"], puts_df["openInterest"].fillna(0)))
+        call_oi_map = dict(zip(calls_df["strike"], calls_df["openInterest"].fillna(0), strict=True))
+        put_oi_map = dict(zip(puts_df["strike"], puts_df["openInterest"].fillna(0), strict=True))
 
         max_pain_price = None
         min_total_pain = float("inf")

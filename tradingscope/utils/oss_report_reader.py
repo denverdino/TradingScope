@@ -1,6 +1,8 @@
 """Read agent reports from Alibaba Cloud OSS.
 
-Discovers and fetches reports stored at: tradingscope/<date>/<ticker>/<agent_name>.md
+Discovers and fetches reports stored at:
+  tradingscope/<date>/<ticker>/<agent_name>.md   (markdown)
+  tradingscope/<date>/<ticker>/<agent_name>.json (structured JSON)
 
 Requires OSS SDK configuration:
     OSS_REGION, OSS_BUCKET, OSS_ACCESS_KEY_ID, OSS_ACCESS_KEY_SECRET
@@ -9,8 +11,9 @@ Requires OSS SDK configuration:
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -153,3 +156,48 @@ async def async_fetch_report(date: str, ticker: str, agent: str = "portfolio_man
     """Async wrapper for fetch_report."""
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, fetch_report, date, ticker, agent)
+
+
+def fetch_json_report(date: str, ticker: str, agent: str = "portfolio_manager") -> Optional[Dict[str, Any]]:
+    """Fetch a structured JSON report from OSS.
+
+    Reads tradingscope/<date>/<ticker>/<agent>.json and returns the parsed dict.
+
+    Args:
+        date: Trade date (YYYY-MM-DD)
+        ticker: Stock ticker (e.g. "AAPL")
+        agent: Agent name (default: "portfolio_manager")
+
+    Returns:
+        Parsed JSON dict, or None on failure.
+    """
+    client, bucket_name = _get_client_and_bucket()
+    if client is None:
+        return None
+
+    try:
+        import alibabacloud_oss_v2 as oss
+    except ImportError:
+        return None
+
+    key = f"{_OSS_KEY_PREFIX}/{date}/{ticker}/{agent}.json"
+    try:
+        resp = client.get_object(
+            oss.GetObjectRequest(
+                bucket=bucket_name,
+                key=key,
+            )
+        )
+        content = resp.body.content
+        if isinstance(content, bytes):
+            content = content.decode("utf-8")
+        return json.loads(content)
+    except Exception as e:
+        logger.debug("[OSSReader] Failed to fetch %s: %s", key, e)
+        return None
+
+
+async def async_fetch_json_report(date: str, ticker: str, agent: str = "portfolio_manager") -> Optional[Dict[str, Any]]:
+    """Async wrapper for fetch_json_report."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, fetch_json_report, date, ticker, agent)

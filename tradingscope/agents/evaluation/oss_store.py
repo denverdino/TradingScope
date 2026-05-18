@@ -1,10 +1,7 @@
 """OSS-backed analysis store for the evaluation module.
 
-Discovers pending evaluations by listing portfolio_manager.md reports
+Discovers pending evaluations by listing portfolio_manager.json reports
 on OSS and tracks evaluated state in a local JSON file.
-
-When OSS listing is unavailable (e.g., bucket policy restricts it),
-falls back to probing recent dates directly via GetObject.
 """
 
 from __future__ import annotations
@@ -15,25 +12,37 @@ import os
 from datetime import datetime, timedelta
 from typing import List, Optional, Set
 
+from tradingscope.agents.utils.context import get_latest_us_trading_date
 from tradingscope.default_config import DEFAULT_CONFIG
-from tradingscope.utils.oss_report_reader import (
-    async_fetch_report,
-)
+from tradingscope.utils.oss_report_reader import async_fetch_json_report
 
 from .models import AnalysisRecord
-from .report_parser import build_analysis_record
 
 logger = logging.getLogger(__name__)
 
 
+def _build_record_from_json(ticker: str, trade_date: str, data: dict) -> AnalysisRecord:
+    """Build an AnalysisRecord directly from a portfolio_manager.json dict."""
+    return AnalysisRecord(
+        ticker=ticker,
+        trade_date=trade_date,
+        direction=data.get("direction", "neutral"),
+        action=data.get("action", "hold"),
+        confidence=float(data.get("confidence", 0.5)),
+        entry_price=data.get("entry_price"),
+        target_price=data.get("target_price"),
+        stop_loss=data.get("stop_loss"),
+        reasoning=data.get("reasoning", "")[:100],
+        final_decision_summary=data.get("adopted_reasoning", "")[:500],
+        status="pending",
+    )
+
+
 class OSSAnalysisStore:
-    """Discover and fetch analysis reports from OSS.
+    """Discover and fetch analysis records from OSS JSON reports.
 
-    Uses OSS listing to find portfolio_manager.md reports, and tracks
-    which reports have been evaluated in a local JSON file.
-
-    When listing is not available (permissions, bucket policy), falls
-    back to probing specific dates via GetObject.
+    Reads portfolio_manager.json (structured output) instead of parsing
+    markdown reports. Tracks evaluated state in a local JSON file.
     """
 
     def __init__(self, results_dir: Optional[str] = None) -> None:
@@ -46,47 +55,35 @@ class OSSAnalysisStore:
         ticker: Optional[str] = None,
         date: Optional[str] = None,
     ) -> List[AnalysisRecord]:
-        """List pending reports from OSS that haven't been evaluated yet.
-
-        Strategy:
-        1. If date+ticker are specified, directly fetch that report.
-        2. If only ticker is specified, probe recent dates via GetObject.
-        3. Otherwise, try OSS listing first; if it fails, probe recent dates.
+        """List pending records from OSS that haven't been evaluated yet.
 
         Args:
             before_date: Only consider reports with trade_date < this value.
-            ticker: Filter by stock symbol.
+            ticker: Filter by stock symbol (required).
             date: Filter by specific trade date.
 
         Returns:
-            List of AnalysisRecord objects parsed from OSS reports.
+            List of AnalysisRecord objects built from OSS JSON reports.
         """
         if not before_date:
             before_date = datetime.now().strftime("%Y-%m-%d")
 
-        # Determine which (date, ticker) pairs to check
         if not ticker:
             logger.warning("[OSSStore] --ticker is required for evaluation")
             return []
 
-        if date:
-            candidates = [(date, ticker)]
-        else:
-            # Default: evaluate yesterday's report only
-            candidates = self._generate_date_candidates(before_date, ticker)
+        candidates = [(date, ticker)] if date else self._generate_date_candidates(before_date, ticker)
 
-        # Filter out already-evaluated
         evaluated = self._load_evaluated_set()
         pending = [(d, t) for d, t in candidates if f"{d}/{t}" not in evaluated]
 
-        # Fetch and parse each pending report
         records: List[AnalysisRecord] = []
         for trade_date, tkr in pending:
-            report_text = await async_fetch_report(trade_date, tkr)
-            if not report_text:
+            data = await async_fetch_json_report(trade_date, tkr)
+            if not data:
+                logger.debug("[OSSStore] No JSON report found for %s/%s", tkr, trade_date)
                 continue
-
-            record = build_analysis_record(tkr, trade_date, report_text)
+            record = _build_record_from_json(tkr, trade_date, data)
             records.append(record)
 
         if records:
@@ -116,9 +113,11 @@ class OSSAnalysisStore:
 
     @staticmethod
     def _generate_date_candidates(before_date: str, ticker: str) -> List[tuple]:
-        """Generate (date, ticker) pair for yesterday only."""
-        yesterday = (datetime.strptime(before_date, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
-        return [(yesterday, ticker)]
+        """Generate (date, ticker) pair for the latest US trading day."""
+        latest_trading_date = get_latest_us_trading_date()
+        if latest_trading_date >= before_date:
+            latest_trading_date = (datetime.strptime(before_date, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+        return [(latest_trading_date, ticker)]
 
     def _load_evaluated_set(self) -> Set[str]:
         """Load the set of evaluated report keys from local tracking file."""

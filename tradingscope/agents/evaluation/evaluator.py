@@ -21,8 +21,6 @@ from .oss_store import OSSAnalysisStore
 
 def calculate_lesson_weight(
     lesson_type: str,
-    accuracy_score: float,
-    confidence: float,
     error_weight_multiplier: float = 2.0,
 ) -> float:
     """Calculate memory weight for a lesson.
@@ -31,29 +29,17 @@ def calculate_lesson_weight(
 
     Args:
         lesson_type: success/failure/partial
-        accuracy_score: 0-1 prediction accuracy
-        confidence: 0-1 original prediction confidence
         error_weight_multiplier: multiplier for error cases
 
     Returns:
         Weight between 0 and 1
     """
-    base_weight = 0.5
-
     if lesson_type == "failure":
         base_weight = 0.8 * error_weight_multiplier
     elif lesson_type == "partial":
         base_weight = 0.6 * error_weight_multiplier
     else:  # success
         base_weight = 0.4
-
-    # High confidence + low accuracy = overconfidence penalty
-    if confidence > 0.7 and accuracy_score < 0.4:
-        base_weight *= 1.2
-
-    # Low confidence + high accuracy = missed opportunity
-    if confidence < 0.4 and accuracy_score > 0.7:
-        base_weight *= 1.1
 
     return min(1.0, max(0.1, base_weight))
 
@@ -75,21 +61,17 @@ _LESSON_PROMPT = """你是一位客观的投资分析评测专家。请根据以
 {report_excerpt}
 
 ## 实际市场数据
-- 评估日期: {eval_date}
+- 前一交易日收盘价: {price_prev}
 - 分析日收盘价: {price_t}
-- 最新收盘价: {price_tn}
 - 实际收益率: {actual_return}
 - 方向判断: {direction_result}
-- 目标达成: {target_result}
 - 止损触发: {stop_loss_result}
-- 综合得分: {accuracy_score:.0%}
 
 ## 输出要求
 请用中文输出，严格控制在450字符以内。格式如下：
-[{ticker}|{trade_date}|得分:{accuracy_score:.0%}]
+[{ticker}|{trade_date}]
 根因: (预测错误/偏差的根本原因，1-2句)
-教训: (核心经验教训，1-2句)
-改进: (1-2条具体可执行的改进措施)
+教训: (核心经验教训，2-3句)
 
 不要使用Markdown格式，直接输出纯文本。"""
 
@@ -183,9 +165,9 @@ class AnalysisEvaluator:
             return None
 
         # Step 1: Fetch actual stock data
-        eval_date = datetime.now().strftime("%Y-%m-%d")
-        start_date = (datetime.strptime(record.trade_date, "%Y-%m-%d") - timedelta(days=3)).strftime("%Y-%m-%d")
-        end_date = (datetime.strptime(eval_date, "%Y-%m-%d") + timedelta(days=3)).strftime("%Y-%m-%d")
+        # Fetch enough history to cover both trade_date and its prior trading day
+        start_date = (datetime.strptime(record.trade_date, "%Y-%m-%d") - timedelta(days=7)).strftime("%Y-%m-%d")
+        end_date = (datetime.strptime(record.trade_date, "%Y-%m-%d") + timedelta(days=3)).strftime("%Y-%m-%d")
 
         stock_data = self._get_stock_data(record.ticker, start_date, end_date)
         if not stock_data or "Error" in str(stock_data):
@@ -193,54 +175,48 @@ class AnalysisEvaluator:
             return None
 
         # Step 2: Extract prices
+        # price_t  : closing price on analysis day (trade_date)
+        # price_prev: closing price on the trading day before trade_date
         price_t = _parse_close_price(stock_data, record.trade_date)
-        price_tn = _parse_close_price(stock_data, eval_date)
+        price_prev = _parse_prev_close_price(stock_data, record.trade_date)
 
-        if price_t is None or price_tn is None:
+        logger.info(
+            "[Evaluator] Prices for %s: prev=%s, trade_date=%s at %s",
+            record.ticker,
+            price_prev,
+            price_t,
+            record.trade_date,
+        )
+
+        if price_t is None or price_prev is None:
             logger.warning(
-                "[Evaluator] Could not parse prices for %s (T=%s, TN=%s)",
+                "[Evaluator] Could not parse prices for %s (price_t=%s, price_prev=%s)",
                 record.ticker,
                 price_t,
-                price_tn,
+                price_prev,
             )
             return None
 
-        # Step 3: Calculate metrics
-        actual_return = (price_tn - price_t) / price_t
+        # Step 3: Calculate metrics using trade_date close vs prior day close
+        actual_return = (price_t - price_prev) / price_prev
         direction_correct = (
             (record.direction == "bullish" and actual_return > 0)
             or (record.direction == "bearish" and actual_return < 0)
-            or (record.direction == "neutral" and abs(actual_return) < 0.02)
+            or (record.direction == "neutral" and abs(actual_return) < 0.03)
         )
-
-        target_reached = False
-        if record.target_price:
-            if record.direction == "bullish":
-                target_reached = price_tn >= record.target_price
-            else:
-                target_reached = price_tn <= record.target_price
 
         stop_loss_triggered = False
         if record.stop_loss:
             if record.direction == "bullish":
-                stop_loss_triggered = price_tn <= record.stop_loss
+                stop_loss_triggered = price_t <= record.stop_loss
+            elif record.direction == "bearish":
+                stop_loss_triggered = price_t >= record.stop_loss
             else:
-                stop_loss_triggered = price_tn >= record.stop_loss
-
-        predicted_return = 0.0
-        if record.entry_price and record.target_price:
-            predicted_return = (record.target_price - record.entry_price) / record.entry_price
-
-        accuracy_score = _calculate_accuracy_score(
-            direction_correct=direction_correct,
-            target_reached=target_reached,
-            stop_loss_triggered=stop_loss_triggered,
-            actual_return=actual_return,
-            predicted_return=predicted_return,
-        )
+                # neutral/hold: stop loss triggers when price falls below stop
+                stop_loss_triggered = price_t <= record.stop_loss
 
         # Determine lesson type
-        if direction_correct and target_reached:
+        if direction_correct and not stop_loss_triggered:
             lesson_type = "success"
         elif not direction_correct or stop_loss_triggered:
             lesson_type = "failure"
@@ -250,25 +226,18 @@ class AnalysisEvaluator:
         # Step 4: Generate lesson via LLM
         lesson_content = await self._generate_lesson(
             record=record,
-            eval_date=eval_date,
+            price_prev=price_prev,
             price_t=price_t,
-            price_tn=price_tn,
             actual_return=actual_return,
             direction_correct=direction_correct,
-            target_reached=target_reached,
             stop_loss_triggered=stop_loss_triggered,
-            accuracy_score=accuracy_score,
         )
 
         if not lesson_content:
             return None
 
         # Step 5: Store lesson in memory
-        weight = calculate_lesson_weight(
-            lesson_type=lesson_type,
-            accuracy_score=accuracy_score,
-            confidence=record.confidence,
-        )
+        weight = calculate_lesson_weight(lesson_type=lesson_type)
 
         if self._memory_manager:
             lessons_mem = self._memory_manager.lessons_memory
@@ -295,20 +264,19 @@ class AnalysisEvaluator:
     async def _generate_lesson(
         self,
         record: AnalysisRecord,
-        eval_date: str,
+        price_prev: float,
         price_t: float,
-        price_tn: float,
         actual_return: float,
         direction_correct: bool,
-        target_reached: bool,
         stop_loss_triggered: bool,
-        accuracy_score: float,
     ) -> Optional[str]:
         """Generate a structured lesson using LLM."""
         api_key = os.environ.get("DASHSCOPE_API_KEY", "")
         if not api_key:
-            logger.warning("[Evaluator] No DASHSCOPE_API_KEY, using template lesson")
-            return self._template_lesson(record, accuracy_score, actual_return, direction_correct)
+            logger.warning("[Evaluator] No DASHSCOPE_API_KEY, skipping lesson generation")
+            return None
+
+        logger.info("[Evaluator] record: %s", record)
 
         prompt = _LESSON_PROMPT.format(
             ticker=record.ticker,
@@ -320,56 +288,38 @@ class AnalysisEvaluator:
             target_price=record.target_price or "-",
             stop_loss=record.stop_loss or "-",
             reasoning=record.reasoning or "-",
-            report_excerpt=record.final_decision_summary[:300] or "-",
-            eval_date=eval_date,
+            report_excerpt=record.final_decision_summary or "-",
+            price_prev=f"${price_prev:.2f}",
             price_t=f"${price_t:.2f}",
-            price_tn=f"${price_tn:.2f}",
             actual_return=f"{actual_return:+.2%}",
             direction_result="正确" if direction_correct else "错误",
-            target_result="是" if target_reached else "否",
             stop_loss_result="是" if stop_loss_triggered else "否",
-            accuracy_score=accuracy_score,
         )
 
+        logger.info("[Evaluator] Prompt: %s", prompt)
+
         try:
-            response = await dashscope.AioGeneration.call(
+            response = dashscope.MultiModalConversation.call(
                 api_key=api_key,
-                model=DEFAULT_CONFIG["quick_think_llm"],
+                model=DEFAULT_CONFIG["deep_think_llm"],
                 messages=[{"role": "user", "content": prompt}],
                 result_format="message",
                 max_tokens=1024,
-                temperature=0.1,
             )
             if response.status_code != 200:
-                logger.warning("[Evaluator] DashScope API returned status %s", response.status_code)
-                return self._template_lesson(record, accuracy_score, actual_return, direction_correct)
+                logger.warning(
+                    "[Evaluator] DashScope API returned status %s: code=%s message=%s",
+                    response.status_code,
+                    getattr(response, "code", "-"),
+                    getattr(response, "message", "-"),
+                )
+                return None
 
-            lesson = (response.output.choices[0].message.content or "").strip()
-            # Enforce 500-char limit for Memory API
-            return lesson[:500] if lesson else None
+            lesson = response.output.choices[0].message.content[0]["text"] or ""
+            return lesson if lesson else None
         except Exception as e:
             logger.warning("[Evaluator] LLM call failed: %s", e)
-            return self._template_lesson(record, accuracy_score, actual_return, direction_correct)
-
-    @staticmethod
-    def _template_lesson(
-        record: AnalysisRecord,
-        accuracy_score: float,
-        actual_return: float,
-        direction_correct: bool,
-    ) -> str:
-        """Fallback template-based lesson when LLM is unavailable."""
-        direction_text = "看涨" if record.direction == "bullish" else "看跌"
-        actual_text = "上涨" if actual_return > 0 else "下跌"
-        result_text = "正确" if direction_correct else "错误"
-
-        return (
-            f"[{record.ticker}|{record.trade_date}|得分:{accuracy_score:.0%}]\n"
-            f"根因: 预测{direction_text}，实际{actual_text}{abs(actual_return):.1%}，"
-            f"方向判断{result_text}。{record.reasoning[:60]}\n"
-            f"教训: {'继续保持当前分析框架' if direction_correct else '需要增加对反向信号的关注度'}\n"
-            f"改进: {'保持并优化止损策略' if direction_correct else '加强反向观点分析权重'}"
-        )[:500]
+            return None
 
 
 def _parse_close_price(data_str: str, target_date: str) -> Optional[float]:
@@ -430,34 +380,54 @@ def _parse_close_price(data_str: str, target_date: str) -> Optional[float]:
         return None
 
 
-def _calculate_accuracy_score(
-    direction_correct: bool,
-    target_reached: bool,
-    stop_loss_triggered: bool,
-    actual_return: float,
-    predicted_return: float,
-) -> float:
-    """Calculate composite accuracy score (0-1).
+def _parse_prev_close_price(data_str: str, trade_date: str) -> Optional[float]:
+    """Extract the closing price of the trading day immediately before trade_date.
 
-    Components: direction (40%), target (30%), stop loss (15%), return (15%).
+    Parses all dated rows from the CSV, sorts them, and returns the close price
+    of the row whose date is the largest date strictly before trade_date.
     """
-    score = 0.0
+    try:
+        lines = [line for line in data_str.strip().split("\n") if line.strip() and not line.strip().startswith("#")]
+        if len(lines) < 2:
+            return None
 
-    if direction_correct:
-        score += 0.4
+        header = lines[0].split(",")
+        close_idx = None
+        for i, col in enumerate(header):
+            if "close" in col.strip().lower():
+                close_idx = i
+                break
+        if close_idx is None:
+            return None
 
-    if target_reached:
-        score += 0.3
-    elif direction_correct:
-        score += 0.1
+        target_dt = datetime.strptime(trade_date, "%Y-%m-%d")
+        dated_rows: list = []
 
-    if not stop_loss_triggered:
-        score += 0.15
+        for line in lines[1:]:
+            parts = line.split(",")
+            if len(parts) <= close_idx:
+                continue
+            date_str = parts[0].strip()[:10]
+            for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%m/%d/%Y"):
+                try:
+                    line_dt = datetime.strptime(date_str, fmt)
+                    break
+                except ValueError:
+                    continue
+            else:
+                continue
+            if line_dt < target_dt:
+                try:
+                    dated_rows.append((line_dt, float(parts[close_idx].strip())))
+                except ValueError:
+                    continue
 
-    if predicted_return != 0:
-        return_error = abs(actual_return - predicted_return) / max(abs(predicted_return), 0.01)
-        score += 0.15 * max(0, 1 - return_error)
-    elif actual_return > -0.05:
-        score += 0.1
+        if not dated_rows:
+            return None
 
-    return min(1.0, max(0.0, score))
+        # Return close price of the most recent day before trade_date
+        dated_rows.sort(key=lambda x: x[0])
+        return dated_rows[-1][1]
+    except Exception as e:
+        logger.warning("Error parsing prev close price: %s", e)
+        return None

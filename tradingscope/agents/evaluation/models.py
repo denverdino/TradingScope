@@ -7,28 +7,11 @@ used later by the evaluation process to score against actual market data.
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-import dashscope
-
-from tradingscope.default_config import DEFAULT_CONFIG
-
 logger = logging.getLogger(__name__)
-
-_SUMMARY_PROMPT = (
-    "你是一位专业的股票分析师。请从以下交易决策文本中提炼关键影响因素摘要。\n"
-    "要求：\n"
-    "1. 提炼影响交易决策的关键因素（技术面、基本面、市场情绪、风险因素等）\n"
-    "2. 保留具体数据指标（价格、ATR、支撑位/阻力位、盈亏比等）\n"
-    "3. 总结各方观点的核心分歧\n"
-    "4. 摘要控制在500字符以内\n"
-    "5. 输出纯文本，不使用Markdown格式\n"
-    "6. 直接输出摘要，不要前缀或说明\n\n"
-    "决策文本：\n{content}"
-)
 
 
 @dataclass
@@ -90,77 +73,3 @@ class AnalysisRecord:
             created_at=data.get("created_at", ""),
         )
 
-    @classmethod
-    async def create_from_context(cls, context: Any) -> "AnalysisRecord":
-        """Create an AnalysisRecord from an AgentContext instance.
-
-        Uses LLM to summarize the final decision text, extracting key
-        influencing factors instead of raw truncation.
-
-        Args:
-            context: AgentContext with final trade decision populated
-
-        Returns:
-            New AnalysisRecord instance
-        """
-        pred_data = context.extract_prediction_data()
-
-        decision_text = context.final_trade_decision or context.trader_investment_plan or ""
-        summary = await _summarize_decision(decision_text)
-
-        return cls(
-            ticker=context.company_of_interest,
-            trade_date=context.trade_date,
-            direction=pred_data["direction"],
-            action=pred_data["action"],
-            confidence=pred_data["confidence"],
-            entry_price=pred_data.get("entry_price"),
-            target_price=pred_data.get("target_price"),
-            stop_loss=pred_data.get("stop_loss"),
-            reasoning=pred_data.get("reasoning", ""),
-            final_decision_summary=summary,
-        )
-
-
-async def _summarize_decision(content: str, max_chars: int = 500) -> str:
-    """Summarize decision text via LLM to extract key influencing factors.
-
-    Falls back to truncation if LLM is unavailable.
-    """
-    if not content:
-        return ""
-    if len(content) <= max_chars:
-        return content.strip()
-
-    api_key = os.environ.get("DASHSCOPE_API_KEY", "")
-    if not api_key:
-        logger.warning("[summary] No DASHSCOPE_API_KEY, falling back to truncation")
-        return content[:max_chars].strip()
-
-    model = DEFAULT_CONFIG.get("quick_think_llm", "qwen-plus")
-    prompt = _SUMMARY_PROMPT.format(content=content)
-
-    try:
-        response = await dashscope.AioGeneration.call(
-            api_key=api_key,
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            result_format="message",
-            max_tokens=1024,
-            temperature=0.1,
-        )
-        if response.status_code != 200:
-            logger.warning("[summary] DashScope API returned status %s, falling back to truncation", response.status_code)
-            return content[:max_chars].strip()
-
-        summary = (response.output.choices[0].message.content or "").strip()
-        if not summary:
-            logger.warning("[summary] LLM returned empty, falling back to truncation")
-            return content[:max_chars].strip()
-        if len(summary) > max_chars:
-            summary = summary[:max_chars]
-        logger.debug("[summary] Compressed %d -> %d chars", len(content), len(summary))
-        return summary
-    except Exception as e:
-        logger.warning("[summary] LLM call failed: %s, falling back to truncation", e)
-        return content[:max_chars].strip()

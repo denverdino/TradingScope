@@ -63,7 +63,7 @@ The pipeline runs 7 stages:
 
 Two models configured in `default_config.py`:
 - `deep_think_llm`: `qwen3.6-plus` — used for debate and analysis
-- `quick_think_llm`: `qwen3.5-flash` — used for quick responses
+- `quick_think_llm`: `qwen3.6-flash` — used for quick responses
 
 ### Entry Points
 

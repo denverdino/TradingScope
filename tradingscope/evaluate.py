@@ -83,7 +83,7 @@ def main() -> None:
     parser.add_argument(
         "--date",
         default=None,
-        help="Trade date to evaluate (YYYY-MM-DD). Default: yesterday.",
+        help="Trade date to evaluate (YYYY-MM-DD). Default: previous US trading day.",
     )
     parser.add_argument(
         "--results-dir",

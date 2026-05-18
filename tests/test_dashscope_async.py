@@ -71,154 +71,78 @@ class TestSummarizeForMemory:
         assert result == "Short"
 
 
-class TestSummarizeDecision:
-    """Tests for models.py _summarize_decision async DashScope calls."""
-
-    def test_success(self):
-        from tradingscope.agents.evaluation.models import _summarize_decision
-
-        with patch.object(dashscope.AioGeneration, "call", new=AsyncMock(return_value=_mock_async_response(content="Key factors summary"))) as mock_call:
-            with patch.dict(os.environ, {"DASHSCOPE_API_KEY": "test-key"}, clear=True):
-                long_content = "A" * 600
-                result = asyncio.run(_summarize_decision(long_content))
-                assert "Key factors" in result
-
-    def test_missing_api_key_fallback(self):
-        from tradingscope.agents.evaluation.models import _summarize_decision
-
-        with patch.dict(os.environ, {}, clear=True):
-            long_content = "A" * 600
-            result = asyncio.run(_summarize_decision(long_content))
-            assert len(result) <= 500
-
-    def test_api_error_fallback(self):
-        from tradingscope.agents.evaluation.models import _summarize_decision
-
-        with patch.object(dashscope.AioGeneration, "call", new=AsyncMock(return_value=_mock_async_response(status_code=400))) as mock_call:
-            with patch.dict(os.environ, {"DASHSCOPE_API_KEY": "test-key"}, clear=True):
-                long_content = "A" * 600
-                result = asyncio.run(_summarize_decision(long_content))
-                assert len(result) <= 500
-
-    def test_exception_fallback(self):
-        from tradingscope.agents.evaluation.models import _summarize_decision
-
-        async_mock = AsyncMock(side_effect=Exception("Connection failed"))
-        with patch.object(dashscope.AioGeneration, "call", async_mock):
-            with patch.dict(os.environ, {"DASHSCOPE_API_KEY": "test-key"}, clear=True):
-                long_content = "A" * 600
-                result = asyncio.run(_summarize_decision(long_content))
-                assert len(result) <= 500
-
-    def test_empty_content(self):
-        from tradingscope.agents.evaluation.models import _summarize_decision
-
-        result = asyncio.run(_summarize_decision(""))
-        assert result == ""
-
-    def test_short_content_no_api_call(self):
-        from tradingscope.agents.evaluation.models import _summarize_decision
-
-        result = asyncio.run(_summarize_decision("Short decision"))
-        assert result == "Short decision"
+def _mock_multimodal_response(status_code=200, text="Test content"):
+    """Build a mock DashScope MultiModalConversation response."""
+    mock = MagicMock()
+    mock.status_code = status_code
+    mock.code = ""
+    mock.message = ""
+    choice = MagicMock()
+    choice.message.content = [{"text": text}]
+    mock.output.choices = [choice]
+    return mock
 
 
 class TestEvaluatorGenerateLesson:
-    """Tests for evaluator.py _generate_lesson async DashScope calls."""
+    """Tests for evaluator.py _generate_lesson DashScope calls."""
+
+    def _make_record(self, **kwargs):
+        from tradingscope.agents.evaluation.models import AnalysisRecord
+
+        defaults = {
+            "ticker": "AAPL",
+            "trade_date": "2025-01-01",
+            "direction": "bullish",
+            "action": "buy",
+            "confidence": 0.8,
+            "reasoning": "Strong fundamentals",
+        }
+        return AnalysisRecord(**{**defaults, **kwargs})
+
+    def _call_generate_lesson(self, evaluator, record):
+        return asyncio.run(
+            evaluator._generate_lesson(
+                record=record,
+                price_prev=150.0,
+                price_t=155.0,
+                actual_return=0.033,
+                direction_correct=True,
+                stop_loss_triggered=False,
+            )
+        )
 
     def test_success(self):
         from tradingscope.agents.evaluation.evaluator import AnalysisEvaluator
-        from tradingscope.agents.evaluation.models import AnalysisRecord
 
-        with patch.object(dashscope.AioGeneration, "call", new=AsyncMock(return_value=_mock_async_response(content="[AAPL|2025-01-01|得分:80%] 根因: test 教训: test 改进: test"))) as mock_call:
-            record = AnalysisRecord(
-                ticker="AAPL",
-                trade_date="2025-01-01",
-                direction="bullish",
-                action="buy",
-                confidence=0.8,
-                entry_price=150.0,
-                target_price=160.0,
-                stop_loss=140.0,
-                reasoning="Strong fundamentals",
-            )
+        lesson_text = "[AAPL|2025-01-01|得分:80%] 根因: test 教训: test 改进: test"
+        mock_resp = _mock_multimodal_response(text=lesson_text)
+        with patch.object(dashscope.MultiModalConversation, "call", return_value=mock_resp):
+            record = self._make_record(entry_price=150.0, target_price=160.0, stop_loss=140.0)
             with tempfile.TemporaryDirectory() as tmpdir:
                 evaluator = AnalysisEvaluator(results_dir=tmpdir, dry_run=True)
                 with patch.dict(os.environ, {"DASHSCOPE_API_KEY": "test-key"}, clear=True):
-                    result = asyncio.run(
-                        evaluator._generate_lesson(
-                            record=record,
-                            eval_date="2025-01-02",
-                            price_t=150.0,
-                            price_tn=155.0,
-                            actual_return=0.033,
-                            direction_correct=True,
-                            target_reached=False,
-                            stop_loss_triggered=False,
-                            accuracy_score=0.8,
-                        )
-                    )
+                    result = self._call_generate_lesson(evaluator, record)
                     assert result is not None
                     assert "AAPL" in result
 
     def test_missing_api_key_fallback(self):
         from tradingscope.agents.evaluation.evaluator import AnalysisEvaluator
-        from tradingscope.agents.evaluation.models import AnalysisRecord
 
-        record = AnalysisRecord(
-            ticker="AAPL",
-            trade_date="2025-01-01",
-            direction="bullish",
-            action="buy",
-            confidence=0.8,
-            reasoning="Strong fundamentals",
-        )
+        record = self._make_record()
         with tempfile.TemporaryDirectory() as tmpdir:
             evaluator = AnalysisEvaluator(results_dir=tmpdir, dry_run=True)
             with patch.dict(os.environ, {}, clear=True):
-                result = asyncio.run(
-                    evaluator._generate_lesson(
-                        record=record,
-                        eval_date="2025-01-02",
-                        price_t=150.0,
-                        price_tn=155.0,
-                        actual_return=0.033,
-                        direction_correct=True,
-                        target_reached=False,
-                        stop_loss_triggered=False,
-                        accuracy_score=0.8,
-                    )
-                )
-                assert result is not None
-                assert "AAPL" in result
+                result = self._call_generate_lesson(evaluator, record)
+                assert result is None
 
     def test_api_error_fallback(self):
         from tradingscope.agents.evaluation.evaluator import AnalysisEvaluator
-        from tradingscope.agents.evaluation.models import AnalysisRecord
 
-        with patch.object(dashscope.AioGeneration, "call", new=AsyncMock(return_value=_mock_async_response(status_code=500))) as mock_call:
-            record = AnalysisRecord(
-                ticker="AAPL",
-                trade_date="2025-01-01",
-                direction="bullish",
-                action="buy",
-                confidence=0.8,
-                reasoning="Strong fundamentals",
-            )
+        mock_resp = _mock_multimodal_response(status_code=500)
+        with patch.object(dashscope.MultiModalConversation, "call", return_value=mock_resp):
+            record = self._make_record()
             with tempfile.TemporaryDirectory() as tmpdir:
                 evaluator = AnalysisEvaluator(results_dir=tmpdir, dry_run=True)
                 with patch.dict(os.environ, {"DASHSCOPE_API_KEY": "test-key"}, clear=True):
-                    result = asyncio.run(
-                        evaluator._generate_lesson(
-                            record=record,
-                            eval_date="2025-01-02",
-                            price_t=150.0,
-                            price_tn=155.0,
-                            actual_return=0.033,
-                            direction_correct=True,
-                            target_reached=False,
-                            stop_loss_triggered=False,
-                            accuracy_score=0.8,
-                        )
-                    )
-                    assert result is not None
+                    result = self._call_generate_lesson(evaluator, record)
+                    assert result is None
