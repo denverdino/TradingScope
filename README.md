@@ -11,7 +11,7 @@ It is a learning project migrated from the original projects:
 ## Installation
 
 ```bash
-make install
+uv sync --extra dev
 ```
 
 ## Usage
@@ -51,7 +51,7 @@ NOTE: This project can support DashScope Open API for Qwen model only at this ti
 
 2. Run the example script:
    ```bash
-   python -m tradingscope.main AAPL
+   uv run python -m tradingscope.main AAPL
    ```
 
 3. Run the example script and send the report by email
@@ -60,7 +60,7 @@ NOTE: This project can support DashScope Open API for Qwen model only at this ti
    export EMAIL_PASSWORD=xxxxxxx
    export SMTP_SSL_HOST=smtp.gmail.com
    export SMTP_SSL_PORT=465
-   python -m tradingscope.main AAPL --email_to test@xyz.com
+   uv run python -m tradingscope.main AAPL --email_to test@xyz.com
    ```
 
 See [agents documentation](tradingscope/agents/README.md) for more details.
@@ -68,6 +68,7 @@ See [agents documentation](tradingscope/agents/README.md) for more details.
 ## Development
 
 This project uses:
+- `uv` for package management
 - `ruff` for linting and formatting
 - `pytest` for testing
 
