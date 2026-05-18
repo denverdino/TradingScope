@@ -2,9 +2,6 @@ import argparse
 import asyncio
 import logging
 import os
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 
 import agentscope
 import markdown
@@ -15,6 +12,7 @@ from agentscope import logger
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.workflow import analyze
 from tradingscope.default_config import DEFAULT_CONFIG
+from tradingscope.utils.email_utils import send_html_email
 
 
 def _configure_memory_debug() -> None:
@@ -34,28 +32,6 @@ def _configure_memory_debug() -> None:
         log = logging.getLogger(name)
         log.setLevel(logging.DEBUG)
         log.addHandler(handler)
-
-
-def send_html_email(subject, html_content, recipient_emails, sender_email, sender_password):
-    """Send HTML email via configurable SMTP."""
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = sender_email
-    msg["To"] = ",".join(recipient_emails)
-    part = MIMEText(html_content, "html")
-    msg.attach(part)
-
-    # Get SMTP configuration from environment variables with Gmail defaults
-    smtp_host = os.getenv("SMTP_SSL_HOST", "smtp.gmail.com")
-    smtp_port = int(os.getenv("SMTP_SSL_PORT", "465"))
-
-    try:
-        with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
-            server.login(sender_email, sender_password)
-            server.sendmail(sender_email, recipient_emails, msg.as_string())
-        logger.info("Report email sent successfully!")
-    except Exception as e:
-        logger.error("Failed to send email: %s", e)
 
 
 def _configure_tool_debug() -> None:
@@ -83,15 +59,12 @@ def main():
     _configure_memory_debug()
     _configure_tool_debug()
 
-    agentscope.init(
-        studio_url=os.getenv("AGENTSCOPE_STUDIO_URL")
-    )
-
+    agentscope.init(studio_url=os.getenv("AGENTSCOPE_STUDIO_URL"))
 
     # Create argument parser
     parser = argparse.ArgumentParser(description="TradingScope - Multi-Agents trading framework")
     parser.add_argument("ticker", nargs="?", default="AAPL", help="Stock ticker symbol (e.g., AAPL, BABA)")
-    parser.add_argument("--email_to", help="Email address to send the report to")
+    parser.add_argument("--email-to", help="Email address to send the report to")
     parser.add_argument(
         "--output", choices=["markdown", "json", "both"], default="both", help="Output format: markdown (HTML only), json (JSON only), both (default)"
     )

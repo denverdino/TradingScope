@@ -27,8 +27,12 @@ jobs:
       - name: Run stock analysis
         run: |
           tickers=(MSFT AAPL TSLA AMZN META NVDA GOOGL BABA TSM)
+          
+          ticker_list=$(IFS=,; echo "${tickers[*]}")
+          uv run python -m tradingscope.evaluate --tickers="$ticker_list" --email-to="${{ secrets.EMAIL_TO }}" --dry-run || echo "Evaluate stock analysis failed, continuing..."
+
           for ticker in "${tickers[@]}"; do
-            uv run python -m tradingscope.main "$ticker" --email_to="${{ secrets.EMAIL_TO }}" || echo "Analyze stock $ticker failed, continuing..."
+            uv run python -m tradingscope.main "$ticker" --email-to="${{ secrets.EMAIL_TO }}" || echo "Analyze stock $ticker failed, continuing..."
           done
         env:
           DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}

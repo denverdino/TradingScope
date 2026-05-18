@@ -71,16 +71,19 @@ class TestSummarizeForMemory:
         assert result == "Short"
 
 
-def _mock_multimodal_response(status_code=200, text="Test content"):
-    """Build a mock DashScope MultiModalConversation response."""
-    mock = MagicMock()
-    mock.status_code = status_code
-    mock.code = ""
-    mock.message = ""
-    choice = MagicMock()
-    choice.message.content = [{"text": text}]
-    mock.output.choices = [choice]
-    return mock
+def _mock_streaming_model(text="Test content"):
+    """Build a mock DashScopeChatModel that returns an async generator."""
+
+    async def _mock_call(*args, **kwargs):
+        async def _stream():
+            chunk = MagicMock()
+            chunk.content = [{"type": "text", "text": text}]
+            yield chunk
+
+        return _stream()
+
+    mock_model = AsyncMock(side_effect=_mock_call)
+    return mock_model
 
 
 class TestEvaluatorGenerateLesson:
@@ -115,34 +118,30 @@ class TestEvaluatorGenerateLesson:
         from tradingscope.agents.evaluation.evaluator import AnalysisEvaluator
 
         lesson_text = "[AAPL|2025-01-01|得分:80%] 根因: test 教训: test 改进: test"
-        mock_resp = _mock_multimodal_response(text=lesson_text)
-        with patch.object(dashscope.MultiModalConversation, "call", return_value=mock_resp):
-            record = self._make_record(entry_price=150.0, target_price=160.0, stop_loss=140.0)
-            with tempfile.TemporaryDirectory() as tmpdir:
-                evaluator = AnalysisEvaluator(results_dir=tmpdir, dry_run=True)
-                with patch.dict(os.environ, {"DASHSCOPE_API_KEY": "test-key"}, clear=True):
-                    result = self._call_generate_lesson(evaluator, record)
-                    assert result is not None
-                    assert "AAPL" in result
+        mock_model = _mock_streaming_model(text=lesson_text)
+        record = self._make_record(entry_price=150.0, target_price=160.0, stop_loss=140.0)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            evaluator = AnalysisEvaluator(model=mock_model, results_dir=tmpdir, dry_run=True)
+            result = self._call_generate_lesson(evaluator, record)
+            assert result is not None
+            assert "AAPL" in result
 
-    def test_missing_api_key_fallback(self):
+    def test_exception_fallback(self):
         from tradingscope.agents.evaluation.evaluator import AnalysisEvaluator
 
+        mock_model = AsyncMock(side_effect=Exception("LLM error"))
         record = self._make_record()
         with tempfile.TemporaryDirectory() as tmpdir:
-            evaluator = AnalysisEvaluator(results_dir=tmpdir, dry_run=True)
-            with patch.dict(os.environ, {}, clear=True):
-                result = self._call_generate_lesson(evaluator, record)
-                assert result is None
+            evaluator = AnalysisEvaluator(model=mock_model, results_dir=tmpdir, dry_run=True)
+            result = self._call_generate_lesson(evaluator, record)
+            assert result is None
 
-    def test_api_error_fallback(self):
+    def test_empty_response(self):
         from tradingscope.agents.evaluation.evaluator import AnalysisEvaluator
 
-        mock_resp = _mock_multimodal_response(status_code=500)
-        with patch.object(dashscope.MultiModalConversation, "call", return_value=mock_resp):
-            record = self._make_record()
-            with tempfile.TemporaryDirectory() as tmpdir:
-                evaluator = AnalysisEvaluator(results_dir=tmpdir, dry_run=True)
-                with patch.dict(os.environ, {"DASHSCOPE_API_KEY": "test-key"}, clear=True):
-                    result = self._call_generate_lesson(evaluator, record)
-                    assert result is None
+        mock_model = _mock_streaming_model(text="")
+        record = self._make_record()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            evaluator = AnalysisEvaluator(model=mock_model, results_dir=tmpdir, dry_run=True)
+            result = self._call_generate_lesson(evaluator, record)
+            assert result is None

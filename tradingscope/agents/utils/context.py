@@ -81,20 +81,12 @@ class AgentContext:
 
         # Model initialization
         self.model = DashScopeChatModel(
-            model_name=DEFAULT_CONFIG["deep_think_llm"],
-            api_key=os.environ.get("DASHSCOPE_API_KEY"),
-            stream=True,
-            enable_thinking=True,
-            multimodality=True
+            model_name=DEFAULT_CONFIG["deep_think_llm"], api_key=os.environ.get("DASHSCOPE_API_KEY"), stream=True, enable_thinking=True, multimodality=True
         )
 
         # Non-thinking model for debate agents (faster, no reasoning overhead)
         self.non_thinking_model = DashScopeChatModel(
-            model_name=DEFAULT_CONFIG["deep_think_llm"],
-            api_key=os.environ.get("DASHSCOPE_API_KEY"),
-            stream=True,
-            enable_thinking=False,
-            multimodality=True
+            model_name=DEFAULT_CONFIG["deep_think_llm"], api_key=os.environ.get("DASHSCOPE_API_KEY"), stream=True, enable_thinking=False, multimodality=True
         )
 
         # Formatter initialization

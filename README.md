@@ -60,7 +60,7 @@ NOTE: This project can support DashScope Open API for Qwen model only at this ti
    export EMAIL_PASSWORD=xxxxxxx
    export SMTP_SSL_HOST=smtp.gmail.com
    export SMTP_SSL_PORT=465
-   uv run python -m tradingscope.main AAPL --email_to test@xyz.com
+   uv run python -m tradingscope.main AAPL --email-to test@xyz.com
    ```
 
 See [agents documentation](tradingscope/agents/README.md) for more details.

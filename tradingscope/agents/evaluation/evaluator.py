@@ -6,16 +6,13 @@ generates Lessons Learned for the shared memory namespace.
 
 from __future__ import annotations
 
-import os
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-import dashscope
 from agentscope import logger
+from agentscope.model import DashScopeChatModel
 
-from tradingscope.default_config import DEFAULT_CONFIG
-
-from .models import AnalysisRecord
+from .models import AnalysisRecord, EvaluationResult
 from .oss_store import OSSAnalysisStore
 
 
@@ -70,8 +67,8 @@ _LESSON_PROMPT = """你是一位客观的投资分析评测专家。请根据以
 ## 输出要求
 请用中文输出，严格控制在450字符以内。格式如下：
 [{ticker}|{trade_date}]
-根因: (预测错误/偏差的根本原因，1-2句)
-教训: (核心经验教训，2-3句)
+评估结果: (评估分析结果的准确性，给出简单描述与分析，比如如错误/偏差的根本原因，1-2句)
+经验教训: (核心经验教训，2-3句)
 
 不要使用Markdown格式，直接输出纯文本。"""
 
@@ -86,6 +83,7 @@ class AnalysisEvaluator:
 
     def __init__(
         self,
+        model: DashScopeChatModel,
         memory_manager: Optional[object] = None,
         results_dir: Optional[str] = None,
         dry_run: bool = False,
@@ -93,11 +91,13 @@ class AnalysisEvaluator:
         """Initialize AnalysisEvaluator.
 
         Args:
+            model: DashScopeChatModel instance for LLM calls.
             memory_manager: FinancialMemoryManager for writing lessons.
                             If None, lessons are generated but not stored.
             results_dir: Directory for local tracking files.
             dry_run: If True, skip all side effects (memory writes, record marking).
         """
+        self._model = model
         self._memory_manager = memory_manager
         self._record_store = OSSAnalysisStore(results_dir=results_dir)
         self._dry_run = dry_run
@@ -118,29 +118,29 @@ class AnalysisEvaluator:
 
     async def run_batch_evaluation(
         self,
-        ticker: Optional[str] = None,
+        tickers: Optional[List[str]] = None,
         date: Optional[str] = None,
-    ) -> List[str]:
+    ) -> List[EvaluationResult]:
         """Evaluate all pending analysis records from OSS.
 
         Args:
-            ticker: Filter by stock symbol (optional)
+            tickers: List of stock symbols to evaluate (optional)
             date: Filter by trade date (optional)
 
         Returns:
-            List of generated lesson strings
+            List of EvaluationResult with ticker, evaluation and lesson fields
         """
         today = datetime.now().strftime("%Y-%m-%d")
-        pending = await self._record_store.list_pending(before_date=today, ticker=ticker, date=date)
+        pending = await self._record_store.list_pending(before_date=today, tickers=tickers, date=date)
 
         logger.info("[Evaluator] Found %d pending records", len(pending))
 
-        lessons: List[str] = []
+        results: List[EvaluationResult] = []
         for record in pending:
             try:
-                lesson = await self.evaluate_single(record)
-                if lesson:
-                    lessons.append(lesson)
+                result = await self.evaluate_single(record)
+                if result:
+                    results.append(result)
             except Exception as e:
                 logger.warning(
                     "[Evaluator] Error evaluating %s/%s: %s",
@@ -149,17 +149,17 @@ class AnalysisEvaluator:
                     e,
                 )
 
-        logger.info("[Evaluator] Generated %d lessons", len(lessons))
-        return lessons
+        logger.info("[Evaluator] Generated %d results", len(results))
+        return results
 
-    async def evaluate_single(self, record: AnalysisRecord) -> Optional[str]:
+    async def evaluate_single(self, record: AnalysisRecord) -> Optional[EvaluationResult]:
         """Evaluate a single analysis record.
 
         Args:
             record: AnalysisRecord to evaluate
 
         Returns:
-            Generated lesson string, or None on failure
+            EvaluationResult with ticker, evaluation and lesson fields, or None on failure
         """
         if not self._ensure_data_imports():
             return None
@@ -259,7 +259,8 @@ class AnalysisEvaluator:
         if not self._dry_run:
             self._record_store.mark_evaluated(record.ticker, record.trade_date)
 
-        return lesson_content
+        evaluation, lesson = _parse_evaluation_and_lesson(lesson_content)
+        return EvaluationResult(ticker=record.ticker, evaluation=evaluation, lesson=lesson)
 
     async def _generate_lesson(
         self,
@@ -271,11 +272,6 @@ class AnalysisEvaluator:
         stop_loss_triggered: bool,
     ) -> Optional[str]:
         """Generate a structured lesson using LLM."""
-        api_key = os.environ.get("DASHSCOPE_API_KEY", "")
-        if not api_key:
-            logger.warning("[Evaluator] No DASHSCOPE_API_KEY, skipping lesson generation")
-            return None
-
         logger.info("[Evaluator] record: %s", record)
 
         prompt = _LESSON_PROMPT.format(
@@ -299,24 +295,19 @@ class AnalysisEvaluator:
         logger.info("[Evaluator] Prompt: %s", prompt)
 
         try:
-            response = dashscope.MultiModalConversation.call(
-                api_key=api_key,
-                model=DEFAULT_CONFIG["deep_think_llm"],
+            response = await self._model(
                 messages=[{"role": "user", "content": prompt}],
-                result_format="message",
                 max_tokens=1024,
             )
-            if response.status_code != 200:
-                logger.warning(
-                    "[Evaluator] DashScope API returned status %s: code=%s message=%s",
-                    response.status_code,
-                    getattr(response, "code", "-"),
-                    getattr(response, "message", "-"),
-                )
-                return None
 
-            lesson = response.output.choices[0].message.content[0]["text"] or ""
-            return lesson if lesson else None
+            # Handle streaming response (async generator)
+            text = ""
+            async for chunk in response:
+                for block in chunk.content:
+                    if block.get("type") == "text":
+                        text = block["text"]
+
+            return text.strip() if text.strip() else None
         except Exception as e:
             logger.warning("[Evaluator] LLM call failed: %s", e)
             return None
@@ -431,3 +422,33 @@ def _parse_prev_close_price(data_str: str, trade_date: str) -> Optional[float]:
     except Exception as e:
         logger.warning("Error parsing prev close price: %s", e)
         return None
+
+
+def _parse_evaluation_and_lesson(lesson_content: str) -> tuple[str, str]:
+    """Parse LLM lesson text into (evaluation, lesson) parts.
+
+    Expects format:
+        [TICKER|DATE]
+        评估: ...
+        教训: ...
+
+    Returns a tuple of (evaluation, lesson). Falls back to (lesson_content, "")
+    if the expected format is not found.
+    """
+    import re
+
+    evaluation = ""
+    lesson = ""
+
+    eval_match = re.search(r"评估结果[:：]\s*(.+?)(?=教训[:：]|$)", lesson_content, re.DOTALL)
+    lesson_match = re.search(r"经验教训[:：]\s*(.+)", lesson_content, re.DOTALL)
+
+    if eval_match:
+        evaluation = eval_match.group(1).strip()
+    if lesson_match:
+        lesson = lesson_match.group(1).strip()
+
+    if not evaluation and not lesson:
+        evaluation = lesson_content.strip()
+
+    return evaluation, lesson

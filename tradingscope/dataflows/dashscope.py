@@ -69,9 +69,7 @@ def get_stock_news_dashscope(query: str, start_date: str, end_date: str) -> str:
         )
 
         if response.status_code != 200:
-            raise RuntimeError(
-                f"DashScope API error: status={response.status_code}, code={response.code}, message={response.message}"
-            )
+            raise RuntimeError(f"DashScope API error: status={response.status_code}, code={response.code}, message={response.message}")
 
         content = _extract_dashscope_content(response)
         if not content:
@@ -120,9 +118,7 @@ def get_global_news_dashscope(curr_date: str, look_back_days: int = 7, limit: in
         )
 
         if response.status_code != 200:
-            raise RuntimeError(
-                f"DashScope API error: status={response.status_code}, code={response.code}, message={response.message}"
-            )
+            raise RuntimeError(f"DashScope API error: status={response.status_code}, code={response.code}, message={response.message}")
 
         content = _extract_dashscope_content(response)
         if not content:
@@ -170,9 +166,7 @@ def get_fundamentals_dashscope(ticker: str, curr_date: str) -> str:
         )
 
         if response.status_code != 200:
-            raise RuntimeError(
-                f"DashScope API error: status={response.status_code}, code={response.code}, message={response.message}"
-            )
+            raise RuntimeError(f"DashScope API error: status={response.status_code}, code={response.code}, message={response.message}")
 
         content = _extract_dashscope_content(response)
         if not content:

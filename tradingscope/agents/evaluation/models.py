@@ -15,6 +15,15 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class EvaluationResult:
+    """Structured result of evaluating a single analysis record."""
+
+    ticker: str
+    evaluation: str  # 评估结论（方向是否正确、止损情况等）
+    lesson: str  # 经验教训
+
+
+@dataclass
 class AnalysisRecord:
     """Record of key decision basis from a workflow run.
 
@@ -72,4 +81,3 @@ class AnalysisRecord:
             status=data.get("status", "pending"),
             created_at=data.get("created_at", ""),
         )
-

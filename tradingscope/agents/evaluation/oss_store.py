@@ -52,14 +52,14 @@ class OSSAnalysisStore:
     async def list_pending(
         self,
         before_date: Optional[str] = None,
-        ticker: Optional[str] = None,
+        tickers: Optional[List[str]] = None,
         date: Optional[str] = None,
     ) -> List[AnalysisRecord]:
         """List pending records from OSS that haven't been evaluated yet.
 
         Args:
             before_date: Only consider reports with trade_date < this value.
-            ticker: Filter by stock symbol (required).
+            tickers: List of stock symbols to evaluate (required).
             date: Filter by specific trade date.
 
         Returns:
@@ -68,11 +68,16 @@ class OSSAnalysisStore:
         if not before_date:
             before_date = datetime.now().strftime("%Y-%m-%d")
 
-        if not ticker:
-            logger.warning("[OSSStore] --ticker is required for evaluation")
+        if not tickers:
+            logger.warning("[OSSStore] --tickers is required for evaluation")
             return []
 
-        candidates = [(date, ticker)] if date else self._generate_date_candidates(before_date, ticker)
+        candidates: list[tuple[str, str]] = []
+        for tkr in tickers:
+            if date:
+                candidates.append((date, tkr))
+            else:
+                candidates.extend(self._generate_date_candidates(before_date, tkr))
 
         evaluated = self._load_evaluated_set()
         pending = [(d, t) for d, t in candidates if f"{d}/{t}" not in evaluated]
