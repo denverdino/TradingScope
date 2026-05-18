@@ -1,15 +1,11 @@
 # Makefile for TradingScope
 
-# Variables
-PYTHON := python3
-PIP := pip3
-
 # Default target
 .PHONY: help
 help:
 	@echo "TradingScope Makefile"
 	@echo "Usage:"
-	@echo "  make install     - Install dependencies"
+	@echo "  make install     - Install dependencies with uv"
 	@echo "  make lint        - Run linting with ruff"
 	@echo "  make lint-fix    - Run linting and resolve violations with ruff"
 	@echo "  make format      - Format code with ruff"
@@ -23,47 +19,47 @@ help:
 # Install dependencies
 .PHONY: install
 install:
-	$(PIP) install -e ".[dev]"
+	uv sync --extra dev
 
 # Linting
 .PHONY: lint
 lint:
-	ruff check .
+	uv run ruff check .
 
 # Strict linting (with auto-fix)
 .PHONY: lint-fix
 lint-fix:
-	ruff check . --fix
+	uv run ruff check . --fix
 
 # Import ordering
 .PHONY: imports
 imports:
-	ruff check . --select I --fix
+	uv run ruff check . --select I --fix
 
 # Formatting
 .PHONY: format
 format:
-	ruff format .
+	uv run ruff format .
 
 # Check formatting
 .PHONY: format-check
 format-check:
-	ruff format --check .
+	uv run ruff format --check .
 
 # Testing
 .PHONY: test
 test:
-	pytest
+	uv run pytest
 
 # Testing with coverage
 .PHONY: test-cov
 test-cov:
-	pytest --cov=tradingscope --cov-report=html --cov-report=term
+	uv run pytest --cov=tradingscope --cov-report=html --cov-report=term
 
 # Post-market evaluation
 .PHONY: evaluate
 evaluate:
-	$(PYTHON) -m tradingscope.agents.evaluation.cli
+	uv run python -m tradingscope.agents.evaluation.cli
 
 # Clean build artifacts
 .PHONY: clean
