@@ -79,14 +79,19 @@ class AgentContext:
         self.trade_date = datetime.now().strftime("%Y-%m-%d")
         self.latest_trading_date = get_latest_us_trading_date()
 
+        api_key = os.environ.get("DASHSCOPE_API_KEY")
+        base_url = os.environ.get("DASHSCOPE_BASE_URL")
+
+        logger.info(f"Using Base URL: {base_url}")
+
         # Model initialization
         self.model = DashScopeChatModel(
-            model_name=DEFAULT_CONFIG["deep_think_llm"], api_key=os.environ.get("DASHSCOPE_API_KEY"), stream=True, enable_thinking=True, multimodality=True
+            model_name=DEFAULT_CONFIG["deep_think_llm"], api_key=api_key, base_http_api_url=base_url, stream=True, enable_thinking=True
         )
 
         # Non-thinking model for debate agents (faster, no reasoning overhead)
         self.non_thinking_model = DashScopeChatModel(
-            model_name=DEFAULT_CONFIG["deep_think_llm"], api_key=os.environ.get("DASHSCOPE_API_KEY"), stream=True, enable_thinking=False, multimodality=True
+            model_name=DEFAULT_CONFIG["deep_think_llm"], api_key=api_key, base_http_api_url=base_url, stream=True, enable_thinking=False
         )
 
         # Formatter initialization
