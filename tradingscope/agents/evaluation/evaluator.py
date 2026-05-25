@@ -440,7 +440,7 @@ def _parse_evaluation_and_lesson(lesson_content: str) -> tuple[str, str]:
     evaluation = ""
     lesson = ""
 
-    eval_match = re.search(r"评估结果[:：]\s*(.+?)(?=教训[:：]|$)", lesson_content, re.DOTALL)
+    eval_match = re.search(r"评估结果[:：]\s*(.+?)(?=经验教训[:：]|$)", lesson_content, re.DOTALL)
     lesson_match = re.search(r"经验教训[:：]\s*(.+)", lesson_content, re.DOTALL)
 
     if eval_match:
