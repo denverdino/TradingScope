@@ -55,7 +55,6 @@ class TestPortfolioManagerAgent:
         assert agent is not None
         assert hasattr(agent, "name")
         assert agent.name == self.agent_name
-        assert hasattr(agent, "memory")
 
     def test_portfolio_manager_agent_system_prompt_content(self, mock_context):
         """Test that the portfolio manager agent has the correct system prompt content."""
@@ -69,9 +68,9 @@ class TestPortfolioManagerAgent:
         # Verify the agent was created with proper system prompt
         assert agent is not None
         # Check that key elements are in the system prompt
-        assert "风险管理委员会主席" in agent.sys_prompt
-        assert "买入、卖出或持有" in agent.sys_prompt
-        assert "辩论" in agent.sys_prompt
+        assert "风险管理委员会主席" in agent._system_prompt
+        assert "买入、卖出或持有" in agent._system_prompt
+        assert "辩论" in agent._system_prompt
 
     def test_portfolio_manager_agent_configuration(self, mock_context):
         """Test that the portfolio manager agent has the correct configuration."""
@@ -84,7 +83,4 @@ class TestPortfolioManagerAgent:
 
         # Verify the agent configuration
         assert agent is not None
-        assert hasattr(agent, "max_iters")
-        assert agent.max_iters == 8  # As defined in the implementation
-        assert hasattr(agent, "parallel_tool_calls")
-        assert agent.parallel_tool_calls is False  # As defined in the implementation
+        assert agent.react_config.max_iters == 8

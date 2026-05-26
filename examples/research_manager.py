@@ -1,29 +1,23 @@
 #!/usr/bin/env python3
-"""Example script demonstrating how to use the Research Manager Agent with structured output."""
+"""Example script demonstrating how to use the Research Manager Agent."""
 
 import asyncio
 
-from agentscope.message import Msg
+from agentscope.message import UserMsg
 
 from tradingscope.agents.managers.research_manager import create_research_manager_agent
-from tradingscope.agents.output import ResearchManagerStructuredOutput
+from tradingscope.agents.utils.agent_utils import call_agent_with_retry
 from tradingscope.agents.utils.context import AgentContext
 
 
 async def main():
-    # Create AgentContext with sample data
     context = AgentContext()
     context.company_of_interest = "AAPL"
 
-    # Create the research manager agent
-    agent = create_research_manager_agent(
-        context=context,
-    )
+    agent = create_research_manager_agent(context=context)
 
-    # Example usage with sample data (prompt must be a Msg object)
-    prompt = Msg(
+    prompt = UserMsg(
         name="user",
-        role="user",
         content="""作为投资组合经理和辩论主持人，您的职责是批判性地评估这轮辩论并做出明确决策：支持看跌分析师、看涨分析师，或者仅在基于所提出论点有强有力理由时选择持有。
 
 请基于以下信息做出决策：
@@ -43,30 +37,12 @@ async def main():
 请用中文撰写所有分析内容和建议。""",
     )
 
-    # Run the agent with structured output
-    response = await agent(prompt, structured_model=ResearchManagerStructuredOutput)
+    response = await call_agent_with_retry(agent, prompt)
 
     print("=" * 60)
     print("Investment Decision:")
-    print(response.content)
+    print(response.get_text_content())
     print("=" * 60)
-
-    structured = response.metadata if response.metadata and ("direction" in response.metadata or "action" in response.metadata) else None
-    if structured:
-        print("\nStructured Output:")
-        model = ResearchManagerStructuredOutput.model_validate(structured)
-        print(f"  Direction:         {model.direction}")
-        print(f"  Action:            {model.action}")
-        print(f"  Confidence:        {model.confidence}")
-        print(f"  Entry Price:       {model.entry_price}")
-        print(f"  Target Price:      {model.target_price}")
-        print(f"  Stop Loss:         {model.stop_loss}")
-        print(f"  Bull Viewpoints:   {model.bull_viewpoints}")
-        print(f"  Bear Viewpoints:   {model.bear_viewpoints}")
-        print(f"  Adopted Reasoning: {model.adopted_reasoning}")
-        print(f"  Reasoning:         {model.reasoning}")
-    else:
-        print("\nNo structured output available (agent did not produce structured data).")
 
 
 if __name__ == "__main__":

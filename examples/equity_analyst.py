@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Test script for the Bear Researcher Agent."""
+"""Example script for the Equity Analyst Agent (Qwen Deep Research)."""
 
 import asyncio
 
@@ -9,14 +9,13 @@ from tradingscope.agents.workflow import get_content, get_markdown
 
 
 async def main():
-    # Create AgentContext (trade_date defaults to today)
     context = AgentContext()
     context.company_of_interest = "BABA"
 
     agent = create_equity_analyst_agent(context=context)
     result = await agent.analyze()
 
-    print("📈 Equity Analyst Report:")
+    print("Equity Analyst Report:")
     print(get_markdown(get_content(result), 2))
 
 

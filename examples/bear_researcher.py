@@ -4,11 +4,11 @@
 import asyncio
 
 from tradingscope.agents.researchers.bear_researcher import create_bear_researcher_agent
+from tradingscope.agents.utils.agent_utils import call_agent_with_retry
 from tradingscope.agents.utils.context import AgentContext
 
 
 async def main():
-    # Create AgentContext (trade_date defaults to today)
     context = AgentContext()
     context.company_of_interest = "AAPL"
     context.market_report = "Market report content here"
@@ -16,14 +16,12 @@ async def main():
     context.news_report = "News report content here"
     context.fundamentals_report = "Fundamentals report content here"
 
-    # Create the bear researcher agent
-    agent = create_bear_researcher_agent(
-        context=context,
-    )
+    agent = create_bear_researcher_agent(context=context)
 
     print(f"Bear Researcher Agent created: {agent.name}")
 
-    await agent(None)
+    response = await call_agent_with_retry(agent, None)
+    print(response.get_text_content())
 
 
 if __name__ == "__main__":

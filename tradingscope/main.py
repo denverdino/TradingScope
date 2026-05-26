@@ -1,12 +1,8 @@
 import argparse
 import asyncio
-import logging
 import os
 
-import agentscope
 import markdown
-
-# 导入日志模块
 from agentscope import logger
 
 from tradingscope.agents.utils.context import AgentContext
@@ -15,52 +11,8 @@ from tradingscope.default_config import DEFAULT_CONFIG
 from tradingscope.utils.email_utils import send_html_email
 
 
-def _configure_memory_debug() -> None:
-    """Enable DEBUG logging for memory API when MEMORY_DEBUG env var is set."""
-    if not os.getenv("MEMORY_DEBUG"):
-        return
-
-    handler = logging.StreamHandler()
-    handler.setFormatter(
-        logging.Formatter("%(asctime)s | %(name)s | %(levelname)s | %(message)s"),
-    )
-
-    for name in (
-        "agentscope_runtime.tools.modelstudio_memory",
-        "tradingscope.agents.utils.memory",
-    ):
-        log = logging.getLogger(name)
-        log.setLevel(logging.DEBUG)
-        log.addHandler(handler)
-
-
-def _configure_tool_debug() -> None:
-    """Gate tool-related console output behind the TOOL_DEBUG env var.
-
-    When TOOL_DEBUG is *not* set:
-      - Suppress the ``system: { "type": "tool_result", ... }`` JSON that
-        AgentScope prints for every tool call by replacing
-        ``AgentBase._print_last_block`` with a no-op.
-    When TOOL_DEBUG *is* set:
-      - Keep the original behaviour (the JSON is printed).
-    """
-    if os.getenv("TOOL_DEBUG"):
-        logger.info("TOOL_DEBUG enabled – tool calls will be logged with arguments and results")
-        return  # keep default printing behaviour
-
-    # Suppress AgentScope's tool-result JSON output
-    from agentscope.agent._agent_base import AgentBase  # noqa: E402
-
-    AgentBase._print_last_block = lambda self, block, msg: None
-
-
 def main():
     """Main entry point for the TradingScope application."""
-    _configure_memory_debug()
-    _configure_tool_debug()
-
-    agentscope.init(studio_url=os.getenv("AGENTSCOPE_STUDIO_URL"))
-
     # Create argument parser
     parser = argparse.ArgumentParser(description="TradingScope - Multi-Agents trading framework")
     parser.add_argument("ticker", nargs="?", default="AAPL", help="Stock ticker symbol (e.g., AAPL, BABA)")

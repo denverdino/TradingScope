@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
-
 from agentscope import logger
-from agentscope.agent import ReActAgent
-from agentscope.memory import InMemoryMemory
-from agentscope.tool import Toolkit
+from agentscope.agent import Agent
+from agentscope.agent._config import ReActConfig
 
 # 导入统一日志系统
 from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT
@@ -14,29 +11,20 @@ from tradingscope.agents.utils.context import AgentContext
 # 导入股票工具类
 from tradingscope.agents.utils.stock_utils import StockUtils
 
-if TYPE_CHECKING:
-    from tradingscope.agents.utils.memory import ModelStudioLongTermMemory
-
 
 def create_bull_researcher_agent(
     context: AgentContext,
     name: str = "BullResearcher",
-    long_term_memory: Optional["ModelStudioLongTermMemory"] = None,
-    long_term_memory_mode: str = "static_control",
-) -> ReActAgent:
+) -> Agent:
     """
-    创建用于看涨研究的 ReActAgent
-    - 基于提供的研究报告构建强有力的看涨论证
-    - 输出中文与固定结构
+    创建用于看涨分析的研究员 Agent
 
     Args:
         context: AgentContext实例包含所有必要的上下文信息
         name: 代理名称
-        long_term_memory: 长期记忆实例用于存储和检索历史经验
-        long_term_memory_mode: 长期记忆模式 ("static_control", "agent_control", "both")
 
     Returns:
-        ReActAgent: 配置好的看涨研究员代理
+        Agent: 配置好的看涨研究员代理
     """
     company_of_interest = context.company_of_interest
     trade_date = context.trade_date
@@ -83,24 +71,14 @@ def create_bull_researcher_agent(
 
 {context.generate_analyst_reports_md()}"""
 
-    # 工具注册
-    formatter = context.multi_agent_formatter
-    toolkit = Toolkit()
-
     logger.info("[看涨研究员] 已注册工具集")
 
-    # 创建 ReActAgent with long-term memory
-    agent = ReActAgent(
+    # 创建 Agent
+    agent = Agent(
         name=name,
-        sys_prompt=system_message,
+        system_prompt=system_message,
         model=context.non_thinking_model,
-        formatter=formatter,
-        toolkit=toolkit,
-        memory=InMemoryMemory(),
-        long_term_memory=long_term_memory,
-        long_term_memory_mode=long_term_memory_mode,
-        parallel_tool_calls=True,
-        max_iters=8,
+        react_config=ReActConfig(max_iters=8),
     )
 
     logger.debug("🐂 [DEBUG] ===== 看涨研究员 Agent 创建完成 =====")

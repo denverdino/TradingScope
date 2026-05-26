@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from agentscope import logger
-from agentscope.agent import ReActAgent
-from agentscope.memory import InMemoryMemory
-from agentscope.tool import Toolkit
+from agentscope.agent import Agent
+from agentscope.agent._config import ReActConfig
+from agentscope.tool import FunctionTool, Toolkit
 
 from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT, get_company_name
 from tradingscope.agents.utils.context import AgentContext
@@ -17,7 +17,7 @@ from tradingscope.agents.utils.stock_utils import StockUtils
 def create_social_media_analyst_agent(
     context: AgentContext,
     name: str = "SocialMediaAnalyst",
-) -> ReActAgent:
+) -> Agent:
     """
     创建用于社交媒体与投资者情绪分析的 ReActAgent（DashScopeChatModel）。
     - 优先使用中国社交媒体情绪工具；如受限/无结果，回退到 Reddit 数据。
@@ -41,16 +41,16 @@ def create_social_media_analyst_agent(
     logger.info(f"[社交媒体分析师] 创建Agent - 股票: {ticker}, 公司: {company_name}, 市场: {market_info['market_name']}")
 
     # 工具注册
-    formatter = context.chat_formatter
-    toolkit = Toolkit()
-
-    # 注册社交媒体相关工具（优先中国社媒，备选 Reddit）
-    toolkit.register_tool_function(get_stock_info)
-    toolkit.register_tool_function(get_news)
+    toolkit = Toolkit(
+        tools=[
+            FunctionTool(get_stock_info),
+            FunctionTool(get_news),
+        ]
+    )
 
     current_date = trade_date
 
-    tool_names = ", ".join(toolkit.tools.keys())
+    tool_names = ", ".join(t.name for t in toolkit.tool_groups[0].tools)
 
     system_prompt = f"""
 {COMPLIANCE_PROMPT}
@@ -121,16 +121,13 @@ def create_social_media_analyst_agent(
 ### 数据来源与时效性说明
 """
 
-    # 创建 ReActAgent
-    agent = ReActAgent(
+    # 创建 Agent
+    agent = Agent(
         name=name,
-        sys_prompt=system_prompt,
+        system_prompt=system_prompt,
         model=context.model,
-        formatter=formatter,
         toolkit=toolkit,
-        memory=InMemoryMemory(),
-        parallel_tool_calls=True,
-        max_iters=8,
+        react_config=ReActConfig(max_iters=8),
     )
 
     logger.debug("📊 [DEBUG] ===== 社交媒体分析师 ReActAgent 创建完成 =====")

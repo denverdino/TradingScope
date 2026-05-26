@@ -214,7 +214,7 @@ class TestMarketAnalystWithVolumeAnalysis:
         context.company_of_interest = "AAPL"
 
         agent = create_market_analyst_agent(context=context)
-        tool_names = list(agent.toolkit.tools.keys())
+        tool_names = [t.name for t in agent.toolkit.tool_groups[0].tools]
         assert "get_volume_analysis" in tool_names
 
     @patch.dict(os.environ, {"DASHSCOPE_API_KEY": "test-key"})
@@ -227,6 +227,6 @@ class TestMarketAnalystWithVolumeAnalysis:
         context.company_of_interest = "AAPL"
 
         agent = create_market_analyst_agent(context=context)
-        assert "get_volume_analysis" in agent.sys_prompt
-        assert "成交量" in agent.sys_prompt
-        assert "OBV" in agent.sys_prompt
+        assert "get_volume_analysis" in agent._system_prompt
+        assert "成交量" in agent._system_prompt
+        assert "OBV" in agent._system_prompt

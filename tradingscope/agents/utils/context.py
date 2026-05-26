@@ -5,7 +5,8 @@ from datetime import datetime, timedelta
 from typing import Annotated, Dict, Optional
 
 import yfinance as yf
-from agentscope.formatter import DashScopeChatFormatter, DashScopeMultiAgentFormatter
+from agentscope.credential import DashScopeCredential
+from agentscope.formatter import DashScopeChatFormatter
 from agentscope.model import DashScopeChatModel
 from yfinance.exceptions import YFRateLimitError
 
@@ -80,23 +81,26 @@ class AgentContext:
         self.latest_trading_date = get_latest_us_trading_date()
 
         api_key = os.environ.get("DASHSCOPE_API_KEY")
-        base_url = os.environ.get("DASHSCOPE_BASE_URL")
 
-        logger.info(f"Using Base URL: {base_url}")
+        credential = DashScopeCredential(api_key=api_key)
 
         # Model initialization
         self.model = DashScopeChatModel(
-            model_name=DEFAULT_CONFIG["deep_think_llm"], api_key=api_key, base_http_api_url=base_url, stream=True, enable_thinking=True
+            credential=credential,
+            model=DEFAULT_CONFIG["deep_think_llm"],
+            parameters=DashScopeChatModel.Parameters(thinking_enable=True, parallel_tool_calls=False),
+            stream=True,
+            formatter=DashScopeChatFormatter(),
         )
 
         # Non-thinking model for debate agents (faster, no reasoning overhead)
         self.non_thinking_model = DashScopeChatModel(
-            model_name=DEFAULT_CONFIG["deep_think_llm"], api_key=api_key, base_http_api_url=base_url, stream=True, enable_thinking=False
+            credential=credential,
+            model=DEFAULT_CONFIG["deep_think_llm"],
+            parameters=DashScopeChatModel.Parameters(thinking_enable=False, parallel_tool_calls=False),
+            stream=True,
+            formatter=DashScopeChatFormatter(),
         )
-
-        # Formatter initialization
-        self.chat_formatter = DashScopeChatFormatter()
-        self.multi_agent_formatter = DashScopeMultiAgentFormatter()
 
     def generate_analyst_reports_md(self) -> str:
         """Generate markdown formatted research reports section."""

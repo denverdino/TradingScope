@@ -2,9 +2,9 @@ from __future__ import annotations
 
 # 导入统一日志系统
 from agentscope import logger
-from agentscope.agent import ReActAgent
-from agentscope.memory import InMemoryMemory
-from agentscope.tool import Toolkit
+from agentscope.agent import Agent
+from agentscope.agent._config import ReActConfig
+from agentscope.tool import FunctionTool, Toolkit
 
 from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT, get_company_name
 from tradingscope.agents.utils.context import AgentContext
@@ -19,18 +19,9 @@ from tradingscope.agents.utils.stock_utils import StockUtils
 def create_news_analyst_agent(
     context: AgentContext,
     name: str = "NewsAnalyst",
-) -> ReActAgent:
+) -> Agent:
     """
-    创建用于新闻分析的新闻分析师 ReActAgent（DashScopeChatModel）。
-    - 自动调用统一新闻工具获取新闻数据。
-    - 输出中文与固定结构。
-
-    Args:
-        context: AgentContext实例包含所有必要的上下文信息
-        name: 代理名称
-
-    Returns:
-        ReActAgent: 配置好的新闻分析师 Agent
+    创建用于新闻分析的新闻分析师 Agent
     """
     # Extract values from context
     ticker = context.company_of_interest
@@ -44,20 +35,18 @@ def create_news_analyst_agent(
     logger.info(f"[新闻分析师] 创建Agent - 股票: {ticker}, 公司: {company_name}, 市场: {market_info['market_name']}")
 
     # 工具注册
-    formatter = context.chat_formatter
-
-    # 如果没有传入toolkit，创建新的
-    toolkit = Toolkit()
-
-    # 创建并注册统一新闻工具
-    toolkit.register_tool_function(get_stock_info)
-    toolkit.register_tool_function(get_news)
-    toolkit.register_tool_function(get_global_news)
+    toolkit = Toolkit(
+        tools=[
+            FunctionTool(get_stock_info),
+            FunctionTool(get_news),
+            FunctionTool(get_global_news),
+        ]
+    )
 
     current_date = trade_date
 
     # 获取工具名称
-    tool_names = ", ".join(toolkit.tools.keys())
+    tool_names = ", ".join(t.name for t in toolkit.tool_groups[0].tools)
 
     # 构建完整的系统提示词
     system_prompt = f"""
@@ -157,16 +146,13 @@ def create_news_analyst_agent(
 
 """
 
-    # 创建 ReActAgent
-    agent = ReActAgent(
+    # 创建 Agent
+    agent = Agent(
         name=name,
-        sys_prompt=system_prompt,
+        system_prompt=system_prompt,
         model=context.model,
-        formatter=formatter,
         toolkit=toolkit,
-        memory=InMemoryMemory(),
-        parallel_tool_calls=True,
-        max_iters=8,
+        react_config=ReActConfig(max_iters=8),
     )
 
     logger.debug("📰 [DEBUG] ===== 新闻分析师 Agent 创建完成 =====")

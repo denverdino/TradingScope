@@ -60,8 +60,8 @@ def test_trader_agent_with_china_stock(mock_get_market_info, mock_get_company_na
 
         assert agent is not None
         # Check that currency information is in the system prompt
-        assert "Chinese Yuan" in agent.sys_prompt
-        assert "¥" in agent.sys_prompt
+        assert "Chinese Yuan" in agent._system_prompt
+        assert "¥" in agent._system_prompt
         print("✅ Trader agent with China stock created successfully")
         # Use assertion instead of return
         assert True

@@ -53,23 +53,14 @@ async def _run(
 
     if dry_run:
         logger.info("[DRY RUN] No lessons will be stored and no records will be marked as evaluated")
-        evaluator = AnalysisEvaluator(
-            model=context.non_thinking_model,
-            memory_manager=None,
-            results_dir=results_dir,
-            dry_run=True,
-        )
-        results = await evaluator.run_batch_evaluation(tickers=tickers, date=date)
-    else:
-        from tradingscope.agents.utils.memory_manager import FinancialMemoryManager
 
-        async with FinancialMemoryManager() as memory_manager:
-            evaluator = AnalysisEvaluator(
-                model=context.non_thinking_model,
-                memory_manager=memory_manager,
-                results_dir=results_dir,
-            )
-            results = await evaluator.run_batch_evaluation(tickers=tickers, date=date)
+    evaluator = AnalysisEvaluator(
+        model=context.non_thinking_model,
+        memory_manager=None,
+        results_dir=results_dir,
+        dry_run=dry_run,
+    )
+    results = await evaluator.run_batch_evaluation(tickers=tickers, date=date)
 
     if results:
         logger.info("=== Evaluation Summary ===")

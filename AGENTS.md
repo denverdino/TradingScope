@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-TradingScope is a multi-agent trading analysis system built on [AgentScope](https://github.com/agentscope-ai/agentscope) using DashScope (Qwen models) as the LLM provider.
+TradingScope is a multi-agent trading analysis system built on [AgentScope 2.0](https://github.com/agentscope-ai/agentscope) using DashScope (Qwen models) as the LLM provider.
 
 References:
 
@@ -39,8 +39,8 @@ Skip slow/integration tests: `uv run pytest -m "not slow and not integration"`
 
 The pipeline runs 7 stages:
 
-1. **Analysis** — Four analyst agents (Market, Fundamentals, News, Social Media) run concurrently via `asyncio.gather`. Each uses AgentScope's `ReActAgent` with tool access to dataflows, producing Markdown reports + Pydantic structured outputs.
-2. **Research Debate** — Bull/Bear researchers debate via `ResearchDebateOrchestrator` using `MsgHub` (progressive rounds: statement → rebuttal → convergence).
+1. **Analysis** — Four analyst agents (Market, Fundamentals, News, Social Media) run concurrently via `asyncio.gather`. Each uses AgentScope's `Agent` with `ReActConfig` and tool access to dataflows, producing Markdown reports.
+2. **Research Debate** — Bull/Bear researchers debate via `ResearchDebateOrchestrator` using `agent.observe()` for message broadcasting (progressive rounds: statement → rebuttal → convergence).
 3. **Research Management** — Research Manager synthesizes debate into an investment recommendation.
 4. **Trading Decision** — Trader agent makes buy/sell/hold decision with entry/stop-loss/target prices.
 5. **Risk Debate** — Aggressive/Conservative/Neutral debators debate via `RiskDebateOrchestrator`.
@@ -51,19 +51,19 @@ The pipeline runs 7 stages:
 
 **Vendor routing** (`dataflows/interface.py`): `VENDOR_METHODS` maps abstract method names to multiple vendor implementations. `route_to_vendor()` supports fallback ordering and comma-separated vendor preferences. Configured via `default_config.py` and dynamically via `dataflows/config.py`. Tool-level `tool_vendors` overrides category-level `data_vendors`.
 
-**Shared context** (`agents/utils/context.py`): `AgentContext` holds all shared state (ticker, trade_date, reports, models, formatters). Each agent factory receives context and builds its prompt from it.
+**Shared context** (`agents/utils/context.py`): `AgentContext` holds all shared state (ticker, trade_date, reports, models). Each agent factory receives context and builds its prompt from it.
 
-**Structured output** (`agents/output.py`): Pydantic models define schemas for each agent stage, passed to `ReActAgent` via `structured_model`. A regex fallback in `AgentContext.extract_prediction_data()` handles cases where structured output fails.
+**Structured output** (`agents/output.py`): Pydantic models define schemas for each agent stage. A regex fallback in `AgentContext.extract_prediction_data()` extracts structured data from agent text responses.
 
-**Tool layer** (`agents/utils/core_stock_tools.py`, etc.): Tool functions wrap `route_to_vendor()` calls, decorated with `@agentscope_tool` for AgentScope Toolkit registration.
-
-**Long-term memory** (`agents/utils/memory.py`, `memory_manager.py`): `FinancialMemoryManager` manages a "lessons_learned" namespace via Alibaba Cloud Model Studio Memory API. Decision agents receive `ReadOnlyLongTermMemory`; evaluation writes scored lessons.
+**Tool layer** (`agents/utils/core_stock_tools.py`, etc.): Tool functions wrap `route_to_vendor()` calls, decorated with `@agentscope_tool` which returns `ToolChunk` objects for AgentScope 2.0 Toolkit registration.
 
 ### LLM Configuration
 
 Two models configured in `default_config.py`:
-- `deep_think_llm`: `qwen3.6-plus` — used for debate and analysis
+- `deep_think_llm`: `qwen3.6-plus` — used for debate and analysis (with thinking mode enabled)
 - `quick_think_llm`: `qwen3.6-flash` — used for quick responses
+
+Models are initialized via `DashScopeChatModel` with `DashScopeCredential` in `AgentContext`. A `non_thinking_model` variant (thinking disabled) is available for debate agents where reasoning overhead is unnecessary.
 
 ### Entry Points
 

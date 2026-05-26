@@ -58,7 +58,6 @@ class TestTraderAgent:
         # Verify the agent was created
         assert agent is not None
         assert hasattr(agent, "name")
-        assert hasattr(agent, "memory")
 
     @patch("tradingscope.agents.utils.agent_utils.get_company_name")
     @patch("tradingscope.agents.utils.stock_utils.StockUtils.get_market_info")
@@ -95,8 +94,8 @@ class TestTraderAgent:
         # Verify the agent was created with proper system prompt
         assert agent is not None
         # Check that currency information is in the system prompt
-        assert "US Dollar" in agent.sys_prompt
-        assert "$" in agent.sys_prompt
+        assert "US Dollar" in agent._system_prompt
+        assert "$" in agent._system_prompt
 
     def test_trader_agent_has_user_message_in_memory(self, mock_context):
         """Test that the trader agent has the user message pre-loaded in memory."""

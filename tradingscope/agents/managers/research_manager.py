@@ -1,20 +1,15 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import TYPE_CHECKING, Optional
 
 from agentscope import logger
-from agentscope.agent import ReActAgent
-from agentscope.memory import InMemoryMemory
-from agentscope.tool import Toolkit
+from agentscope.agent import Agent
+from agentscope.agent._config import ReActConfig
 from pydantic import BaseModel, Field
 
 # Import unified logging system
 from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT
 from tradingscope.agents.utils.context import AgentContext
-
-if TYPE_CHECKING:
-    from tradingscope.agents.utils.memory import ModelStudioLongTermMemory
 
 
 class RecommendationEnum(str, Enum):
@@ -42,19 +37,15 @@ class InvestmentDecision(BaseModel):
 def create_research_manager_agent(
     context: AgentContext,
     name: str = "ResearchManager",
-    long_term_memory: Optional["ModelStudioLongTermMemory"] = None,
-    long_term_memory_mode: str = "static_control",
-) -> ReActAgent:
-    """创建支持结构化输出的投资决策经理 ReActAgent。
+) -> Agent:
+    """创建支持结构化输出的投资决策经理 Agent。
 
     Args:
         context: AgentContext实例包含所有必要的上下文信息
         name: 代理名称
-        long_term_memory: 长期记忆实例用于存储和检索历史经验
-        long_term_memory_mode: 长期记忆模式 ("static_control", "agent_control", "both")
 
     Returns:
-        ReActAgent: 配置好的投资决策经理代理
+        Agent: 配置好的投资决策经理代理
     """
     company_of_interest = context.company_of_interest
     trade_date = context.trade_date
@@ -122,22 +113,12 @@ def create_research_manager_agent(
 
 {context.generate_analyst_reports_md()}"""
 
-    # 工具注册（如果需要）
-    formatter = context.multi_agent_formatter
-    toolkit = Toolkit()
-
-    # 创建 ReActAgent with long-term memory
-    agent = ReActAgent(
+    # 创建 Agent
+    agent = Agent(
         name=name,
-        sys_prompt=system_message,
+        system_prompt=system_message,
         model=context.model,
-        formatter=formatter,
-        toolkit=toolkit,
-        memory=InMemoryMemory(),
-        long_term_memory=long_term_memory,
-        long_term_memory_mode=long_term_memory_mode,
-        parallel_tool_calls=True,
-        max_iters=8,
+        react_config=ReActConfig(max_iters=8),
     )
 
     logger.debug("📊 [DEBUG] ===== 结构化投资决策经理 Agent 创建完成 =====")

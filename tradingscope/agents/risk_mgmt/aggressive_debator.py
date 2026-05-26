@@ -5,8 +5,8 @@ from __future__ import annotations
 from agentscope import logger
 
 # AgentScope imports
-from agentscope.agent import ReActAgent
-from agentscope.memory import InMemoryMemory
+from agentscope.agent import Agent
+from agentscope.agent._config import ReActConfig
 from agentscope.tool import Toolkit
 
 # Local imports
@@ -17,7 +17,7 @@ from tradingscope.agents.utils.context import AgentContext
 def create_aggressive_debator_agent(
     context: AgentContext,
     name: str = "AggressiveRiskDebator",
-) -> ReActAgent:
+) -> Agent:
     """Create an AgentScope ReAct agent for the aggressive risk debator.
 
     Args:
@@ -44,19 +44,15 @@ def create_aggressive_debator_agent(
 
 {context.generate_risk_evaluation_context_md()}"""
 
-    formatter = context.multi_agent_formatter
     toolkit = Toolkit()
 
     # Create the agent
-    agent = ReActAgent(
+    agent = Agent(
         name=name,
-        sys_prompt=prompt,
+        system_prompt=prompt,
         model=context.non_thinking_model,
-        formatter=formatter,
-        memory=InMemoryMemory(),
         toolkit=toolkit,
-        parallel_tool_calls=False,
-        max_iters=5,
+        react_config=ReActConfig(max_iters=5),
     )
 
     return agent

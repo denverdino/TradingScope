@@ -1,42 +1,32 @@
-"""Portfolio Manager Agent for TradingScope using AgentScope ReAct framework."""
+"""Portfolio Manager Agent for TradingScope using AgentScope framework."""
 
 from __future__ import annotations
-
-from typing import TYPE_CHECKING, Optional
 
 from agentscope import logger
 
 # AgentScope imports
-from agentscope.agent import ReActAgent
-from agentscope.memory import InMemoryMemory
-from agentscope.tool import Toolkit
+from agentscope.agent import Agent
+from agentscope.agent._config import ReActConfig
+from agentscope.tool import FunctionTool, Toolkit
 
 # Local imports
 from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.tool_response_helper import code_interpreter
 
-if TYPE_CHECKING:
-    from tradingscope.agents.utils.memory import ModelStudioLongTermMemory
-
 
 def create_portfolio_manager_agent(
     context: AgentContext,
     name: str = "PortfolioManager",
-    long_term_memory: Optional["ModelStudioLongTermMemory"] = None,
-    long_term_memory_mode: str = "static_control",
-) -> ReActAgent:
+) -> Agent:
     """Create Portfolio Manager Agent that evaluates risk analysis debates and makes final decisions.
 
     Args:
-        model: AgentScope model instance
         context: AgentContext instance containing all necessary context information
         name: Agent name
-        long_term_memory: 长期记忆实例用于存储和检索历史经验
-        long_term_memory_mode: 长期记忆模式 ("static_control", "agent_control", "both")
 
     Returns:
-        ReActAgent: Configured portfolio manager agent
+        Agent: Configured portfolio manager agent
     """
     company_of_interest = context.company_of_interest
     trade_date = context.trade_date
@@ -96,22 +86,15 @@ def create_portfolio_manager_agent(
 
 {context.generate_risk_evaluation_context_md()}"""
 
-    formatter = context.multi_agent_formatter
-    toolkit = Toolkit()
-    toolkit.register_tool_function(code_interpreter)
+    toolkit = Toolkit(tools=[FunctionTool(code_interpreter)])
 
-    # 创建ReActAgent with long-term memory
-    agent = ReActAgent(
+    # 创建 Agent
+    agent = Agent(
         name=name,
-        sys_prompt=system_message,
+        system_prompt=system_message,
         model=context.model,
-        formatter=formatter,
-        memory=InMemoryMemory(),
-        long_term_memory=long_term_memory,
-        long_term_memory_mode=long_term_memory_mode,
         toolkit=toolkit,
-        parallel_tool_calls=False,
-        max_iters=8,
+        react_config=ReActConfig(max_iters=8),
     )
 
     logger.debug("📊 [DEBUG] ===== 投资组合经理 Agent 创建完成 =====")

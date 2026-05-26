@@ -5,6 +5,7 @@ import asyncio
 
 import httpx
 from agentscope import logger
+from agentscope.permission import PermissionMode
 
 COMPLIANCE_PROMPT = "你必须严格遵守内容安全与合规要求，不得生成任何涉黄、涉暴、涉政、违法、仇恨、歧视等内容。"
 
@@ -138,7 +139,6 @@ _RETRIABLE_EXCEPTIONS = (
 async def call_agent_with_retry(
     agent,
     prompt,
-    structured_model=None,
     max_retries: int = 3,
     base_delay: float = 2.0,
 ):
@@ -148,22 +148,25 @@ async def call_agent_with_retry(
     that commonly occur during streaming LLM responses.
 
     Args:
-        agent: AgentScope agent to call
-        prompt: Message prompt to pass to the agent
-        structured_model: Optional Pydantic BaseModel class for structured output
+        agent: AgentScope Agent to call
+        prompt: Message prompt to pass to the agent (or None)
         max_retries: Maximum number of retry attempts
         base_delay: Base delay in seconds for exponential backoff
 
     Returns:
-        Agent response message
+        Agent response Msg
 
     Raises:
         The last exception if all retries are exhausted
     """
+    # Auto-allow all tool calls (no user confirmation needed in batch mode)
+    if hasattr(agent, "state") and hasattr(agent.state, "permission_context"):
+        agent.state.permission_context.mode = PermissionMode.BYPASS
+
     last_exc = None
     for attempt in range(max_retries + 1):
         try:
-            return await agent(prompt, structured_model=structured_model)
+            return await agent.reply(prompt)
         except _RETRIABLE_EXCEPTIONS as e:
             last_exc = e
             if attempt < max_retries:

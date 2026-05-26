@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from agentscope import logger
-from agentscope.agent import ReActAgent
-from agentscope.memory import InMemoryMemory
-from agentscope.tool import Toolkit
+from agentscope.agent import Agent
+from agentscope.agent._config import ReActConfig
+from agentscope.tool import FunctionTool, Toolkit
 
 from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT, get_company_name
 from tradingscope.agents.utils.context import AgentContext
@@ -22,15 +20,9 @@ from tradingscope.agents.utils.tool_response_helper import code_interpreter
 def create_fundamentals_analyst_agent(
     context: AgentContext,
     name: str = "FundamentalsAnalyst",
-) -> ReActAgent:
-    """创建 AgentScope 版本的基本面分析师。
-
-    参数：
-        context: AgentContext实例包含所有必要的上下文信息
-        name: Agent 名称（默认"基本面分析师"）。
-
-    返回：
-        一个配置好的 ReActAgent，可直接以 `await agent(Msg(...))` 运行。
+) -> Agent:
+    """
+    创建用于基本面分析的 Agent
     """
     # Extract values from context
     ticker = context.company_of_interest
@@ -52,15 +44,17 @@ def create_fundamentals_analyst_agent(
     currency_symbol = market_info["currency_symbol"]
     market_name = market_info["market_name"]
 
-    formatter = context.chat_formatter
-    toolkit = Toolkit()
-    toolkit.register_tool_function(get_fundamentals)
-    toolkit.register_tool_function(get_balance_sheet)
-    toolkit.register_tool_function(get_cashflow)
-    toolkit.register_tool_function(get_income_statement)
-    toolkit.register_tool_function(code_interpreter)
+    toolkit = Toolkit(
+        tools=[
+            FunctionTool(get_fundamentals),
+            FunctionTool(get_balance_sheet),
+            FunctionTool(get_cashflow),
+            FunctionTool(get_income_statement),
+            FunctionTool(code_interpreter),
+        ]
+    )
 
-    tool_names = ", ".join(toolkit.tools.keys())
+    tool_names = ", ".join(t.name for t in toolkit.tool_groups[0].tools)
 
     # 面向短期交易的基本面分析提示词
     system_prompt = f"""{COMPLIANCE_PROMPT}
@@ -160,19 +154,13 @@ def create_fundamentals_analyst_agent(
 现在**立即**根据上述规范完成一次面向短期交易的基本面分析。
 """
 
-    # ===== 创建 ReActAgent =====
-    agent = ReActAgent(
+    # ===== 创建 Agent =====
+    agent = Agent(
         name=name,
-        sys_prompt=system_prompt,
+        system_prompt=system_prompt,
         model=context.model,
-        formatter=formatter,
-        memory=InMemoryMemory(),
         toolkit=toolkit,
-        # 启用并行工具调用 & 关闭 Meta Tool（保持可控）
-        parallel_tool_calls=True,
-        enable_meta_tool=False,
-        # 可根据需要限制迭代步数，避免啰嗦
-        max_iters=6,
+        react_config=ReActConfig(max_iters=6),
     )
 
     logger.debug("📊 [DEBUG] ===== 基本面分析师 Agent 创建完成 =====")

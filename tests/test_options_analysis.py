@@ -204,7 +204,7 @@ class TestMarketAnalystWithOptions:
         context.company_of_interest = "AAPL"
 
         agent = create_market_analyst_agent(context=context)
-        tool_names = list(agent.toolkit.tools.keys())
+        tool_names = [t.name for t in agent.toolkit.tool_groups[0].tools]
         assert "get_options_analysis" in tool_names
 
     @patch.dict(os.environ, {"DASHSCOPE_API_KEY": "test-key"})
@@ -217,6 +217,6 @@ class TestMarketAnalystWithOptions:
         context.company_of_interest = "AAPL"
 
         agent = create_market_analyst_agent(context=context)
-        assert "get_options_analysis" in agent.sys_prompt
-        assert "期权" in agent.sys_prompt
-        assert "Put/Call Ratio" in agent.sys_prompt
+        assert "get_options_analysis" in agent._system_prompt
+        assert "期权" in agent._system_prompt
+        assert "Put/Call Ratio" in agent._system_prompt

@@ -1,40 +1,31 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
-
 # 导入统一日志系统
 from agentscope import logger
-from agentscope.agent import ReActAgent
-from agentscope.memory import InMemoryMemory
-from agentscope.tool import Toolkit
+from agentscope.agent import Agent
+from agentscope.agent._config import ReActConfig
+from agentscope.tool import FunctionTool, Toolkit
 
 from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT, get_company_name
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.stock_utils import StockUtils
 from tradingscope.agents.utils.tool_response_helper import code_interpreter
 
-if TYPE_CHECKING:
-    from tradingscope.agents.utils.memory import ModelStudioLongTermMemory
-
 
 def create_trader_agent(
     context: AgentContext,
     name: str = "Trader",
-    long_term_memory: Optional["ModelStudioLongTermMemory"] = None,
-    long_term_memory_mode: str = "static_control",
-) -> ReActAgent:
+) -> Agent:
     """
-    创建使用AgentScope ReActAgent的交易员代理。
+    创建使用AgentScope Agent的交易员代理。
 
     参数:
         model: AgentScope模型实例
         context: AgentContext实例包含所有必要的上下文信息
         name: 代理名称
-        long_term_memory: 长期记忆实例用于存储和检索历史经验
-        long_term_memory_mode: 长期记忆模式 ("static_control", "agent_control", "both")
 
     返回:
-        配置好的ReActAgent实例
+        配置好的Agent实例
     """
     company_of_interest = context.company_of_interest
     trade_date = context.trade_date
@@ -279,23 +270,15 @@ def create_trader_agent(
 
 {context.generate_trader_context_md()}"""
 
-    formatter = context.chat_formatter
-    toolkit = Toolkit()
-    toolkit.register_tool_function(code_interpreter)
+    toolkit = Toolkit(tools=[FunctionTool(code_interpreter)])
 
-    # 创建ReActAgent with long-term memory
-    agent = ReActAgent(
+    # 创建Agent with ReActConfig
+    agent = Agent(
         name=name,
-        sys_prompt=system_prompt,
+        system_prompt=system_prompt,
         model=context.model,
-        formatter=formatter,
-        memory=InMemoryMemory(),
-        long_term_memory=long_term_memory,
-        long_term_memory_mode=long_term_memory_mode,
         toolkit=toolkit,
-        parallel_tool_calls=False,  # 交易员不需要并行工具调用
-        enable_meta_tool=False,  # 禁用元工具以保持可控
-        max_iters=6,  # 限制迭代次数
+        react_config=ReActConfig(max_iters=6),
     )
 
     logger.debug(f"💰 [DEBUG] 准备调用LLM，系统提示包含货币: {currency}")

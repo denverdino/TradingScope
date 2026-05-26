@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-# Local imports
 from agentscope import logger
-
-# AgentScope imports
-from agentscope.message import Msg
-from agentscope.pipeline import MsgHub
+from agentscope.message import UserMsg
 
 from tradingscope.agents.utils.agent_utils import call_agent_with_retry
 
@@ -22,7 +18,6 @@ class RiskDebateOrchestrator:
         neutral_agent,
         portfolio_manager,
         max_rounds: int,
-        portfolio_structured_model=None,
     ):
         """Initialize the debate orchestrator.
 
@@ -32,10 +27,8 @@ class RiskDebateOrchestrator:
             neutral_agent: Neutral debator agent
             portfolio_manager: Portfolio manager agent
             max_rounds: Maximum number of debate rounds
-            portfolio_structured_model: Optional Pydantic BaseModel for portfolio structured output
         """
         self.max_rounds = max_rounds
-        self.portfolio_structured_model = portfolio_structured_model
 
         # Create the debator agents
         self.aggressive_agent = aggressive_agent
@@ -47,7 +40,7 @@ class RiskDebateOrchestrator:
 
         logger.info("✅ Risk Debate Orchestrator initialized with 3 debators and 1 portfolio manager")
 
-    def _get_round_prompts(self, round_num: int) -> tuple[Msg, Msg, Msg]:
+    def _get_round_prompts(self, round_num: int) -> tuple[UserMsg, UserMsg, UserMsg]:
         """根据辩论轮次返回不同阶段的提示词。
 
         第1轮：充分陈述——完整表达初始观点，不急于反驳
@@ -136,47 +129,55 @@ class RiskDebateOrchestrator:
                 "目标是减少确认偏见，展示批判性思维，找到最优风险收益平衡点。"
             )
 
-        aggressive_prompt = Msg(name="DebateOrchestrator", role="user", content=aggressive_content)
-        conservative_prompt = Msg(name="DebateOrchestrator", role="user", content=conservative_content)
-        neutral_prompt = Msg(name="DebateOrchestrator", role="user", content=neutral_content)
+        aggressive_prompt = UserMsg(name="DebateOrchestrator", content=aggressive_content)
+        conservative_prompt = UserMsg(name="DebateOrchestrator", content=conservative_content)
+        neutral_prompt = UserMsg(name="DebateOrchestrator", content=neutral_content)
         return aggressive_prompt, conservative_prompt, neutral_prompt
 
     async def run_debate(
         self,
         company_name: str,
-    ) -> Msg:
+    ):
         """Run the complete multi-agent debate and return the final decision.
 
         Args:
             company_name: Name of the company being analyzed
 
         Returns:
-            Final decision from the portfolio manager
+            Final decision Msg from the portfolio manager
         """
         logger.info(f"🚀 Starting risk management debate for {company_name}")
 
-        # Use MsgHub for message broadcasting between debators
-        async with MsgHub(participants=[self.aggressive_agent, self.conservative_agent, self.neutral_agent, self.portfolio_manager]):
-            # Run debate rounds
-            for round_num in range(1, self.max_rounds + 1):
-                logger.info(f"🔄 Starting risk management debate round {round_num}")
+        for round_num in range(1, self.max_rounds + 1):
+            logger.info(f"🔄 Starting risk management debate round {round_num}")
 
-                # 根据轮次获取不同阶段的提示词
-                aggressive_prompt, conservative_prompt, neutral_prompt = self._get_round_prompts(round_num)
+            aggressive_prompt, conservative_prompt, neutral_prompt = self._get_round_prompts(round_num)
 
-                # Run all debators concurrently within the MsgHub context
-                await call_agent_with_retry(self.aggressive_agent, aggressive_prompt)
-                await call_agent_with_retry(self.conservative_agent, conservative_prompt)
-                await call_agent_with_retry(self.neutral_agent, neutral_prompt)
+            # Aggressive debator speaks
+            agg_response = await call_agent_with_retry(self.aggressive_agent, aggressive_prompt)
+            await self.conservative_agent.observe(agg_response)
+            await self.neutral_agent.observe(agg_response)
+            await self.portfolio_manager.observe(agg_response)
 
-                logger.info(f"📝 Risk management debate round {round_num} completed")
+            # Conservative debator speaks
+            con_response = await call_agent_with_retry(self.conservative_agent, conservative_prompt)
+            await self.aggressive_agent.observe(con_response)
+            await self.neutral_agent.observe(con_response)
+            await self.portfolio_manager.observe(con_response)
+
+            # Neutral debator speaks
+            neu_response = await call_agent_with_retry(self.neutral_agent, neutral_prompt)
+            await self.aggressive_agent.observe(neu_response)
+            await self.conservative_agent.observe(neu_response)
+            await self.portfolio_manager.observe(neu_response)
+
+            logger.info(f"📝 Risk management debate round {round_num} completed")
 
         # Have portfolio manager make final decision
         logger.info("⚖️ Requesting final decision from Portfolio Manager")
 
-        portfolio_manager_prompt = Msg(
+        portfolio_manager_prompt = UserMsg(
             name="DebateOrchestrator",
-            role="user",
             content="""作为风险管理委员会主席，您的目标是评估三位风险分析师——激进、中性和安全/保守——之间的辩论，并确定交易员的最佳行动方案。您的决策必须产生明确的建议：买入、卖出或持有。只有在有具体论据强烈支持时才选择持有，而不是在所有方面都似乎有效时作为后备选择。力求清晰和果断。
 
 决策指导原则：
@@ -197,7 +198,6 @@ class RiskDebateOrchestrator:
         final_decision = await call_agent_with_retry(
             self.portfolio_manager,
             portfolio_manager_prompt,
-            structured_model=self.portfolio_structured_model,
         )
 
         logger.info("✅ Risk management debate completed")
@@ -211,7 +211,6 @@ def create_debate_orchestrator(
     neutral_agent,
     portfolio_manager,
     max_rounds: int = 3,
-    portfolio_structured_model=None,
 ) -> RiskDebateOrchestrator:
     """Create a risk management debate orchestrator.
 
@@ -221,7 +220,6 @@ def create_debate_orchestrator(
         neutral_agent: Neutral debator agent
         portfolio_manager: Portfolio manager agent
         max_rounds: Maximum number of debate rounds
-        portfolio_structured_model: Optional Pydantic BaseModel for portfolio structured output
 
     Returns:
         Configured RiskDebateOrchestrator instance
@@ -232,5 +230,4 @@ def create_debate_orchestrator(
         neutral_agent=neutral_agent,
         portfolio_manager=portfolio_manager,
         max_rounds=max_rounds,
-        portfolio_structured_model=portfolio_structured_model,
     )

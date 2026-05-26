@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-# Local imports
 from agentscope import logger
-
-# AgentScope imports
-from agentscope.message import Msg
-from agentscope.pipeline import MsgHub
+from agentscope.message import UserMsg
 
 from tradingscope.agents.utils.agent_utils import call_agent_with_retry
 
@@ -21,7 +17,6 @@ class ResearchDebateOrchestrator:
         bear_researcher,
         research_manager,
         max_rounds: int = 3,
-        research_structured_model=None,
     ):
         """Initialize the debate orchestrator.
 
@@ -30,17 +25,15 @@ class ResearchDebateOrchestrator:
             bear_researcher: Bear researcher agent
             research_manager: Research manager agent
             max_rounds: Maximum number of debate rounds
-            research_structured_model: Optional Pydantic BaseModel for research structured output
         """
         self.bull_researcher = bull_researcher
         self.bear_researcher = bear_researcher
         self.research_manager = research_manager
         self.max_rounds = max_rounds
-        self.research_structured_model = research_structured_model
 
         logger.info("✅ Research Debate Orchestrator initialized with bull researcher, bear researcher and research manager")
 
-    def _get_round_prompts(self, round_num: int) -> tuple[Msg, Msg]:
+    def _get_round_prompts(self, round_num: int) -> tuple[UserMsg, UserMsg]:
         """根据辩论轮次返回不同阶段的提示词。
 
         第1轮：充分陈述——完整表达初始观点，不急于反驳
@@ -106,45 +99,48 @@ class ResearchDebateOrchestrator:
                 "目标是减少确认偏见，展示批判性思维，找到最有力的风险警示。"
             )
 
-        bull_prompt = Msg(name="DebateModerator", role="user", content=bull_content)
-        bear_prompt = Msg(name="DebateModerator", role="user", content=bear_content)
+        bull_prompt = UserMsg(name="DebateModerator", content=bull_content)
+        bear_prompt = UserMsg(name="DebateModerator", content=bear_content)
         return bull_prompt, bear_prompt
 
     async def run_debate(
         self,
         company_name: str,
-    ) -> tuple[str, Msg]:
+    ):
         """Run the complete multi-agent debate and return the final decision.
 
         Args:
             company_name: Name of the company being analyzed
 
         Returns:
-            Tuple of (debate_history, final_decision) from the research manager
+            Final decision Msg from the research manager
         """
         logger.info(f"🚀 Starting research debate for {company_name}")
 
-        # Use MsgHub for message broadcasting between researchers
-        async with MsgHub(participants=[self.bull_researcher, self.bear_researcher, self.research_manager]):
-            # Run debate rounds
-            for round_num in range(1, self.max_rounds + 1):
-                logger.info(f"🔄 Starting research debate round {round_num}")
+        for round_num in range(1, self.max_rounds + 1):
+            logger.info(f"🔄 Starting research debate round {round_num}")
 
-                # 根据轮次获取不同阶段的提示词
-                bull_prompt, bear_prompt = self._get_round_prompts(round_num)
+            bull_prompt, bear_prompt = self._get_round_prompts(round_num)
 
-                # Run all researchers concurrently within the MsgHub context
-                await call_agent_with_retry(self.bull_researcher, bull_prompt)
-                await call_agent_with_retry(self.bear_researcher, bear_prompt)
+            # Bull researcher speaks
+            bull_response = await call_agent_with_retry(self.bull_researcher, bull_prompt)
+            # Broadcast to bear and research manager
+            await self.bear_researcher.observe(bull_response)
+            await self.research_manager.observe(bull_response)
 
-                logger.info(f"📝 Research debate round {round_num} completed")
+            # Bear researcher speaks
+            bear_response = await call_agent_with_retry(self.bear_researcher, bear_prompt)
+            # Broadcast to bull and research manager
+            await self.bull_researcher.observe(bear_response)
+            await self.research_manager.observe(bear_response)
+
+            logger.info(f"📝 Research debate round {round_num} completed")
 
         # Have research manager make final decision
         logger.info("⚖️ Requesting final decision from Research Manager")
 
-        research_manager_prompt = Msg(
+        research_manager_prompt = UserMsg(
             name="DebateOrchestrator",
-            role="user",
             content="""作为投资决策经理，请基于以下辩论历史做出最终的投资决策：
 
 请给出明确的买入、卖出或持有建议，并说明理由。
@@ -155,7 +151,6 @@ class ResearchDebateOrchestrator:
         final_decision = await call_agent_with_retry(
             self.research_manager,
             research_manager_prompt,
-            structured_model=self.research_structured_model,
         )
         logger.info("✅ Research debate completed")
 
@@ -167,7 +162,6 @@ def create_research_debate_orchestrator(
     bear_researcher,
     research_manager,
     max_rounds: int = 3,
-    research_structured_model=None,
 ) -> ResearchDebateOrchestrator:
     """Create a research debate orchestrator.
 
@@ -176,7 +170,6 @@ def create_research_debate_orchestrator(
         bear_researcher: Bear researcher agent
         research_manager: Research manager agent
         max_rounds: Maximum number of debate rounds
-        research_structured_model: Optional Pydantic BaseModel for research structured output
 
     Returns:
         Configured ResearchDebateOrchestrator instance
@@ -186,5 +179,4 @@ def create_research_debate_orchestrator(
         bear_researcher,
         research_manager,
         max_rounds=max_rounds,
-        research_structured_model=research_structured_model,
     )
