@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 
 from agentscope import logger
+from agentscope.message import UserMsg
 from agentscope.model import DashScopeChatModel
 
 from .models import AnalysisRecord, EvaluationResult
@@ -295,16 +296,16 @@ class AnalysisEvaluator:
         logger.info("[Evaluator] Prompt: %s", prompt)
 
         try:
-            response = await self._model(
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=1024,
-            )
+            msg = UserMsg(name="evaluator", content=prompt)
+            response = await self._model(messages=[msg])
 
             # Handle streaming response (async generator)
             text = ""
             async for chunk in response:
                 for block in chunk.content:
-                    if block.get("type") == "text":
+                    if hasattr(block, "text"):
+                        text = block.text
+                    elif isinstance(block, dict) and block.get("type") == "text":
                         text = block["text"]
 
             return text.strip() if text.strip() else None

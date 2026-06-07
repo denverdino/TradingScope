@@ -1,98 +1,69 @@
-# -*- coding: utf-8 -*-
-"""The main entry point of the Qwen Deep Research agent example."""
+from __future__ import annotations
 
 from datetime import datetime, timedelta
 
 from agentscope import logger
-from agentscope.message import Msg
+from agentscope.message import Msg, UserMsg
 
 from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.qwen_deep_research_agent import QwenDeepResearchAgent
 
 
-class EquityAnalyst(QwenDeepResearchAgent):
-    """Orchestrates a multi-agent debate between bull and bear researchers."""
+def create_equity_analyst_agent(
+    context: AgentContext,
+    name: str = "EquityAnalyst",
+) -> QwenDeepResearchAgent:
+    """创建用于深度研究分析的 Equity Analyst Agent。
 
-    def __init__(
-        self,
-        name: str,
-        ticker: str,
-        trade_date: str,
-        latest_trading_date: str = "",
-        sector: str = "Technology",
-    ):
-        """Initialize the Equity Analyst.
+    Uses the Qwen Deep Research model for a two-step analysis:
+    clarification followed by deep research. Call via
+    ``run_equity_analysis(agent)`` to execute the full flow.
+    """
+    agent = QwenDeepResearchAgent(name=name)
 
-        Args:
-            name: Name of the analyst
-            ticker: Stock ticker symbol
-            trade_date: Current date
-            latest_trading_date: Latest US stock market trading date
-        """
+    ticker = context.company_of_interest
+    trade_date = context.trade_date
+    latest_trading_date = context.latest_trading_date or trade_date
 
-        super().__init__(name)
+    dt = datetime.strptime(trade_date, "%Y-%m-%d")
+    start_date = (dt - timedelta(days=30)).strftime("%Y-%m-%d")
 
-        self.ticker = ticker
-        self.trade_date = trade_date
-        self.latest_trading_date = latest_trading_date or trade_date
-        self.sector = sector
-        self.verbose = True
-
-        # calculate the date 30 days before trade_date
-        dt = datetime.strptime(self.trade_date, "%Y-%m-%d")
-        self.start_date = (dt - timedelta(days=30)).strftime("%Y-%m-%d")
-
-        logger.info("✅ Equity Analyst initialized")
-
-    async def analyze(self) -> Msg:
-        user_msg = Msg(
-            name="User",
-            content=f"""{COMPLIANCE_PROMPT}
+    agent._equity_initial_prompt = f"""{COMPLIANCE_PROMPT}
 
 你是一个 AI 金融研究分析师。
 
 【角色设定】
 你的定位 = Bloomberg terminal + McKinsey consultant 的混合体。
-请对公司股票代码 {self.ticker}，用 **中文** 输出接近机构投研水准的研究报告。
-""",
-            role="user",
-        )
+请对公司股票代码 {ticker}，用 **中文** 输出接近机构投研水准的研究报告。
+"""
 
-        clarification = await self(user_msg)
-        logger.info("%s: %s", clarification.name, clarification.content)
-
-        # Step 2: Deep research
-        # Based on the content of the follow-up question in Step 1,
-        # the model executes the complete research process.
-        user_response = Msg(
-            name="User",
-            content=f"""
+    agent._equity_research_prompt = f"""
 1. 研究报告目标是辅助短期交易决策，需要重点关注关键事件、与市场风险排查和预警。
 2. 研究报告目标读者是股票交易员。
-3. 需要聚焦从 {self.start_date} 到 {self.trade_date} 时间范围内的关键事件。
+3. 需要聚焦从 {start_date} 到 {trade_date} 时间范围内的关键事件。
 
 ⸻
 
 【核心约束（极其重要）】
 
 1️⃣ 时间与信息新鲜度（强约束）
-    * 当前日期为 {self.trade_date}，最新美股交易日期为 {self.latest_trading_date}
-    * 对于日度数据(股价、资金流向、机构报告、ETF flows、新闻等) 仅允许使用 {self.start_date} 到 {self.trade_date} 之间的信息进行分析
+    * 当前日期为 {trade_date}，最新美股交易日期为 {latest_trading_date}
+    * 对于日度数据(股价、资金流向、机构报告、ETF flows、新闻等) 仅允许使用 {start_date} 到 {trade_date} 之间的信息进行分析
     * 对于季度数据（季度财报、基金持仓、宏观正常与行业数据）等：
         * 必须采用最新可得数据（如最近一期年报/季报，且尚未更新）
         * 被明确标注为「历史背景信息」，不得作为核心论据
 
 🚫 严禁使用以下内容：
-    * 过期卖方观点当作“当前市场共识”
+    * 过期卖方观点当作"当前市场共识"
     * 未经验证的旧新闻、旧政策、旧财务数据
-    * 用“行业常识 / 一般认知”来补全缺失数据
+    * 用"行业常识 / 一般认知"来补全缺失数据
 
 ⸻
 
 2️⃣ 数据来源与可验证性
     * 所有事实性数据，必须来自搜索结果，包括：财务数据、估值、资金流向、机构持仓、市场份额、政策文件等
-    * 严禁编造任何数字、比例、趋势或“看起来合理”的估计
+    * 严禁编造任何数字、比例、趋势或"看起来合理"的估计
     * 如无公开数据，必须明确写明：「公开信息有限，暂无可靠数据支持该指标，以下不做定量判断」
 
 ⸻
@@ -102,7 +73,7 @@ class EquityAnalyst(QwenDeepResearchAgent):
 你输出的每一类判断，必须清楚标注其属性：
     * 事实（Fact）→ 来自公告、财报、官方数据、基金披露
     * 主流观点（Consensus）→ 多家卖方 / 市场一致预期
-    * 你的推理 / 分析判断（AI Synthesis）→ 基于事实与共识的逻辑推演，明确为“推理”
+    * 你的推理 / 分析判断（AI Synthesis）→ 基于事实与共识的逻辑推演，明确为"推理"
 
 ⸻
 
@@ -111,7 +82,7 @@ class EquityAnalyst(QwenDeepResearchAgent):
     * 可保留少量标准英文金融术语（P/E、EPS、DCF、EBITDA、Guidance 等）
     * 风格参考：高盛 / 摩根士丹利 / 瑞银卖方报告
     * 优先级：信息密度 > 可执行洞见 > 逻辑严谨 > 文学性
-    * 避免：空泛判断（“长期向好”“具备潜力”“值得关注”）
+    * 避免：空泛判断（"长期向好""具备潜力""值得关注"）
     * 情绪化或营销式语言
 
 ⸻
@@ -133,10 +104,10 @@ class EquityAnalyst(QwenDeepResearchAgent):
     - 机构持仓比例是上升、持平还是下降；
     - 主要基金和相关 ETF 处于净买入还是净卖出状态；
     - 资金流向与股价表现是否出现背离。
-- 尽量给出关键数字或区间（如 “收入同比 +23%”，“P/E ~18–20x”）。
+- 尽量给出关键数字或区间（如 "收入同比 +23%"，"P/E ~18–20x"）。
 - 近 30 天股价与基本面/资金面的关系判断（必须回答）
   - 当前股价走势是：已提前反映基本面改善 / 恶化？明显跑在基本面前面? 或明显滞后于基本面?
-  - 是否存在短期“定价偏差”（overreaction / underreaction）
+  - 是否存在短期"定价偏差"（overreaction / underreaction）
 
 ⸻
 
@@ -158,7 +129,7 @@ class EquityAnalyst(QwenDeepResearchAgent):
     * 是否出现：
         * 突破关键区间
         * 跳空 / 放量 / 连续性行情
-    * 价格行为是否呈现“事件驱动”特征
+    * 价格行为是否呈现"事件驱动"特征
 3.	价格 vs 信息的对应关系（重点）
     * 近 30 天内哪些事件/信息：
         * 被明显交易（priced in）
@@ -331,24 +302,27 @@ class EquityAnalyst(QwenDeepResearchAgent):
   - 标注不同来源的结论
   - 用你的分析判断哪一方更可信，并说明理由。
 - 在结尾处，可以用一小段（3–5 行）给出你对该标的的「一言以蔽之」总结（一句话投资论点）。
-            """,
-            role="user",
-        )
+"""
 
-        return await self(user_response)
-
-
-def create_equity_analyst_agent(
-    context: AgentContext,
-    name: str = "EquityAnalyst",
-) -> EquityAnalyst:
-
-    # Create Equity Analyst Agent
-    agent = EquityAnalyst(
-        name=name,
-        ticker=context.company_of_interest,
-        trade_date=context.trade_date,
-        latest_trading_date=context.latest_trading_date,
-    )
-
+    logger.info("[%s] Equity Analyst initialized", name)
     return agent
+
+
+async def run_equity_analysis(agent: QwenDeepResearchAgent) -> Msg:
+    """Execute the two-step deep research flow for an equity analyst agent.
+
+    Step 1: Clarification — the model analyzes the question and responds.
+    Step 2: Deep research — the model executes the full research process.
+    """
+    initial_msg = UserMsg(
+        name="User",
+        content=agent._equity_initial_prompt,
+    )
+    clarification = await agent(initial_msg)
+    logger.info("[%s] Clarification: %s", agent.name, clarification.content)
+
+    research_msg = UserMsg(
+        name="User",
+        content=agent._equity_research_prompt,
+    )
+    return await agent(research_msg)

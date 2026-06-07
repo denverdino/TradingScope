@@ -3,9 +3,11 @@
 
 import asyncio
 
-from tradingscope.agents.analysts.equity_analyst import create_equity_analyst_agent
+from tradingscope.agents.analysts.equity_analyst import (
+    create_equity_analyst_agent,
+    run_equity_analysis,
+)
 from tradingscope.agents.utils.context import AgentContext
-from tradingscope.agents.workflow import get_content, get_markdown
 
 
 async def main():
@@ -13,10 +15,10 @@ async def main():
     context.company_of_interest = "BABA"
 
     agent = create_equity_analyst_agent(context=context)
-    result = await agent.analyze()
+    result = await run_equity_analysis(agent)
 
     print("Equity Analyst Report:")
-    print(get_markdown(get_content(result), 2))
+    print(result.get_text_content())
 
 
 if __name__ == "__main__":

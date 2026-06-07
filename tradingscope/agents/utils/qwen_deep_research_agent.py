@@ -1,154 +1,70 @@
 # -*- coding: utf-8 -*-
-"""Qwen Deep Research Agent"""
+"""Qwen Deep Research Agent for AgentScope 2.0.
 
-# pylint: disable=line-too-long, too-many-branches, too-many-statements
+Calls the qwen-deep-research model directly via DashScope streaming API.
+Supports a two-step research process: clarification → deep research.
+"""
 
 import os
-from typing import Any, Optional, Sequence, Union
+from typing import Optional
 
 import dashscope
 from agentscope import logger
-from agentscope.agent import AgentBase
-from agentscope.memory import InMemoryMemory, MemoryBase
-from agentscope.message import Msg
+from agentscope.message import Msg, UserMsg
 from dashscope.api_entities.dashscope_response import GenerationResponse
 
 
-class QwenDeepResearchAgent(AgentBase):
-    """
-    Deep Research Agent based on Qwen-Deep-Research model
-    This agent supports a two-step research process:
-    1. Clarification: Analyzes the question and asks follow-up questions
-    2. Deep research: Executes the complete research process
-    Args:
-        name (str):
-            Agent name
-        api_key (str, optional):
-            DashScope API Key, defaults to environment variable
-        memory (MemoryBase, optional):
-            Memory component
-        verbose (bool):
-            Whether to display detailed process, defaults to True
+class QwenDeepResearchAgent:
+    """Deep Research Agent based on the Qwen-Deep-Research model.
+
+    This is a standalone agent (not an AgentScope Agent subclass) because it
+    calls the DashScope streaming API directly rather than going through
+    AgentScope's model layer.
     """
 
     def __init__(
         self,
         name: str,
         api_key: Optional[str] = None,
-        memory: Optional[MemoryBase] = None,
         verbose: bool = False,
     ):
-        """Initialize QwenDeepResearchAgent Agent"""
-
-        super().__init__()
-
         self.name = name
-
-        # Configure API Key
         self.api_key = api_key or os.getenv("DASHSCOPE_API_KEY")
         if not self.api_key:
             raise ValueError(
                 "The DASHSCOPE_API_KEY environment variable is not set.",
             )
-
         self.model_name = "qwen-deep-research"
         self.verbose = verbose
-        self.memory = memory or InMemoryMemory()
+        self._messages: list[dict[str, str]] = []
 
-    async def reply(
-        self,
-        x: Optional[Union[Msg, Sequence[Msg]]] = None,
-    ) -> Msg:
-        """
-        Process input message and return reply (asynchronous version)
-        Args:
-            x: Input message, can be a single Msg or a list of Msg
-        Returns:
-            Msg: Agent's reply message
-        """
+    async def __call__(self, x: Msg) -> Msg:
+        """Process an input message and return a reply."""
+        self._messages.append({"role": x.role, "content": x.get_text_content()})
 
-        # Process input message
-        if x is None:
-            logger.warning("Received empty message")
-            return Msg(name=self.name, content="", role="assistant")
+        user_count = sum(1 for m in self._messages if m["role"] == "user")
+        step_name = "Clarification" if user_count == 1 else "Deep Research"
+        logger.info("[%s] Starting %s ...", self.name, step_name)
 
-        # Convert to message list
-        if isinstance(x, Msg):
-            msgs = [x]
-        else:
-            msgs = list(x)
+        content = await self._call_model(step_name)
 
-        # Add to memory
-        for msg in msgs:
-            await self.memory.add(msg)
+        self._messages.append({"role": "assistant", "content": content})
 
-        # Check if clarification is needed
-        memory_list = await self.memory.get_memory()
-        user_msgs = [m for m in memory_list if m.role == "user"]
-
-        if len(user_msgs) == 1:
-            # Step 1: Clarification
-            logger.info("[%s] Starting clarification ...", self.name)
-            content = await self._call_model(step_name="Clarification")
-
-            response_msg = Msg(
-                name=self.name,
-                content=content,
-                role="assistant",
-                metadata={
-                    "phase": "clarification",
-                    "requires_user_response": True,
-                },
-            )
-        else:
-            # Step 2: Deep Research
-            logger.info("[%s] Starting deep research ...", self.name)
-            content = await self._call_model(step_name="Deep Research")
-
-            response_msg = Msg(
-                name=self.name,
-                content=content,
-                role="assistant",
-                metadata={
-                    "phase": "deep_research",
-                    "requires_user_response": False,
-                },
-            )
-
-        await self.memory.add(response_msg)
-
-        return response_msg
+        return UserMsg(name=self.name, content=content)
 
     async def _call_model(self, step_name: str) -> str:
-        """
-        Call qwen-deep-research model
-        Args:
-            step_name: step name
-        Returns:
-            str: Model response content
-        """
-
         if self.verbose:
             logger.info("\n%s", "=" * 50)
             logger.info("  %s", step_name)
             logger.info("%s", "=" * 50)
 
-        memory_list = await self.memory.get_memory()
-        messages = []
-        for msg in memory_list:
-            messages.append(
-                {
-                    "role": msg.role,
-                    "content": msg.content,
-                },
-            )
         try:
             responses = await dashscope.AioGeneration.call(
                 api_key=self.api_key,
                 model=self.model_name,
-                messages=messages,
+                messages=self._messages,
                 stream=True,
-                request_timeout=1800,  # Seconds
+                request_timeout=1800,
             )
             return await self._process_responses(responses)
         except Exception as e:
@@ -160,15 +76,6 @@ class QwenDeepResearchAgent(AgentBase):
         self,
         responses: GenerationResponse,
     ) -> str:
-        """
-        Process model streaming responses (asynchronous version)
-        Args:
-            responses: Model response stream
-            step_name: Step name
-        Returns:
-            str: Model response content
-        """
-
         current_phase = None
         current_status = None
         phase_content = ""
@@ -177,7 +84,6 @@ class QwenDeepResearchAgent(AgentBase):
         references = []
 
         async for response in responses:
-            # Check response status
             if hasattr(response, "status_code") and response.status_code != 200:
                 error_msg = f"HTTP status code: {response.status_code}"
                 if hasattr(response, "code"):
@@ -194,7 +100,6 @@ class QwenDeepResearchAgent(AgentBase):
                 status = message.get("status")
                 extra = message.get("extra", {})
 
-                # Phase change detection
                 if phase != current_phase:
                     if current_phase and phase_content and self.verbose:
                         logger.info("\n✓ %s phase completed", current_phase)
@@ -211,7 +116,6 @@ class QwenDeepResearchAgent(AgentBase):
                                 [],
                             )
 
-                # Process WebResearch phase
                 if phase == "WebResearch" and self.verbose:
                     research_goal = self._handle_web_research_phase(
                         status,
@@ -221,18 +125,14 @@ class QwenDeepResearchAgent(AgentBase):
 
                 if content:
                     phase_content += content
-
-                    # Display content
                     if self.verbose:
                         logger.debug(content)
 
-                # Display status changes
                 if status:
                     if status != current_status and status != "typing" and self.verbose:
                         self._log_status(status)
                     current_status = status
 
-                # Token usage statistics
                 if status == "finished":
                     self._log_usage(response)
                     if self.verbose:
@@ -251,7 +151,6 @@ class QwenDeepResearchAgent(AgentBase):
                             phase_content = phase_content + "\n\n## References\n\n" + "\n".join(list_links) + "\n\n" + "\n".join(reference_links)
                             break
 
-                # Process KeepAlive
                 if phase == "KeepAlive":
                     if not keepalive_shown and self.verbose:
                         logger.info("\n⏳ Preparing for the next phase...")
@@ -269,14 +168,12 @@ class QwenDeepResearchAgent(AgentBase):
         if extra.get("deep_research", {}).get("research"):
             research_info = extra["deep_research"]["research"]
 
-            # handle research goal
             if status == "streamingQueries":
                 if "researchGoal" in research_info:
                     goal = research_info["researchGoal"]
                     if goal:
                         research_goal += goal
 
-            # handle web site search results
             elif status == "streamingWebResult":
                 if research_goal != "":
                     logger.info("\n🎯 Research Goal: %s", research_goal)
@@ -284,13 +181,11 @@ class QwenDeepResearchAgent(AgentBase):
                 if "webSites" in research_info:
                     sites = research_info["webSites"]
                     if sites and sites != web_sites:
-                        # web_sites.clear()
                         web_sites.extend(sites)
                         msg = f"\n🔍 Found {len(sites)} relevant websites:\n" + "\n".join(
                             f"  {i + 1}. {site.get('title', 'No title')}\n     {site.get('url', 'No link')}" for i, site in enumerate(sites)
                         )
                         logger.info(msg)
-            # handle finished status
             elif status == "WebResultFinished":
                 logger.info(
                     "\n✓ Web search completed, found %s reference sources",
@@ -300,20 +195,15 @@ class QwenDeepResearchAgent(AgentBase):
         return research_goal
 
     def _log_status(self, status: str) -> None:
-        """log status information"""
-
         status_desc = {
             "streamingQueries": "Generating research goals and search queries (WebResearch phase)",
             "streamingWebResult": "Performing search, web page reading, and code execution (WebResearch phase)",
             "WebResultFinished": "Web search phase completed (WebResearch phase)",
         }
-
         if status in status_desc:
             logger.info("\n📊 %s", status_desc[status])
 
     def _log_usage(self, response: GenerationResponse) -> None:
-        """log Token usage information"""
-
         if hasattr(response, "usage") and response.usage:
             usage = response.usage
             if self.verbose:
@@ -323,34 +213,5 @@ class QwenDeepResearchAgent(AgentBase):
                     usage.get("output_tokens", 0),
                 )
 
-    async def observe(self, msg: Msg | list[Msg] | None) -> None:
-        """Receive the given message(s) without generating a reply.
-        Args:
-            msg (`Msg | list[Msg] | None`):
-                The message(s) to be observed.
-        """
-        # Simply add the message(s) to memory without generating a reply
-        if msg is not None:
-            if isinstance(msg, Msg):
-                await self.memory.add(msg)
-            else:
-                for m in msg:
-                    await self.memory.add(m)
-
-    async def handle_interrupt(self, *args: Any, **kwargs: Any) -> Msg:
-        """The post-processing logic when the reply is interrupted by the
-        user or something else.
-        Returns:
-            Msg: The interrupt message.
-        """
-        # Return a message indicating the interruption
-        # pylint: disable=unused-argument
-        return Msg(
-            name=self.name,
-            content="Operation was interrupted.",
-            role="assistant",
-        )
-
     async def reset_memory(self) -> None:
-        """reset memory"""
-        await self.memory.clear()
+        self._messages.clear()
