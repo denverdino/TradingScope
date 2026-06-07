@@ -18,7 +18,7 @@ resolution-markers = [
 
 [[package]]
 name = "agentscope"
-version = "2.0.0"
+version = "2.0.1"
 source = { registry = "http://mirrors.aliyun.com/pypi/simple/" }
 dependencies = [
     { name = "aiofiles" },
@@ -42,14 +42,13 @@ dependencies = [
     { name = "python-datauri" },
     { name = "python-frontmatter" },
     { name = "python-socketio" },
-    { name = "ripgrep" },
     { name = "shortuuid" },
     { name = "tree-sitter" },
     { name = "tree-sitter-bash" },
 ]
-sdist = { url = "http://mirrors.aliyun.com/pypi/packages/1c/2f/5d2ace489b288a457163095a62bbafc822708e485517f4866d65ce3d561d/agentscope-2.0.0.tar.gz", hash = "sha256:333eae04d2384c05eab09df3575603fc7d9b09899599d0f175fef5c6b39fcf60" }
+sdist = { url = "http://mirrors.aliyun.com/pypi/packages/36/27/8c66102f6afbda017a946304a4e9c5fcf8f6e53b78b968be010929ece8d8/agentscope-2.0.1.tar.gz", hash = "sha256:1f6035eb67a71a433f3a679cf8d79415185150d5f2be2e7e1d8ee1e2f1f0637a" }
 wheels = [
-    { url = "http://mirrors.aliyun.com/pypi/packages/8b/06/9465dac42f8401ae12244de3c92c681af08544dc1e57620b3474cc2f24ee/agentscope-2.0.0-py3-none-any.whl", hash = "sha256:248cd91e61487ce45ed1fa1dc3057faa3b2e624410670cbfc202f9a6c6f279c4" },
+    { url = "http://mirrors.aliyun.com/pypi/packages/16/f2/e4c8c1c97c8cf18d9d8b81d3ecabcfe02392b9c4f6811f57203e3665f013/agentscope-2.0.1-py3-none-any.whl", hash = "sha256:8ec54aa13c0fae0944116d3e2875528d126f86588085b801d46907c22c253db5" },
 ]
 
 [[package]]
@@ -4174,16 +4173,6 @@ wheels = [
 ]
 
 [[package]]
-name = "ripgrep"
-version = "15.1.0"
-source = { registry = "http://mirrors.aliyun.com/pypi/simple/" }
-sdist = { url = "http://mirrors.aliyun.com/pypi/packages/1e/18/0740869cfcee3b9671d601aec90541cc68e342794cecf02c6eec7ee12f19/ripgrep-15.1.0.tar.gz", hash = "sha256:3b4793859cd25c57ffd894b59ba9155636616b4084a1c12d0b9e819c16931ebf" }
-wheels = [
-    { url = "http://mirrors.aliyun.com/pypi/packages/7e/42/994bb17dc45399f60bc850c9ea295b9638eb7abee9ec26cc386a2ebc264d/ripgrep-15.1.0-py3-none-macosx_11_0_arm64.whl", hash = "sha256:3f99a068cea48d10ffc6b3c43bef37b684e1ba449d4ae57b0f96c4521f8d923f" },
-    { url = "http://mirrors.aliyun.com/pypi/packages/29/5c/951baee5033a25e9b79df51b378276fd0b3a88c7aba9665d50178e9738c1/ripgrep-15.1.0-py3-none-manylinux_2_39_x86_64.whl", hash = "sha256:9b9bbd02a7f2c3e88882f9a9df416da8e272957071ba8ab59a7a7f06813643cf" },
-]
-
-[[package]]
 name = "rpds-py"
 version = "0.30.0"
 source = { registry = "http://mirrors.aliyun.com/pypi/simple/" }
@@ -4710,7 +4699,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "agentscope", specifier = ">=2.0.0" },
+    { name = "agentscope", specifier = ">=2.0.1" },
     { name = "alibabacloud-oss-v2", specifier = ">=1.2.0" },
     { name = "beautifulsoup4", specifier = ">=4.14.2" },
     { name = "cachetools", specifier = ">=5.3.2" },

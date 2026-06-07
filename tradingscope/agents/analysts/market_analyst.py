@@ -16,7 +16,7 @@ from tradingscope.agents.utils.core_stock_tools import (
     get_volume_analysis,
 )
 from tradingscope.agents.utils.stock_utils import StockUtils
-from tradingscope.agents.utils.technical_indicators_tools import get_indicators
+from tradingscope.agents.utils.technical_indicators_tools import get_indicators, get_weekly_bollinger_signal
 from tradingscope.agents.utils.tool_response_helper import code_interpreter
 
 
@@ -42,6 +42,7 @@ def create_market_analyst_agent(
             FunctionTool(get_stock_info),
             FunctionTool(get_stock_data),
             FunctionTool(get_indicators),
+            FunctionTool(get_weekly_bollinger_signal),
             FunctionTool(get_sector_performance),
             FunctionTool(get_market_indices),
             FunctionTool(get_options_analysis),
@@ -98,7 +99,8 @@ def create_market_analyst_agent(
 6) **调用 `get_options_analysis`** 获取期权链分析数据（仅适用于美股），包括：Put/Call Ratio（期权情绪指标）、基于未平仓合约（Open Interest）的支撑位和阻力位、Max Pain 价格。若为非美股标的（如港股、A股），跳过此步骤。
 7) **调用 `get_volume_analysis`** 获取成交量深度分析，包括：成交量趋势（放量/缩量）、OBV 趋势、量价背离检测、成交量分布统计。此数据用于确认价格趋势的可靠性。
 8) **调用 `code_interpreter`** 执行 Python 代码进行精确数值计算，例如：乖离率偏离度、盈亏比、ATR 倍数、百分比变化等。LLM 直接计算常出现数值错误，必须使用此工具确保计算准确性。用法：传入 Python 代码字符串，用 print() 输出结果。
-9) 任一调用失败：说明失败原因与影响范围，在对应分析章节标注"【数据缺失】工具调用失败，本节结论不可用"；不得使用其他工具的数据推断该工具应返回的结论；交易建议须降级（若板块数据缺失，板块相对强弱判断留空，不得影响买入/卖出方向）。
+9) **调用 `get_weekly_bollinger_signal`** 获取周线布林带买卖信号，判断现价是否接近周线布林上/下轨（偏差 < 0.5%），用于中期超买超卖参考。
+10) 任一调用失败：说明失败原因与影响范围，在对应分析章节标注"【数据缺失】工具调用失败，本节结论不可用"；不得使用其他工具的数据推断该工具应返回的结论；交易建议须降级（若板块数据缺失，板块相对强弱判断留空，不得影响买入/卖出方向）。
 
 ——
 【短期技术指标池（优先选择，最多择 6 个）】
@@ -232,7 +234,17 @@ def create_market_analyst_agent(
     - |偏离度| ≥ 8%：极端偏离，强烈警惕回调；除非有极强催化剂支撑，否则不应建议追高买入
   - **乖离率与交易建议的一致性（强制）**：若乖离率 ≥ 5% 且建议"买入"，必须在交易建议中充分讨论两者之间的张力——不能一边提示"需警惕回调压力"一边给出无条件买入建议；应明确是"回调后买入""小仓位试探性建仓"还是"持有等待"
 
-**5) 期权链支撑阻力分析（美股适用）**
+**5) 周线布林带信号分析（中期参考）**
+- 调用 `get_weekly_bollinger_signal` 获取周线级别布林带数据
+- 信号判定标准：
+  - **买入信号**：现价接近周线布林下轨，偏差 < 0.5%（即 |(现价 - 下轨) / 下轨| < 0.5%），或已跌破下轨
+  - **卖出信号**：现价接近周线布林上轨，偏差 < 0.5%（即 |(现价 - 上轨) / 上轨| < 0.5%），或已突破上轨
+- 注意：周线布林带信号是中期参考信号，应与日线短期指标交叉验证
+  - 若周线布林给出买入信号，但日线 RSI 已超买（>70），应降低买入信心
+  - 若周线布林给出卖出信号，但日线 RSI 已超卖（<30），应降低卖出信心
+- 带宽收口/扩口趋势可辅助判断波动周期
+
+**6) 期权链支撑阻力分析（美股适用）**
 - 如已调用 `get_options_analysis` 获取数据：
   - 分析 Put/Call Ratio 所反映的市场情绪：PCR < 0.7 偏多、0.7-1.0 中性偏多、1.0-1.5 中性偏空、> 1.5 偏空/防御
   - **PCR 多维解读（强制）**：PCR 偏高不一定代表市场看空，对于高市值蓝筹股，高 PCR 也可能反映机构的系统性对冲（保护性 Put 建仓）而非方向性看跌。需结合 Put 主要分布的行权价来判断：若 Put 集中在深度虚值区（远低于现价），更可能是保护性建仓；若 Put 集中在平值附近，则偏向方向性看跌。
@@ -244,7 +256,7 @@ def create_market_analyst_agent(
     - 若两者不一致 → 说明分歧并给出合理解释
 - 若为非美股标的或期权数据不可用，标注"【期权数据不适用】"并跳过本节
 
-**6) 短期交易建议（必须明确！）**
+**7) 短期交易建议（必须明确！）**
 - **必须**给出针对短期交易的 **买入 / 持有 / 卖出**建议，三选一，不得回避
 - **必须**给出**信心等级**：高信心 / 中等信心 / 低信心，并说明信心等级的依据（哪些信号支撑、哪些信号矛盾）
 - **必须**给出 2-3 句话的**核心理由摘要**，概括支撑该方向判断的最关键证据
@@ -314,6 +326,17 @@ def create_market_analyst_agent(
 
 - 逐项列出所选指标（≤6），给出**具体数值、阈值/形态、日期与解释**
 - 重点分析短期买卖信号
+
+### 周线布林带信号
+
+- **周线布林上轨**：xxx
+- **周线布林中轨**：xxx
+- **周线布林下轨**：xxx
+- **现价 vs 上轨偏差**：+/-x.xx%
+- **现价 vs 下轨偏差**：+/-x.xx%
+- **信号判定**：买入信号 / 卖出信号 / 无信号
+- **带宽变化**：收口 / 扩口
+- **与日线指标交叉验证**：一致 / 矛盾（说明）
 
 ### 期权链支撑阻力分析（如适用）
 

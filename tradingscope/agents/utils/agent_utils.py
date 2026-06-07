@@ -5,6 +5,15 @@ import asyncio
 
 import httpx
 from agentscope import logger
+from agentscope.event import (
+    ModelCallEndEvent,
+    ReplyStartEvent,
+    TextBlockDeltaEvent,
+    ToolCallStartEvent,
+    ToolResultStartEvent,
+    ToolResultTextDeltaEvent,
+)
+from agentscope.message import Msg
 from agentscope.permission import PermissionMode
 
 COMPLIANCE_PROMPT = "你必须严格遵守内容安全与合规要求，不得生成任何涉黄、涉暴、涉政、违法、仇恨、歧视等内容。"
@@ -163,17 +172,49 @@ async def call_agent_with_retry(
     if hasattr(agent, "state") and hasattr(agent.state, "permission_context"):
         agent.state.permission_context.mode = PermissionMode.BYPASS
 
+    agent_name = getattr(agent, "name", "unknown")
+
     last_exc = None
     for attempt in range(max_retries + 1):
         try:
-            return await agent.reply(prompt)
+            final_msg: Msg | None = None
+            text_buf: list[str] = []
+            tool_result_buf: list[str] = []
+            async for event in agent._reply(prompt):
+                if isinstance(event, Msg):
+                    final_msg = event
+                elif isinstance(event, ReplyStartEvent):
+                    logger.info("[%s] started", agent_name)
+                elif isinstance(event, TextBlockDeltaEvent):
+                    text_buf.append(event.delta)
+                elif isinstance(event, ToolCallStartEvent):
+                    if text_buf:
+                        logger.info("[%s] %s", agent_name, "".join(text_buf))
+                        text_buf.clear()
+                    logger.info("[%s] -> tool: %s", agent_name, event.tool_call_name)
+                elif isinstance(event, ToolResultStartEvent):
+                    tool_result_buf.clear()
+                elif isinstance(event, ToolResultTextDeltaEvent):
+                    tool_result_buf.append(event.delta)
+                elif isinstance(event, ModelCallEndEvent):
+                    if text_buf:
+                        logger.info("[%s] %s", agent_name, "".join(text_buf))
+                        text_buf.clear()
+                    if tool_result_buf:
+                        result_text = "".join(tool_result_buf)
+                        logger.debug("[%s] tool result: %s", agent_name, result_text[:500])
+                        tool_result_buf.clear()
+                    logger.info("[%s] tokens: in=%d out=%d", agent_name, event.input_tokens, event.output_tokens)
+            if final_msg is None:
+                raise RuntimeError(f"Agent '{agent_name}' did not produce a final message.")
+            return final_msg
         except _RETRIABLE_EXCEPTIONS as e:
             last_exc = e
             if attempt < max_retries:
                 delay = base_delay * (2**attempt)
                 logger.warning(
                     "[Retry] Agent '%s' failed (attempt %d/%d): %s. Retrying in %.0fs...",
-                    getattr(agent, "name", "unknown"),
+                    agent_name,
                     attempt + 1,
                     max_retries,
                     e,
@@ -183,7 +224,7 @@ async def call_agent_with_retry(
             else:
                 logger.error(
                     "[Retry] Agent '%s' failed after %d attempts: %s",
-                    getattr(agent, "name", "unknown"),
+                    agent_name,
                     max_retries + 1,
                     e,
                 )
