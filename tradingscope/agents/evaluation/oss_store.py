@@ -21,6 +21,27 @@ from .models import AnalysisRecord
 logger = logging.getLogger(__name__)
 
 
+def _extract_portfolio_from_full_report(full_report: dict | None) -> dict | None:
+    """Extract a flat portfolio dict from a full_report.json structure.
+
+    full_report.json stores portfolio_decision with a nested 'prediction' key.
+    This flattens it into the format expected by _build_record_from_json.
+    """
+    if not full_report or not isinstance(full_report, dict):
+        return None
+    pd = full_report.get("portfolio_decision")
+    if not pd or not isinstance(pd, dict):
+        return None
+    prediction = pd.get("prediction", {})
+    flat = {**prediction}
+    for key in ("adopted_reasoning", "viewpoints_aggressive", "viewpoints_conservative",
+                "viewpoints_neutral", "position_advice", "risk_score",
+                "risk_control_measures", "invalidation_conditions"):
+        if key in pd:
+            flat[key] = pd[key]
+    return flat
+
+
 def _build_record_from_json(ticker: str, trade_date: str, data: dict) -> AnalysisRecord:
     """Build an AnalysisRecord directly from a portfolio_manager.json dict."""
     return AnalysisRecord(
@@ -85,6 +106,10 @@ class OSSAnalysisStore:
         records: List[AnalysisRecord] = []
         for trade_date, tkr in pending:
             data = await async_fetch_json_report(trade_date, tkr)
+            if not data:
+                data = _extract_portfolio_from_full_report(
+                    await async_fetch_json_report(trade_date, tkr, agent="full_report")
+                )
             if not data:
                 logger.debug("[OSSStore] No JSON report found for %s/%s", tkr, trade_date)
                 continue

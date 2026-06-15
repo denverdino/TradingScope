@@ -263,6 +263,25 @@ def create_trader_agent(
 - **禁止**在操作建议为"持有"时，给出与"买入"无异的完整入场计划作为主计划（入场计划只能放在"备用计划"或"突破计划"中，且必须标注条件触发）
 - **禁止**通过将止损压缩到<0.3x ATR来人为抬高盈亏比，若诚实计算盈亏比不足则应建议观望
 
+**重要：在分析末尾，必须输出以下JSON格式的结构化数据（用```json代码块包裹）：**
+
+```json
+{{
+  "direction": "bullish 或 bearish 或 neutral",
+  "action": "buy 或 sell 或 hold",
+  "confidence": 0.0到1.0之间的数值,
+  "entry_price": 数值或null,
+  "target_price": 数值或null,
+  "stop_loss": 数值或null,
+  "risk_reward_ratio": 盈亏比数值或null,
+  "position_advice": "轻仓 或 中等仓位 或 重仓",
+  "risk_score": 0.0到1.0之间的数值,
+  "time_stop_days": 时间止损天数整数或null,
+  "invalidation_conditions": "交易计划失效条件",
+  "reasoning": "交易决策核心理由（一段话）"
+}}
+```
+
 # 可用资源：
 
 {context.generate_trader_context_md()}"""

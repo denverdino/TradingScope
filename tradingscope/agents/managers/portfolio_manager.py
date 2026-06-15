@@ -79,6 +79,28 @@ def create_portfolio_manager_agent(
 ### 失效条件
 - 明确说明交易计划失效的条件
 
+**重要：在分析末尾，必须输出以下JSON格式的结构化数据（用```json代码块包裹）：**
+
+```json
+{{
+  "direction": "bullish 或 bearish 或 neutral",
+  "action": "buy 或 sell 或 hold",
+  "confidence": 0.0到1.0之间的数值,
+  "entry_price": 数值或null,
+  "target_price": 数值或null,
+  "stop_loss": 数值或null,
+  "position_advice": "轻仓 或 中等仓位 或 重仓",
+  "risk_score": 0.0到1.0之间的数值,
+  "aggressive_viewpoint": "激进派核心观点摘要（一段话）",
+  "conservative_viewpoint": "保守派核心观点摘要（一段话）",
+  "neutral_viewpoint": "中性派核心观点摘要（一段话）",
+  "adopted_reasoning": "最终决策采纳理由（一段话）",
+  "risk_control_measures": ["风险控制措施1", "风险控制措施2"],
+  "invalidation_conditions": "交易计划失效条件",
+  "reasoning": "最终决策核心理由（一段话）"
+}}
+```
+
 # 可用资源：
 
 {context.generate_risk_evaluation_context_md()}"""

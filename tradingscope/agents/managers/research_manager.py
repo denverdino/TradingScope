@@ -109,6 +109,23 @@ def create_research_manager_agent(
 ### 风险提示
 - 列出2-3个主要风险点
 
+**重要：在分析末尾，必须输出以下JSON格式的结构化数据（用```json代码块包裹）：**
+
+```json
+{{
+  "direction": "bullish 或 bearish 或 neutral",
+  "action": "buy 或 sell 或 hold",
+  "confidence": 0.0到1.0之间的数值,
+  "entry_price": 数值或null,
+  "target_price": 数值或null,
+  "stop_loss": 数值或null,
+  "bull_viewpoints": "看涨论点摘要（一段话）",
+  "bear_viewpoints": "看跌论点摘要（一段话）",
+  "adopted_reasoning": "决策采纳理由（一段话）",
+  "reasoning": "投资决策核心理由（一段话）"
+}}
+```
+
 # 可用资源：
 
 {context.generate_analyst_reports_md()}"""

@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 from dataclasses import dataclass
 
 from agentscope import logger
@@ -62,6 +63,25 @@ def get_structured_output(result: Msg | Exception) -> dict | None:
         return result.metadata
     # Also support nested "structured_output" key for backward compatibility
     return result.metadata.get("structured_output")
+
+
+def extract_json_from_text(text: str) -> dict | None:
+    """Extract the last JSON code block from agent text response.
+
+    Looks for ```json ... ``` blocks and parses the content.
+    Uses the last match since the structured output block is appended
+    at the end of the response.
+    """
+    if not text:
+        return None
+    matches = re.findall(r"```json\s*\n(.*?)\n\s*```", text, re.DOTALL)
+    if not matches:
+        return None
+    try:
+        return json.loads(matches[-1])
+    except (json.JSONDecodeError, ValueError):
+        logger.warning("Found JSON code block but failed to parse it")
+        return None
 
 
 @dataclass
@@ -168,6 +188,8 @@ async def analyze(ticker: str, trade_date: str | None = None) -> AnalysisOutput:
     logger.info("投资决策:\n%s", researcher_investment_plan)
 
     research_structured = get_structured_output(manager_response)
+    if not research_structured:
+        research_structured = extract_json_from_text(researcher_investment_plan)
 
     # 更新context中的投资计划
     context.researcher_investment_plan = researcher_investment_plan
@@ -195,6 +217,8 @@ async def analyze(ticker: str, trade_date: str | None = None) -> AnalysisOutput:
     logger.info("交易决策:\n%s", trader_plan)
 
     trader_structured = get_structured_output(trader_response)
+    if not trader_structured:
+        trader_structured = extract_json_from_text(trader_plan)
 
     # 更新context中的交易员计划
     context.trader_investment_plan = trader_plan
@@ -240,6 +264,8 @@ async def analyze(ticker: str, trade_date: str | None = None) -> AnalysisOutput:
     logger.info("最终交易决策:\n%s", final_trade_decision)
 
     portfolio_structured = get_structured_output(risk_decision)
+    if not portfolio_structured:
+        portfolio_structured = extract_json_from_text(final_trade_decision)
 
     # 更新context中的最终决策
     context.final_trade_decision = final_trade_decision
