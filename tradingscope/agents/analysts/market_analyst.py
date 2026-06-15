@@ -17,7 +17,6 @@ from tradingscope.agents.utils.core_stock_tools import (
 )
 from tradingscope.agents.utils.stock_utils import StockUtils
 from tradingscope.agents.utils.technical_indicators_tools import get_indicators, get_weekly_bollinger_signal
-from tradingscope.agents.utils.tool_response_helper import code_interpreter
 
 
 def create_market_analyst_agent(
@@ -47,7 +46,6 @@ def create_market_analyst_agent(
             FunctionTool(get_market_indices),
             FunctionTool(get_options_analysis),
             FunctionTool(get_volume_analysis),
-            FunctionTool(code_interpreter),
         ]
     )
 
@@ -98,9 +96,9 @@ def create_market_analyst_agent(
 5) **调用 `get_indicators`** 获取技术指标，**优先选择短期指标**（见下方指标池）。
 6) **调用 `get_options_analysis`** 获取期权链分析数据（仅适用于美股），包括：Put/Call Ratio（期权情绪指标）、基于未平仓合约（Open Interest）的支撑位和阻力位、Max Pain 价格。若为非美股标的（如港股、A股），跳过此步骤。
 7) **调用 `get_volume_analysis`** 获取成交量深度分析，包括：成交量趋势（放量/缩量）、OBV 趋势、量价背离检测、成交量分布统计。此数据用于确认价格趋势的可靠性。
-8) **调用 `code_interpreter`** 执行 Python 代码进行精确数值计算，例如：乖离率偏离度、盈亏比、ATR 倍数、百分比变化等。LLM 直接计算常出现数值错误，必须使用此工具确保计算准确性。用法：传入 Python 代码字符串，用 print() 输出结果。
-9) **调用 `get_weekly_bollinger_signal`** 获取周线布林带买卖信号，判断现价是否接近周线布林上/下轨（偏差 < 0.5%），用于中期超买超卖参考。
-10) 任一调用失败：说明失败原因与影响范围，在对应分析章节标注"【数据缺失】工具调用失败，本节结论不可用"；不得使用其他工具的数据推断该工具应返回的结论；交易建议须降级（若板块数据缺失，板块相对强弱判断留空，不得影响买入/卖出方向）。
+8) **调用 `get_weekly_bollinger_signal`** 获取周线布林带买卖信号，判断现价是否接近周线布林上/下轨（偏差 < 0.5%），用于中期超买超卖参考。
+9) 任一调用失败：说明失败原因与影响范围，在对应分析章节标注"【数据缺失】工具调用失败，本节结论不可用"；不得使用其他工具的数据推断该工具应返回的结论；交易建议须降级（若板块数据缺失，板块相对强弱判断留空，不得影响买入/卖出方向）。
+- **精确计算规则**：凡涉及乖离率偏离度、盈亏比、ATR 倍数、百分比变化等数值计算，必须在思考过程中逐步列出算式并验证，不得直接给出结论性数值。
 
 ——
 【短期技术指标池（优先选择，最多择 6 个）】

@@ -6,13 +6,10 @@ from agentscope import logger
 
 # AgentScope imports
 from agentscope.agent import Agent
-from agentscope.agent._config import ReActConfig
-from agentscope.tool import FunctionTool, Toolkit
 
 # Local imports
 from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT
 from tradingscope.agents.utils.context import AgentContext
-from tradingscope.agents.utils.tool_response_helper import code_interpreter
 
 
 def create_portfolio_manager_agent(
@@ -86,15 +83,10 @@ def create_portfolio_manager_agent(
 
 {context.generate_risk_evaluation_context_md()}"""
 
-    toolkit = Toolkit(tools=[FunctionTool(code_interpreter)])
-
-    # 创建 Agent
     agent = Agent(
         name=name,
         system_prompt=system_message,
-        model=context.model,
-        toolkit=toolkit,
-        react_config=ReActConfig(max_iters=8),
+        model=context.code_interpreter_model,
     )
 
     logger.debug("📊 [DEBUG] ===== 投资组合经理 Agent 创建完成 =====")

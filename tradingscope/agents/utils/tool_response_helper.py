@@ -1,4 +1,3 @@
-import asyncio
 import copy
 import functools
 import os
@@ -53,41 +52,3 @@ def _fmt_args(args: tuple, kwargs: dict) -> str:
     parts = [repr(a) for a in args]
     parts += [f"{k}={v!r}" for k, v in kwargs.items()]
     return ", ".join(parts)
-
-
-async def code_interpreter(code: str, timeout: float = 30) -> ToolChunk:
-    """Execute Python code for precise numerical calculations (deviation rates, risk-reward ratios, ATR multiples, etc.).
-
-    Use this tool when you need exact arithmetic that LLMs often miscalculate.
-    Write Python code with print() statements to output results.
-
-    Args:
-        code: Python code to execute. Must use print() to see output.
-        timeout: Maximum execution time in seconds (default 30, capped at 60).
-
-    Returns:
-        ToolChunk containing stdout, stderr, and return code from execution.
-    """
-    timeout = min(timeout, 60)
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            "python",
-            "-c",
-            code,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-        stdout_str = stdout.decode() if stdout else ""
-        stderr_str = stderr.decode() if stderr else ""
-        result_parts = []
-        if stdout_str:
-            result_parts.append(f"stdout:\n{stdout_str}")
-        if stderr_str:
-            result_parts.append(f"stderr:\n{stderr_str}")
-        result_parts.append(f"return_code: {proc.returncode}")
-        return _to_tool_chunk("\n".join(result_parts))
-    except asyncio.TimeoutError:
-        return _to_tool_chunk(f"Error: Code execution timed out after {timeout} seconds")
-    except Exception as e:
-        return _to_tool_chunk(f"Error: {type(e).__name__}: {e}")

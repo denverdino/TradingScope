@@ -2,7 +2,7 @@ import logging
 import os
 import re
 from datetime import datetime, timedelta
-from typing import Annotated, Dict, Optional
+from typing import Annotated, Any, Dict, Optional
 
 import yfinance as yf
 from agentscope.credential import DashScopeCredential
@@ -11,6 +11,29 @@ from agentscope.model import DashScopeChatModel
 from yfinance.exceptions import YFRateLimitError
 
 from tradingscope.default_config import DEFAULT_CONFIG
+
+
+class CodeInterpreterModel(DashScopeChatModel):
+    """DashScope model with built-in code_interpreter enabled.
+
+    Uses DashScope's server-side code_interpreter which runs Python in a
+    cloud sandbox. Mutually exclusive with Function Calling (Toolkit).
+
+    Ref: https://help.aliyun.com/zh/model-studio/qwen-code-interpreter
+    """
+
+    async def _call_api(
+        self,
+        model_name: str,
+        messages: list,
+        tools: list[dict] | None = None,
+        tool_choice: Any = None,
+        **kwargs: Any,
+    ):
+        kwargs.setdefault("extra_body", {})
+        kwargs["extra_body"]["enable_code_interpreter"] = True
+        return await super()._call_api(model_name, messages, tools=None, tool_choice=None, **kwargs)
+
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +121,15 @@ class AgentContext:
             credential=credential,
             model=DEFAULT_CONFIG["deep_think_llm"],
             parameters=DashScopeChatModel.Parameters(thinking_enable=False, parallel_tool_calls=False),
+            stream=True,
+            formatter=DashScopeChatFormatter(),
+        )
+
+        # Model with built-in code_interpreter (cloud sandbox, no Function Calling)
+        self.code_interpreter_model = CodeInterpreterModel(
+            credential=credential,
+            model=DEFAULT_CONFIG.get("deep_think_llm"),
+            parameters=CodeInterpreterModel.Parameters(thinking_enable=True, parallel_tool_calls=False),
             stream=True,
             formatter=DashScopeChatFormatter(),
         )

@@ -3,13 +3,10 @@ from __future__ import annotations
 # 导入统一日志系统
 from agentscope import logger
 from agentscope.agent import Agent
-from agentscope.agent._config import ReActConfig
-from agentscope.tool import FunctionTool, Toolkit
 
 from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT, get_company_name
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.stock_utils import StockUtils
-from tradingscope.agents.utils.tool_response_helper import code_interpreter
 
 
 def create_trader_agent(
@@ -106,7 +103,7 @@ def create_trader_agent(
 - **目标价位**：基于阻力位、布林带上轨、或 2-3x ATR 盈利目标
 - **仓位建议**：基于风险评估和波动率
 - **时间止损**：短期交易必须设定时间限制
-- **精确计算规则（强制）**：凡涉及盈亏比、止损宽度、ATR 倍数、百分比变化等数值计算，必须使用 `code_interpreter` 执行 Python 代码完成，不得依赖 LLM 直接计算。LLM 常在除法、比值、百分比等运算中出现数值错误，使用 code_interpreter 确保计算准确。
+- **精确计算规则（强制）**：凡涉及盈亏比、止损宽度、ATR 倍数、百分比变化等数值计算，必须编写并执行 Python 代码精确计算，不得依赖直接推理估算。你具备内置代码执行能力，可直接编写 Python 代码进行计算。
 
 **6) 关注短期交易信号**
 - 盘前/盘后价格跳空方向
@@ -270,15 +267,10 @@ def create_trader_agent(
 
 {context.generate_trader_context_md()}"""
 
-    toolkit = Toolkit(tools=[FunctionTool(code_interpreter)])
-
-    # 创建Agent with ReActConfig
     agent = Agent(
         name=name,
         system_prompt=system_prompt,
-        model=context.model,
-        toolkit=toolkit,
-        react_config=ReActConfig(max_iters=6),
+        model=context.code_interpreter_model,
     )
 
     logger.debug(f"💰 [DEBUG] 准备调用LLM，系统提示包含货币: {currency}")

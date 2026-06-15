@@ -14,7 +14,6 @@ from tradingscope.agents.utils.fundamental_data_tools import (
     get_income_statement,
 )
 from tradingscope.agents.utils.stock_utils import StockUtils
-from tradingscope.agents.utils.tool_response_helper import code_interpreter
 
 
 def create_fundamentals_analyst_agent(
@@ -50,7 +49,6 @@ def create_fundamentals_analyst_agent(
             FunctionTool(get_balance_sheet),
             FunctionTool(get_cashflow),
             FunctionTool(get_income_statement),
-            FunctionTool(code_interpreter),
         ]
     )
 
@@ -112,7 +110,7 @@ def create_fundamentals_analyst_agent(
 - PB = 当前股价 / 每股净资产（BPS）
 - ROE、毛利率、净利率等必须标注口径（TTM / MRQ / FY）
 - 数字格式：价格与估值保留 2 位小数；百分比保留 1 位小数
-- **精确计算规则**：凡涉及 PE、PB、ROE、增长率、百分比变化等数值计算，必须使用 `code_interpreter` 执行 Python 代码完成，不得依赖 LLM 直接计算。LLM 常出现除法、百分比、多位小数等计算错误。
+- **精确计算规则**：凡涉及 PE、PB、ROE、增长率、百分比变化等数值计算，必须在思考过程中逐步列出算式并验证，不得直接给出结论性数值。
 
 # 关于分析师目标价的处理
 **重要：不要过度强调分析师的长期目标价（如 12 个月目标价）**

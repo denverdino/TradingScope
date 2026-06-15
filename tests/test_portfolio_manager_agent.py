@@ -81,6 +81,6 @@ class TestPortfolioManagerAgent:
             name=self.agent_name,
         )
 
-        # Verify the agent configuration
+        # Uses built-in code_interpreter model (no toolkit/react_config)
         assert agent is not None
-        assert agent.react_config.max_iters == 8
+        assert agent.model is context.code_interpreter_model
