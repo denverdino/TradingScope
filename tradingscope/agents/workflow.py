@@ -36,7 +36,7 @@ from .trader.trader import create_trader_agent
 from .utils.agent_utils import call_agent_with_retry
 
 # Import AgentContext
-from .utils.context import AgentContext
+from .utils.context import AgentContext, strip_structured_json_from_markdown
 
 
 def get_content(result: Msg | Exception) -> str:
@@ -184,12 +184,16 @@ async def analyze(ticker: str, trade_date: str | None = None) -> AnalysisOutput:
         company_name=ticker,
     )
 
-    researcher_investment_plan = get_content(manager_response)
-    logger.info("投资决策:\n%s", researcher_investment_plan)
+    researcher_investment_plan_raw = get_content(manager_response)
+    logger.info("投资决策:\n%s", researcher_investment_plan_raw)
 
     research_structured = get_structured_output(manager_response)
     if not research_structured:
-        research_structured = extract_json_from_text(researcher_investment_plan)
+        research_structured = extract_json_from_text(researcher_investment_plan_raw)
+
+    # Keep human-facing report text free of structured JSON. Structured data is
+    # persisted separately through upload_structured_outputs and AnalysisResult.
+    researcher_investment_plan = strip_structured_json_from_markdown(researcher_investment_plan_raw)
 
     # 更新context中的投资计划
     context.researcher_investment_plan = researcher_investment_plan
@@ -213,12 +217,15 @@ async def analyze(ticker: str, trade_date: str | None = None) -> AnalysisOutput:
     trader = create_trader_agent(context=context)
 
     trader_response = await call_agent_with_retry(trader, None)
-    trader_plan = get_content(trader_response)
-    logger.info("交易决策:\n%s", trader_plan)
+    trader_plan_raw = get_content(trader_response)
+    logger.info("交易决策:\n%s", trader_plan_raw)
 
     trader_structured = get_structured_output(trader_response)
     if not trader_structured:
-        trader_structured = extract_json_from_text(trader_plan)
+        trader_structured = extract_json_from_text(trader_plan_raw)
+
+    # Keep context/report output human-readable; structured JSON remains separate.
+    trader_plan = strip_structured_json_from_markdown(trader_plan_raw)
 
     # 更新context中的交易员计划
     context.trader_investment_plan = trader_plan
@@ -260,12 +267,15 @@ async def analyze(ticker: str, trade_date: str | None = None) -> AnalysisOutput:
         company_name=ticker,
     )
 
-    final_trade_decision = get_content(risk_decision)
-    logger.info("最终交易决策:\n%s", final_trade_decision)
+    final_trade_decision_raw = get_content(risk_decision)
+    logger.info("最终交易决策:\n%s", final_trade_decision_raw)
 
     portfolio_structured = get_structured_output(risk_decision)
     if not portfolio_structured:
-        portfolio_structured = extract_json_from_text(final_trade_decision)
+        portfolio_structured = extract_json_from_text(final_trade_decision_raw)
+
+    # Keep context/report output human-readable; structured JSON remains separate.
+    final_trade_decision = strip_structured_json_from_markdown(final_trade_decision_raw)
 
     # 更新context中的最终决策
     context.final_trade_decision = final_trade_decision
