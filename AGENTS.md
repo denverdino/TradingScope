@@ -1,85 +1,113 @@
-# TradingScope Project Context
+# TradingScope Agent Guide
 
 ## Project Overview
 
-TradingScope is a multi-agent trading analysis system built on [AgentScope 2.0](https://github.com/agentscope-ai/agentscope) using DashScope (Qwen models) as the LLM provider.
+TradingScope is a multi-agent trading analysis system built on [AgentScope 2.0](https://github.com/agentscope-ai/agentscope) and DashScope Qwen models. It is inspired by [TradingAgents](https://github.com/TauricResearch/TradingAgents).
 
-References:
+Use Python 3.11 or later. Manage dependencies and commands with `uv`; do not introduce an OpenAI API dependency.
 
-* https://github.com/TauricResearch/TradingAgents
-
-## Build & Development Commands
+## Commands
 
 ```bash
-uv sync --extra dev   # Install dependencies with uv
-make install          # Install dependencies with uv
-make lint             # Lint with ruff
-make lint-fix         # Lint and auto-fix violations
-make format           # Format code with ruff
-make format-check     # Check formatting without changes
-make imports          # Order imports with ruff
-make test             # Run all tests (pytest)
-make test-cov         # Run tests with coverage report
-make evaluate         # Run post-market evaluation CLI
-make clean            # Clean build artifacts
+uv sync --extra dev       # Install dependencies
+make install              # Install dependencies with uv
+make lint                 # Run Ruff lint checks
+make lint-fix             # Run Ruff and apply safe fixes
+make format               # Format with Ruff
+make format-check         # Check formatting
+make imports              # Sort imports with Ruff
+make test                 # Run all pytest tests
+make test-cov             # Run tests with coverage
+make evaluate             # Run post-market evaluation
+make clean                # Remove build and test artifacts
 ```
 
-Run a single test file: `uv run pytest tests/test_foo.py`
-Run a single test: `uv run pytest tests/test_foo.py::TestClass::test_method -v`
-Skip slow/integration tests: `uv run pytest -m "not slow and not integration"`
+Targeted test commands:
 
-## Required Environment Variables
+```bash
+uv run pytest tests/test_foo.py
+uv run pytest tests/test_foo.py::TestClass::test_method -v
+uv run pytest -m "not slow and not integration"
+```
 
-- `DASHSCOPE_API_KEY` — required for Qwen LLM models (DashScope SDK, no OpenAI key needed)
-- `ALPHA_VANTAGE_API_KEY` — optional for Alpha Vantage data APIs
-- `PERPLEXITY_API_KEY` — optional, for Perplexity data source
-- OSS variables (`OSS_ACCESS_KEY_ID`, `OSS_ACCESS_KEY_SECRET`, `OSS_REGION`, `OSS_BUCKET`) — optional, for report upload to Alibaba Cloud OSS
+Run the application with `uv run python -m tradingscope.main AAPL`.
 
-## Architecture
+## Environment Variables
 
-The pipeline runs 7 stages:
+- `DASHSCOPE_API_KEY` — required for Qwen model calls.
+- `ALPHA_VANTAGE_API_KEY` — required only when using Alpha Vantage data.
+- `PERPLEXITY_API_KEY` — required only when using the Perplexity data source.
+- `OSS_ACCESS_KEY_ID`, `OSS_ACCESS_KEY_SECRET`, `OSS_REGION`, `OSS_BUCKET` — optional Alibaba Cloud OSS report storage.
+- `EMAIL_FROM`, `EMAIL_PASSWORD` — required only when email delivery is requested. SMTP host and port may be configured with `SMTP_SSL_HOST` and `SMTP_SSL_PORT`.
 
-1. **Analysis** — Four analyst agents (Market, Fundamentals, News, Social Media) run concurrently via `asyncio.gather`. Each uses AgentScope's `Agent` with `ReActConfig` and tool access to dataflows, producing Markdown reports.
-2. **Research Debate** — Bull/Bear researchers debate via `ResearchDebateOrchestrator` using `agent.observe()` for message broadcasting (progressive rounds: statement → rebuttal → convergence).
-3. **Research Management** — Research Manager synthesizes debate into an investment recommendation.
-4. **Trading Decision** — Trader agent makes buy/sell/hold decision with entry/stop-loss/target prices.
-5. **Risk Debate** — Aggressive/Conservative/Neutral debators debate via `RiskDebateOrchestrator`.
-6. **Risk Management** — Portfolio Manager evaluates risk debate for final risk-adjusted decision.
-7. **Report Generation** — Markdown report + structured JSON (`AnalysisResult`) produced; optionally uploaded to OSS or emailed.
+Never commit credentials, tokens, generated reports, or local environment files.
 
-### Key Design Patterns
+## Architecture and Code Map
 
-**Vendor routing** (`dataflows/interface.py`): `VENDOR_METHODS` maps abstract method names to multiple vendor implementations. `route_to_vendor()` supports fallback ordering and comma-separated vendor preferences. Configured via `default_config.py` and dynamically via `dataflows/config.py`. Tool-level `tool_vendors` overrides category-level `data_vendors`.
+The workflow in `tradingscope/agents/workflow.py` has seven stages:
 
-**Shared context** (`agents/utils/context.py`): `AgentContext` holds all shared state (ticker, trade_date, reports, models). Each agent factory receives context and builds its prompt from it.
+1. **Analysis** — Market, Fundamentals, News, and Social Media analysts run concurrently with `asyncio.gather` and produce Markdown plus structured output.
+2. **Research Debate** — Bull and Bear researchers exchange statements, rebuttals, and convergence messages through `ResearchDebateOrchestrator` and `agent.observe()`.
+3. **Research Management** — The Research Manager synthesizes the debate into an investment recommendation.
+4. **Trading Decision** — The Trader produces buy, sell, or hold guidance with entry, stop-loss, and target prices.
+5. **Risk Debate** — Aggressive, Conservative, and Neutral agents debate the proposed trade.
+6. **Risk Management** — The Portfolio Manager makes the final risk-adjusted decision.
+7. **Report Generation** — The workflow returns a Markdown report and structured `AnalysisResult`, with optional OSS upload or email delivery.
 
-**Structured output** (`agents/output.py`): Pydantic models define schemas for each agent stage. A regex fallback in `AgentContext.extract_prediction_data()` extracts structured data from agent text responses.
+Key locations:
 
-**Tool layer** (`agents/utils/core_stock_tools.py`, etc.): Tool functions wrap `route_to_vendor()` calls, decorated with `@agentscope_tool` which returns `ToolChunk` objects for AgentScope 2.0 Toolkit registration.
+- `tradingscope/main.py` — analysis CLI entry point.
+- `tradingscope/evaluate.py` — post-market evaluation CLI entry point.
+- `tradingscope/default_config.py` — model, debate, directory, and default vendor configuration.
+- `tradingscope/agents/workflow.py` — end-to-end pipeline orchestration.
+- `tradingscope/agents/utils/context.py` — shared `AgentContext`, model initialization, and report state.
+- `tradingscope/agents/output.py` — Pydantic schemas for stage outputs and `AnalysisResult`.
+- `tradingscope/dataflows/interface.py` — `VENDOR_METHODS` and `route_to_vendor()` fallback routing.
+- `tradingscope/dataflows/config.py` — runtime dataflow configuration.
+- `tradingscope/agents/utils/*_tools.py` — AgentScope tool wrappers returning `ToolChunk` values through `@agentscope_tool`.
+- `tests/` — pytest suite; mirror the source area when adding focused tests.
 
-### LLM Configuration
+Vendor selection follows this precedence: tool-level `tool_vendors`, category-level `data_vendors`, then the fallback order implemented by `route_to_vendor()`. Vendor preferences may be comma-separated.
 
-Two models configured in `default_config.py`:
-- `deep_think_llm`: `qwen3.6-plus` — used for debate and analysis (with thinking mode enabled)
-- `quick_think_llm`: `qwen3.6-flash` — used for quick responses
+The configured models are:
 
-Models are initialized via `DashScopeChatModel` with `DashScopeCredential` in `AgentContext`. A `non_thinking_model` variant (thinking disabled) is available for debate agents where reasoning overhead is unnecessary.
+- `deep_think_llm`: `qwen3.7-max` for analysis and debate with thinking enabled.
+- `quick_think_llm`: `qwen3.6-flash` for fast tasks.
+- `non_thinking_model`: the deep model with thinking disabled for debate agents where extra reasoning is unnecessary.
 
-### Entry Points
+## Working Rules
 
-- `tradingscope` CLI → `tradingscope.main:main` (run analysis: `uv run python -m tradingscope.main AAPL`)
-- `tradingscope-evaluate` CLI → `tradingscope.evaluate:main` (post-market evaluation)
+### Before Editing
 
-## Code Quality Standards
+- Inspect the relevant implementation, tests, configuration, and current Git diff before proposing changes.
+- State assumptions that affect behavior. If requirements have materially different interpretations, present the trade-off and ask instead of choosing silently.
+- Prefer the simpler solution when it fully satisfies the request. Push back on unnecessary scope.
+- For multi-step work, define a short plan with a verification result for each step.
 
-- Follow SOLID principles (Single Responsibility, Open/Closed, Liskov Substitution, Interface Segregation, Dependency Inversion)
-- Apply DRY (Don't Repeat Yourself) — extract common functionality into reusable components
-- Follow YAGNI (You Aren't Gonna Need It) — implement only what's currently required
-- Use clear, descriptive naming conventions for variables, functions, and classes
-- Maintain modular structure with logical separation of concerns
-- Minimize code redundancy through proper abstraction
+### While Editing
 
-## Refactoring Guidelines
+- Make the smallest change that solves the requested problem. Do not add speculative features, flexibility, abstractions, or handling for impossible cases.
+- Follow SOLID, DRY, and YAGNI pragmatically. Extract shared code only when there is real reuse; do not create abstractions for a single use.
+- Match the surrounding style and architecture. Do not refactor, reformat, or clean up unrelated code.
+- Preserve all unrelated user changes in a dirty worktree. Mention unrelated dead code rather than deleting it.
+- Remove imports, variables, functions, and files made obsolete by your own change.
+- Every changed line must trace to the request or to verification required by the request.
 
-- Minimize code updates; focus on required changes only
-- Run `make lint-fix` after code changes
+### Testing and Verification
+
+- For a bug fix, first add or identify a test that reproduces the failure, then make it pass.
+- For new behavior, add focused tests covering the requested success and failure cases.
+- Run the narrowest relevant tests during iteration, then expand checks in proportion to the affected scope.
+- After Python changes, run `make lint-fix`, relevant pytest tests, and `make format-check`. Run the full suite when changes cross modules or affect the workflow.
+- For documentation-only changes, inspect the rendered structure, verify commands and paths against the repository, and review the final diff; the application test suite is not required.
+- Do not claim success without fresh command output. Report skipped checks and the reason.
+
+### Completion
+
+Summarize:
+
+1. What changed and why.
+2. What was verified, including exact commands.
+3. Any remaining risk, assumption, or follow-up.
+
+Do not commit, push, open a pull request, upload reports, or send email unless the user explicitly requests it.
