@@ -38,6 +38,27 @@ class CodeInterpreterModel(DashScopeChatModel):
 logger = logging.getLogger(__name__)
 
 
+def strip_structured_json_from_markdown(text: str) -> str:
+    """Remove machine-readable JSON snippets from human-facing markdown reports.
+
+    Agent prompts ask for structured data at the end of responses. That data is
+    persisted separately as JSON, so it should not be included in email/HTML
+    reports generated from markdown.
+    """
+    if not text:
+        return text
+
+    # Remove fenced JSON code blocks: ```json ... ```
+    cleaned = re.sub(r"```\s*json\s*\n.*?\n\s*```", "", text, flags=re.IGNORECASE | re.DOTALL)
+
+    # Some renderers/models may emit a bare trailing block like: json { ... }
+    # after markdown conversion or without backticks. Keep this scoped to the
+    # end of the section to avoid deleting prose that merely mentions JSON.
+    cleaned = re.sub(r"(?:^|\n)\s*json\s*\{.*?\}\s*$", "", cleaned, flags=re.IGNORECASE | re.DOTALL)
+
+    return cleaned.strip()
+
+
 def get_latest_us_trading_date() -> str:
     """Get the latest US stock market trading date using Yahoo Finance.
 
@@ -181,13 +202,13 @@ class AgentContext:
         sections = [f"# 股票分析报告: {self.company_of_interest} ({self.trade_date} | 最新交易日: {self.latest_trading_date})"]
 
         if self.final_trade_decision:
-            sections.append(f"## 最终交易决策\n\n{self.final_trade_decision}")
+            sections.append(f"## 最终交易决策\n\n{strip_structured_json_from_markdown(self.final_trade_decision)}")
 
         if self.trader_investment_plan:
-            sections.append(f"## 交易员操作计划\n\n{self.trader_investment_plan}")
+            sections.append(f"## 交易员操作计划\n\n{strip_structured_json_from_markdown(self.trader_investment_plan)}")
 
         if self.researcher_investment_plan:
-            sections.append(f"## 研究经理投资建议\n\n{self.researcher_investment_plan}")
+            sections.append(f"## 研究经理投资建议\n\n{strip_structured_json_from_markdown(self.researcher_investment_plan)}")
 
         sections.append(self.generate_analyst_reports_md())
 

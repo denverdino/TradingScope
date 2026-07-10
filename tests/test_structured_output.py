@@ -580,3 +580,32 @@ class TestAnalysisResultExtended:
         assert result.analyst_decisions == {}
         assert result.research_decision.prediction.action == "hold"
         assert result.analyst_reports.market_structured is None
+
+
+# --- Human-facing markdown report cleanup ---
+
+
+class TestHumanFacingReportCleanup:
+    def test_generate_full_report_removes_structured_json_blocks(self, mock_context):
+        ctx = mock_context
+        ctx.company_of_interest = "AAPL"
+        ctx.trade_date = "2025-01-01"
+        ctx.latest_trading_date = "2024-12-31"
+        ctx.final_trade_decision = '''最终建议：卖出
+
+```json
+{
+  "direction": "bearish",
+  "action": "sell",
+  "confidence": 0.8
+}
+```'''
+        ctx.trader_investment_plan = '操作计划：减仓\n\njson { "action": "sell" }'
+
+        report = ctx.generate_full_report_md()
+
+        assert "最终建议：卖出" in report
+        assert "操作计划：减仓" in report
+        assert "```json" not in report
+        assert '"direction"' not in report
+        assert '"action"' not in report
