@@ -2,12 +2,16 @@
 
 import os
 import sys
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
 # Add the project root to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from tests.test_output_models import _all_outputs
+from tradingscope.agents.researchers.debate_orchestrator import ResearchDebateOrchestrator
 from tradingscope.agents.risk_mgmt.debate_orchestrator import RiskDebateOrchestrator, create_debate_orchestrator
 
 
@@ -34,6 +38,7 @@ class TestRiskDebateOrchestrator:
         self.mock_conservative_agent = MockAgent("ConservativeAgent")
         self.mock_neutral_agent = MockAgent("NeutralAgent")
         self.mock_portfolio_manager = MockAgent("PortfolioManager")
+        self.structured_runner = SimpleNamespace(run=AsyncMock())
         self.max_rounds = 2
 
     def test_create_debate_orchestrator_success(self):
@@ -43,6 +48,7 @@ class TestRiskDebateOrchestrator:
             conservative_agent=self.mock_conservative_agent,
             neutral_agent=self.mock_neutral_agent,
             portfolio_manager=self.mock_portfolio_manager,
+            structured_runner=self.structured_runner,
             max_rounds=self.max_rounds,
         )
 
@@ -62,6 +68,7 @@ class TestRiskDebateOrchestrator:
             conservative_agent=self.mock_conservative_agent,
             neutral_agent=self.mock_neutral_agent,
             portfolio_manager=self.mock_portfolio_manager,
+            structured_runner=self.structured_runner,
             max_rounds=self.max_rounds,
         )
 
@@ -81,6 +88,7 @@ class TestRiskDebateOrchestrator:
             conservative_agent=self.mock_conservative_agent,
             neutral_agent=self.mock_neutral_agent,
             portfolio_manager=self.mock_portfolio_manager,
+            structured_runner=self.structured_runner,
             max_rounds=self.max_rounds,
         )
 
@@ -95,6 +103,7 @@ class TestRiskDebateOrchestrator:
             conservative_agent=self.mock_conservative_agent,
             neutral_agent=self.mock_neutral_agent,
             portfolio_manager=self.mock_portfolio_manager,
+            structured_runner=self.structured_runner,
             max_rounds=self.max_rounds,
         )
 
@@ -102,3 +111,37 @@ class TestRiskDebateOrchestrator:
         # we can verify the orchestrator was created with the right configuration
         assert orchestrator is not None
         assert orchestrator.max_rounds == self.max_rounds
+
+    @pytest.mark.asyncio
+    async def test_risk_manager_returns_typed_output(self):
+        expected = _all_outputs()[6]
+        self.structured_runner.run.return_value = expected
+        orchestrator = RiskDebateOrchestrator(
+            aggressive_agent=self.mock_aggressive_agent,
+            conservative_agent=self.mock_conservative_agent,
+            neutral_agent=self.mock_neutral_agent,
+            portfolio_manager=self.mock_portfolio_manager,
+            structured_runner=self.structured_runner,
+            max_rounds=0,
+        )
+
+        result = await orchestrator.run_debate("AAPL")
+
+        assert result is expected
+
+
+@pytest.mark.asyncio
+async def test_research_manager_returns_typed_output():
+    expected = _all_outputs()[4]
+    structured_runner = SimpleNamespace(run=AsyncMock(return_value=expected))
+    orchestrator = ResearchDebateOrchestrator(
+        bull_researcher=MockAgent("Bull"),
+        bear_researcher=MockAgent("Bear"),
+        research_manager=MockAgent("ResearchManager"),
+        structured_runner=structured_runner,
+        max_rounds=0,
+    )
+
+    result = await orchestrator.run_debate("AAPL")
+
+    assert result is expected

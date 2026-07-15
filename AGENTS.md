@@ -110,4 +110,8 @@ Summarize:
 2. What was verified, including exact commands.
 3. Any remaining risk, assumption, or follow-up.
 
-Do not commit, push, open a pull request, upload reports, or send email unless the user explicitly requests it.
+- Never commit AI-generated design, specification, planning, or implementation-plan documents. Keep such artifacts outside the repository or leave them untracked for local use only.
+- Before merging any development branch into a trunk branch such as `main` or `master`, squash all branch commits into a single commit. Do not merge a multi-commit branch history directly into the trunk.
+- After repository changes are complete and verified, automatically create the squashed local commit, merge it into the local `main` branch, and verify the merged result. This is standing authorization for local commits and local merges; do not ask for confirmation each time.
+
+Do not push, open a pull request, upload reports, or send email unless the user explicitly requests it.

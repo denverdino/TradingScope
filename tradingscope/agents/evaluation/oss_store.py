@@ -12,49 +12,29 @@ import os
 from datetime import datetime, timedelta
 from typing import List, Optional, Set
 
+from tradingscope.agents.output import PortfolioManagerOutput
 from tradingscope.agents.utils.context import get_latest_us_trading_date
 from tradingscope.default_config import DEFAULT_CONFIG
-from tradingscope.utils.oss_report_reader import async_fetch_json_report
+from tradingscope.utils.oss_structured_output_reader import async_fetch_completed_v2_output
 
 from .models import AnalysisRecord
 
 logger = logging.getLogger(__name__)
 
 
-def _extract_portfolio_from_full_report(full_report: dict | None) -> dict | None:
-    """Extract a flat portfolio dict from a full_report.json structure.
-
-    full_report.json stores portfolio_decision with a nested 'prediction' key.
-    This flattens it into the format expected by _build_record_from_json.
-    """
-    if not full_report or not isinstance(full_report, dict):
-        return None
-    pd = full_report.get("portfolio_decision")
-    if not pd or not isinstance(pd, dict):
-        return None
-    prediction = pd.get("prediction", {})
-    flat = {**prediction}
-    for key in ("adopted_reasoning", "viewpoints_aggressive", "viewpoints_conservative",
-                "viewpoints_neutral", "position_advice", "risk_score",
-                "risk_control_measures", "invalidation_conditions"):
-        if key in pd:
-            flat[key] = pd[key]
-    return flat
-
-
-def _build_record_from_json(ticker: str, trade_date: str, data: dict) -> AnalysisRecord:
-    """Build an AnalysisRecord directly from a portfolio_manager.json dict."""
+def build_record_from_portfolio(portfolio: PortfolioManagerOutput) -> AnalysisRecord:
+    """Build an evaluation record from a validated portfolio decision."""
     return AnalysisRecord(
-        ticker=ticker,
-        trade_date=trade_date,
-        direction=data.get("direction", "neutral"),
-        action=data.get("action", "hold"),
-        confidence=float(data.get("confidence", 0.5)),
-        entry_price=data.get("entry_price"),
-        target_price=data.get("target_price"),
-        stop_loss=data.get("stop_loss"),
-        reasoning=data.get("reasoning", "")[:100],
-        final_decision_summary=data.get("adopted_reasoning", "")[:500],
+        ticker=portfolio.ticker,
+        trade_date=portfolio.trade_date.isoformat(),
+        direction=portfolio.decision.direction.value,
+        action=portfolio.decision.action.value,
+        confidence=portfolio.decision.confidence,
+        entry_price=portfolio.price_plan.entry_price,
+        target_price=portfolio.price_plan.target_price,
+        stop_loss=portfolio.price_plan.stop_loss,
+        reasoning="；".join(portfolio.decision.reasoning)[:100],
+        final_decision_summary="；".join(portfolio.adopted_reasoning)[:500],
         status="pending",
     )
 
@@ -105,15 +85,16 @@ class OSSAnalysisStore:
 
         records: List[AnalysisRecord] = []
         for trade_date, tkr in pending:
-            data = await async_fetch_json_report(trade_date, tkr)
+            data = await async_fetch_completed_v2_output(trade_date, tkr)
             if not data:
-                data = _extract_portfolio_from_full_report(
-                    await async_fetch_json_report(trade_date, tkr, agent="full_report")
+                logger.debug(
+                    "[OSSStore] No completed v2 report found for %s/%s",
+                    tkr,
+                    trade_date,
                 )
-            if not data:
-                logger.debug("[OSSStore] No JSON report found for %s/%s", tkr, trade_date)
                 continue
-            record = _build_record_from_json(tkr, trade_date, data)
+            portfolio = PortfolioManagerOutput.model_validate(data)
+            record = build_record_from_portfolio(portfolio)
             records.append(record)
 
         if records:

@@ -3,18 +3,19 @@
 
 import asyncio
 
+from tradingscope.agents.renderers import render_full_report
 from tradingscope.agents.workflow import analyze
 
 
 async def main():
-    output = await analyze("MSFT")
+    result = await analyze("MSFT")
     print("=" * 60)
     print("Final Markdown Report")
-    print(output.report_md)
+    print(render_full_report(result))
     print("=" * 60)
 
     print("\nStructured JSON Output:")
-    print(output.structured.to_json())
+    print(result.model_dump_json(indent=2))
 
 
 if __name__ == "__main__":

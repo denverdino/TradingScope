@@ -49,7 +49,7 @@ format-check:
 # Testing
 .PHONY: test
 test:
-	uv run pytest
+	.venv/bin/python -m pytest
 
 # Testing with coverage
 .PHONY: test-cov

@@ -121,7 +121,7 @@ def create_news_analyst_agent(
 💰 必须包含基于新闻的价格影响分析和调整建议
 🌍 考虑{market_info["market_name"]}市场特点进行分析
 
-**输出格式：**
+**分析素材应覆盖：**
 ### 股票基本信息
 - 公司名称：{company_name}
 - 股票代码：{ticker}
@@ -143,6 +143,8 @@ def create_news_analyst_agent(
 - ...
 
 🔗 **重要提示：** 必须在报告中保留所有新闻的原始链接，确保信息可追溯和可验证。
+
+不要输出 JSON、JSON 代码块或固定 Markdown 报告模板；系统将在下一阶段根据严格 schema 生成正式结果。
 
 """
 

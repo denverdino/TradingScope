@@ -18,7 +18,7 @@ resolution-markers = [
 
 [[package]]
 name = "agentscope"
-version = "2.0.1"
+version = "2.0.4"
 source = { registry = "http://mirrors.aliyun.com/pypi/simple/" }
 dependencies = [
     { name = "aiofiles" },
@@ -46,9 +46,9 @@ dependencies = [
     { name = "tree-sitter" },
     { name = "tree-sitter-bash" },
 ]
-sdist = { url = "http://mirrors.aliyun.com/pypi/packages/36/27/8c66102f6afbda017a946304a4e9c5fcf8f6e53b78b968be010929ece8d8/agentscope-2.0.1.tar.gz", hash = "sha256:1f6035eb67a71a433f3a679cf8d79415185150d5f2be2e7e1d8ee1e2f1f0637a" }
+sdist = { url = "http://mirrors.aliyun.com/pypi/packages/09/7b/4511a665d7ffd2242e8030b2e33ad5bc0f11bc3aa266d5dfd595c58d0076/agentscope-2.0.4.tar.gz", hash = "sha256:286c073882a75bf13a898f1e9ee2eaf25ae7feef44d60a55b07271b84662ed47" }
 wheels = [
-    { url = "http://mirrors.aliyun.com/pypi/packages/16/f2/e4c8c1c97c8cf18d9d8b81d3ecabcfe02392b9c4f6811f57203e3665f013/agentscope-2.0.1-py3-none-any.whl", hash = "sha256:8ec54aa13c0fae0944116d3e2875528d126f86588085b801d46907c22c253db5" },
+    { url = "http://mirrors.aliyun.com/pypi/packages/ea/61/80c68f3ef4dfa6166fa11151fe39c8ae3db6192875a5034d042ea10a3aa8/agentscope-2.0.4-py3-none-any.whl", hash = "sha256:cf14ebda5e05d759a03b273b4cf85397bdf715d93d07baa23625b3f435847cd6" },
 ]
 
 [[package]]
@@ -4699,7 +4699,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "agentscope", specifier = ">=2.0.1" },
+    { name = "agentscope", specifier = ">=2.0.4,<2.1" },
     { name = "alibabacloud-oss-v2", specifier = ">=1.2.0" },
     { name = "beautifulsoup4", specifier = ">=4.14.2" },
     { name = "cachetools", specifier = ">=5.3.2" },

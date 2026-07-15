@@ -35,6 +35,7 @@ def test_debate_orchestrator_creation(mock_model):
             conservative_agent=mock_conservative,
             neutral_agent=mock_neutral,
             portfolio_manager=mock_portfolio_manager,
+            structured_runner=object(),
             max_rounds=1,
         )
         print("✅ Debate orchestrator created successfully!")

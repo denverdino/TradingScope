@@ -1,8 +1,11 @@
+"""Shared models, dates, and typed workflow state for TradingScope agents."""
+
+from __future__ import annotations
+
 import logging
 import os
-import re
 from datetime import datetime, timedelta
-from typing import Annotated, Any, Dict, Optional
+from typing import Annotated, Any
 
 import yfinance as yf
 from agentscope.credential import DashScopeCredential
@@ -10,17 +13,21 @@ from agentscope.formatter import DashScopeChatFormatter
 from agentscope.model import DashScopeChatModel
 from yfinance.exceptions import YFRateLimitError
 
+from tradingscope.agents.output import (
+    FundamentalsAnalystOutput,
+    MarketAnalystOutput,
+    NewsAnalystOutput,
+    PortfolioManagerOutput,
+    ResearchManagerOutput,
+    SocialMediaAnalystOutput,
+    TraderOutput,
+)
+from tradingscope.agents.renderers import render_markdown
 from tradingscope.default_config import DEFAULT_CONFIG
 
 
 class CodeInterpreterModel(DashScopeChatModel):
-    """DashScope model with built-in code_interpreter enabled.
-
-    Uses DashScope's server-side code_interpreter which runs Python in a
-    cloud sandbox. Mutually exclusive with Function Calling (Toolkit).
-
-    Ref: https://help.aliyun.com/zh/model-studio/qwen-code-interpreter
-    """
+    """DashScope model with its server-side code interpreter enabled."""
 
     async def _call_api(
         self,
@@ -32,48 +39,25 @@ class CodeInterpreterModel(DashScopeChatModel):
     ):
         kwargs.setdefault("extra_body", {})
         kwargs["extra_body"]["enable_code_interpreter"] = True
-        return await super()._call_api(model_name, messages, tools=None, tool_choice=None, **kwargs)
+        return await super()._call_api(
+            model_name,
+            messages,
+            tools=None,
+            tool_choice=None,
+            **kwargs,
+        )
 
 
 logger = logging.getLogger(__name__)
 
 
-def strip_structured_json_from_markdown(text: str) -> str:
-    """Remove machine-readable JSON snippets from human-facing markdown reports.
-
-    Agent prompts ask for structured data at the end of responses. That data is
-    persisted separately as JSON, so it should not be included in email/HTML
-    reports generated from markdown.
-    """
-    if not text:
-        return text
-
-    # Remove fenced JSON code blocks: ```json ... ```
-    cleaned = re.sub(r"```\s*json\s*\n.*?\n\s*```", "", text, flags=re.IGNORECASE | re.DOTALL)
-
-    # Some renderers/models may emit a bare trailing block like: json { ... }
-    # after markdown conversion or without backticks. Keep this scoped to the
-    # end of the section to avoid deleting prose that merely mentions JSON.
-    cleaned = re.sub(r"(?:^|\n)\s*json\s*\{.*?\}\s*$", "", cleaned, flags=re.IGNORECASE | re.DOTALL)
-
-    return cleaned.strip()
-
-
 def get_latest_us_trading_date() -> str:
-    """Get the latest US stock market trading date using Yahoo Finance.
-
-    Uses SPY (S&P 500 ETF) as a reference to determine the most recent
-    completed trading day, accounting for weekends and market holidays.
-
-    Returns:
-        str: Latest trading date in YYYY-MM-DD format
-    """
+    """Return the most recent completed US trading date."""
     try:
         spy = yf.Ticker("SPY")
         hist = spy.history(period="5d")
         if hist is not None and not hist.empty:
             latest_date = hist.index[-1]
-            # Remove timezone info if present
             if hasattr(latest_date, "tz") and latest_date.tz is not None:
                 latest_date = latest_date.tz_localize(None)
             result = latest_date.strftime("%Y-%m-%d")
@@ -81,15 +65,13 @@ def get_latest_us_trading_date() -> str:
             return result
     except YFRateLimitError:
         logger.warning("Yahoo Finance rate limited when fetching latest trading date")
-    except Exception as e:
-        logger.warning("Failed to get latest trading date from Yahoo Finance: %s", e)
+    except Exception as exc:
+        logger.warning("Failed to get latest trading date from Yahoo Finance: %s", exc)
 
-    # Fallback: weekday-based estimation (does not account for market holidays)
     now = datetime.now()
-    weekday = now.weekday()
-    if weekday == 5:  # Saturday -> Friday
+    if now.weekday() == 5:
         now -= timedelta(days=1)
-    elif weekday == 6:  # Sunday -> Friday
+    elif now.weekday() == 6:
         now -= timedelta(days=2)
     result = now.strftime("%Y-%m-%d")
     logger.info("Using fallback trading date (weekday-based): %s", result)
@@ -97,292 +79,84 @@ def get_latest_us_trading_date() -> str:
 
 
 class AgentContext:
-    """Context object that holds shared state between agents."""
+    """Shared workflow state whose analysis values are validated models."""
 
-    # Core context information
-    company_of_interest: Annotated[str, "Company that we are interested in trading"] = ""
-    trade_date: Annotated[str, "Current date"] = ""
-    latest_trading_date: Annotated[str, "Latest US stock market trading date"] = ""
+    company_of_interest: Annotated[str, "Company being analyzed"] = ""
+    trade_date: Annotated[str, "Current analysis date"] = ""
+    latest_trading_date: Annotated[str, "Latest US trading date"] = ""
 
-    # Analyst step
-    market_report: Annotated[str, "Report from the Market Analyst"] = ""
-    sentiment_report: Annotated[str, "Report from the Social Media Analyst"] = ""
-    news_report: Annotated[str, "Report from the News Analyst"] = ""
-    fundamentals_report: Annotated[str, "Report from the Fundamentals Analyst"] = ""
-    equity_report: Annotated[str, "Report from the Equity Analyst"] = ""
-
-    # Researcher team discussion step
-    researcher_investment_plan: Annotated[str, "Plan generated by the researcher manager"] = ""
-
-    trader_investment_plan: Annotated[str, "Plan generated by the Trader"] = ""
-
-    # risk management team discussion step
-    final_trade_decision: Annotated[str, "Final decision made by the Risk Analysts"] = ""
-
-    def __init__(self):
-        """Initialize AgentContext with default values."""
+    def __init__(self) -> None:
         self.trade_date = datetime.now().strftime("%Y-%m-%d")
         self.latest_trading_date = get_latest_us_trading_date()
+        self.market_analysis: MarketAnalystOutput | None = None
+        self.fundamentals_analysis: FundamentalsAnalystOutput | None = None
+        self.news_analysis: NewsAnalystOutput | None = None
+        self.social_analysis: SocialMediaAnalystOutput | None = None
+        self.research_decision: ResearchManagerOutput | None = None
+        self.trader_decision: TraderOutput | None = None
+        self.portfolio_decision: PortfolioManagerOutput | None = None
 
-        api_key = os.environ.get("DASHSCOPE_API_KEY")
-
-        credential = DashScopeCredential(api_key=api_key)
-
-        # Model initialization
+        credential = DashScopeCredential(api_key=os.environ.get("DASHSCOPE_API_KEY"))
+        common_parameters = DashScopeChatModel.Parameters(
+            thinking_enable=True,
+            parallel_tool_calls=False,
+        )
         self.model = DashScopeChatModel(
             credential=credential,
             model=DEFAULT_CONFIG["deep_think_llm"],
-            parameters=DashScopeChatModel.Parameters(thinking_enable=True, parallel_tool_calls=False),
+            parameters=common_parameters,
             stream=True,
             formatter=DashScopeChatFormatter(),
         )
-
-        # Non-thinking model for debate agents (faster, no reasoning overhead)
         self.non_thinking_model = DashScopeChatModel(
             credential=credential,
             model=DEFAULT_CONFIG["deep_think_llm"],
-            parameters=DashScopeChatModel.Parameters(thinking_enable=False, parallel_tool_calls=False),
+            parameters=DashScopeChatModel.Parameters(
+                thinking_enable=False,
+                parallel_tool_calls=False,
+            ),
             stream=True,
             formatter=DashScopeChatFormatter(),
         )
-
-        # Model with built-in code_interpreter (cloud sandbox, no Function Calling)
         self.code_interpreter_model = CodeInterpreterModel(
             credential=credential,
-            model=DEFAULT_CONFIG.get("deep_think_llm"),
-            parameters=CodeInterpreterModel.Parameters(thinking_enable=True, parallel_tool_calls=False),
+            model=DEFAULT_CONFIG["deep_think_llm"],
+            parameters=CodeInterpreterModel.Parameters(
+                thinking_enable=True,
+                parallel_tool_calls=False,
+            ),
             stream=True,
             formatter=DashScopeChatFormatter(),
         )
 
     def generate_analyst_reports_md(self) -> str:
-        """Generate markdown formatted research reports section."""
-        sections = []
-
-        if self.market_report:
-            sections.append(f"## 股票技术面分析报告\n\n{self.market_report}")
-
-        if self.sentiment_report:
-            sections.append(f"## 股票社交媒体情绪面分析报告\n\n{self.sentiment_report}")
-
-        if self.news_report:
-            sections.append(f"## 股票消息面分析报告\n\n{self.news_report}")
-
-        if self.fundamentals_report:
-            sections.append(f"## 股票基本面分析报告\n\n{self.fundamentals_report}")
-
-        return "\n\n---\n\n".join(sections)
+        """Render available typed analyst outputs for downstream text agents."""
+        outputs = (
+            self.market_analysis,
+            self.social_analysis,
+            self.news_analysis,
+            self.fundamentals_analysis,
+        )
+        return "\n\n---\n\n".join(render_markdown(output) for output in outputs if output is not None)
 
     def generate_trader_context_md(self) -> str:
-        """Generate markdown formatted context for trader"""
+        """Render the validated research decision and analyst evidence."""
+        research = render_markdown(self.research_decision) if self.research_decision is not None else ""
         return f"""## 研究经理投资建议
 
-{self.researcher_investment_plan}
+{research}
 
 ---
 
 {self.generate_analyst_reports_md()}"""
 
     def generate_risk_evaluation_context_md(self) -> str:
-        """Generate markdown formatted context for risk evaluation"""
+        """Render the validated trader decision and its upstream context."""
+        trader = render_markdown(self.trader_decision) if self.trader_decision is not None else ""
         return f"""## 交易员操作计划
 
-{self.trader_investment_plan}
+{trader}
 
 ---
 
 {self.generate_trader_context_md()}"""
-
-    def generate_full_report_md(self) -> str:
-        """Generate the complete analysis report in markdown format.
-
-        Returns:
-            Complete markdown report with all sections properly formatted
-        """
-        sections = [f"# 股票分析报告: {self.company_of_interest} ({self.trade_date} | 最新交易日: {self.latest_trading_date})"]
-
-        if self.final_trade_decision:
-            sections.append(f"## 最终交易决策\n\n{strip_structured_json_from_markdown(self.final_trade_decision)}")
-
-        if self.trader_investment_plan:
-            sections.append(f"## 交易员操作计划\n\n{strip_structured_json_from_markdown(self.trader_investment_plan)}")
-
-        if self.researcher_investment_plan:
-            sections.append(f"## 研究经理投资建议\n\n{strip_structured_json_from_markdown(self.researcher_investment_plan)}")
-
-        sections.append(self.generate_analyst_reports_md())
-
-        return "\n\n---\n\n".join(sections)
-
-    def generate_situation_summary(self) -> str:
-        """Generate a condensed market situation summary for memory retrieval.
-
-        This method creates a concise description of the current market situation
-        from all analyst reports, optimized for semantic similarity search in
-        the memory system.
-
-        Returns:
-            Condensed situation summary string
-        """
-        summary_parts = [
-            f"股票: {self.company_of_interest}",
-            f"日期: {self.trade_date}",
-            f"最新交易日: {self.latest_trading_date}",
-        ]
-
-        # Extract key points from each report (first 500 chars as summary)
-        if self.market_report:
-            market_summary = self.market_report[:500].strip()
-            summary_parts.append(f"市场技术面: {market_summary}")
-
-        if self.fundamentals_report:
-            fundamentals_summary = self.fundamentals_report[:500].strip()
-            summary_parts.append(f"基本面: {fundamentals_summary}")
-
-        if self.news_report:
-            news_summary = self.news_report[:500].strip()
-            summary_parts.append(f"消息面: {news_summary}")
-
-        if self.sentiment_report:
-            sentiment_summary = self.sentiment_report[:500].strip()
-            summary_parts.append(f"情绪面: {sentiment_summary}")
-
-        return "\n".join(summary_parts)
-
-    def extract_prediction_data(self, source: str | None = None) -> Dict[str, Optional[str]]:
-        """Extract structured prediction data from final trade decision.
-
-        Parses the final_trade_decision text to extract:
-        - direction: bullish/bearish/neutral
-        - action: buy/sell/hold
-        - confidence: 0-1 (from 置信度 field)
-        - entry_price: suggested entry price
-        - target_price: price target
-        - stop_loss: stop loss price
-        - reasoning: core reasoning (compressed)
-
-        Args:
-            source: Text to parse. Defaults to final_trade_decision,
-                falling back to trader_investment_plan.
-
-        Returns:
-            Dictionary with extracted prediction fields
-        """
-        result = {
-            "direction": "neutral",
-            "action": "hold",
-            "confidence": 0.5,
-            "entry_price": None,
-            "target_price": None,
-            "stop_loss": None,
-            "reasoning": "",
-        }
-
-        decision_text = source if source is not None else self.final_trade_decision
-        if not decision_text:
-            decision_text = self.trader_investment_plan
-
-        if not decision_text:
-            return result
-
-        text_lower = decision_text.lower()
-
-        # Extract action (buy/sell/hold)
-        if any(kw in text_lower for kw in ["买入", "buy", "做多", "增持"]):
-            result["action"] = "buy"
-            result["direction"] = "bullish"
-        elif any(kw in text_lower for kw in ["卖出", "sell", "做空", "减持", "清仓"]):
-            result["action"] = "sell"
-            result["direction"] = "bearish"
-        else:
-            result["action"] = "hold"
-            result["direction"] = "neutral"
-
-        # Extract confidence (置信度)
-        confidence_patterns = [
-            r"置信度[：:]\s*(\d+\.?\d*)",
-            r"信心[：:]\s*(\d+\.?\d*)",
-            r"confidence[：:]\s*(\d+\.?\d*)",
-        ]
-        for pattern in confidence_patterns:
-            match = re.search(pattern, decision_text, re.IGNORECASE)
-            if match:
-                conf = float(match.group(1))
-                # Normalize to 0-1 if given as percentage
-                if conf > 1:
-                    conf = conf / 100
-                result["confidence"] = min(1.0, max(0.0, conf))
-                break
-
-        # Extract entry price
-        entry_patterns = [
-            r"入场价(?:位)?[：:]\s*\$?(\d+\.?\d*)",
-            r"建议入场(?:价)?[：:]\s*\$?(\d+\.?\d*)",
-            r"entry[：:\s]+\$?(\d+\.?\d*)",
-        ]
-        for pattern in entry_patterns:
-            match = re.search(pattern, decision_text, re.IGNORECASE)
-            if match:
-                result["entry_price"] = float(match.group(1))
-                break
-
-        # Extract target price
-        target_patterns = [
-            r"目标价(?:位)?[：:]\s*\$?(\d+\.?\d*)",
-            r"目标[：:\s]+\$?(\d+\.?\d*)",
-            r"target[：:\s]+\$?(\d+\.?\d*)",
-        ]
-        for pattern in target_patterns:
-            match = re.search(pattern, decision_text, re.IGNORECASE)
-            if match:
-                result["target_price"] = float(match.group(1))
-                break
-
-        # Extract stop loss
-        stop_patterns = [
-            r"止损(?:价位)?[：:]\s*\$?(\d+\.?\d*)",
-            r"stop.?loss[：:\s]+\$?(\d+\.?\d*)",
-        ]
-        for pattern in stop_patterns:
-            match = re.search(pattern, decision_text, re.IGNORECASE)
-            if match:
-                result["stop_loss"] = float(match.group(1))
-                break
-
-        # Extract reasoning (first meaningful paragraph)
-        reasoning_parts = []
-
-        # Look for key decision points
-        reason_patterns = [
-            r"决策理由[：:](.*?)(?:\n\n|\n#|$)",
-            r"核心逻辑[：:](.*?)(?:\n\n|\n#|$)",
-            r"主要原因[：:](.*?)(?:\n\n|\n#|$)",
-        ]
-        for pattern in reason_patterns:
-            match = re.search(pattern, decision_text, re.DOTALL)
-            if match:
-                reasoning_parts.append(match.group(1).strip()[:100])
-                break
-
-        # If no explicit reasoning, extract from action context
-        if not reasoning_parts:
-            # Find sentences containing the action keyword
-            sentences = re.split(r"[。\.\n]", decision_text)
-            action_keywords = ["买入", "卖出", "持有", "buy", "sell", "hold"]
-            for sent in sentences:
-                if any(kw in sent.lower() for kw in action_keywords) and len(sent) > 20:
-                    reasoning_parts.append(sent.strip()[:100])
-                    break
-
-        result["reasoning"] = _clean_markdown("".join(reasoning_parts)[:100]) if reasoning_parts else "未提供详细理由"
-
-        return result
-
-
-def _clean_markdown(text: str) -> str:
-    """Strip markdown formatting from text."""
-    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)  # bold
-    text = re.sub(r"\*(.+?)\*", r"\1", text)  # italic
-    text = re.sub(r"^#+\s*", "", text, flags=re.MULTILINE)  # headings
-    text = re.sub(r"^[-*]\s+", "", text, flags=re.MULTILINE)  # list markers
-    return text.strip()

@@ -5,6 +5,7 @@ from __future__ import annotations
 from agentscope import logger
 from agentscope.message import UserMsg
 
+from tradingscope.agents.output import ResearchManagerOutput
 from tradingscope.agents.utils.agent_utils import call_agent_with_retry
 
 
@@ -16,6 +17,7 @@ class ResearchDebateOrchestrator:
         bull_researcher,
         bear_researcher,
         research_manager,
+        structured_runner,
         max_rounds: int = 3,
     ):
         """Initialize the debate orchestrator.
@@ -29,6 +31,7 @@ class ResearchDebateOrchestrator:
         self.bull_researcher = bull_researcher
         self.bear_researcher = bear_researcher
         self.research_manager = research_manager
+        self.structured_runner = structured_runner
         self.max_rounds = max_rounds
 
         logger.info("✅ Research Debate Orchestrator initialized with bull researcher, bear researcher and research manager")
@@ -148,8 +151,9 @@ class ResearchDebateOrchestrator:
 """,
         )
 
-        final_decision = await call_agent_with_retry(
+        final_decision = await self.structured_runner.run(
             self.research_manager,
+            ResearchManagerOutput,
             research_manager_prompt,
         )
         logger.info("✅ Research debate completed")
@@ -161,6 +165,7 @@ def create_research_debate_orchestrator(
     bull_researcher,
     bear_researcher,
     research_manager,
+    structured_runner,
     max_rounds: int = 3,
 ) -> ResearchDebateOrchestrator:
     """Create a research debate orchestrator.
@@ -178,5 +183,6 @@ def create_research_debate_orchestrator(
         bull_researcher,
         bear_researcher,
         research_manager,
+        structured_runner,
         max_rounds=max_rounds,
     )

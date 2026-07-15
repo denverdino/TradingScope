@@ -5,6 +5,7 @@ from __future__ import annotations
 from agentscope import logger
 from agentscope.message import UserMsg
 
+from tradingscope.agents.output import PortfolioManagerOutput
 from tradingscope.agents.utils.agent_utils import call_agent_with_retry
 
 
@@ -17,6 +18,7 @@ class RiskDebateOrchestrator:
         conservative_agent,
         neutral_agent,
         portfolio_manager,
+        structured_runner,
         max_rounds: int,
     ):
         """Initialize the debate orchestrator.
@@ -37,6 +39,7 @@ class RiskDebateOrchestrator:
 
         # Create the portfolio manager agent
         self.portfolio_manager = portfolio_manager
+        self.structured_runner = structured_runner
 
         logger.info("✅ Risk Debate Orchestrator initialized with 3 debators and 1 portfolio manager")
 
@@ -195,8 +198,9 @@ class RiskDebateOrchestrator:
 """,
         )
 
-        final_decision = await call_agent_with_retry(
+        final_decision = await self.structured_runner.run(
             self.portfolio_manager,
+            PortfolioManagerOutput,
             portfolio_manager_prompt,
         )
 
@@ -210,6 +214,7 @@ def create_debate_orchestrator(
     conservative_agent,
     neutral_agent,
     portfolio_manager,
+    structured_runner,
     max_rounds: int = 3,
 ) -> RiskDebateOrchestrator:
     """Create a risk management debate orchestrator.
@@ -229,5 +234,6 @@ def create_debate_orchestrator(
         conservative_agent=conservative_agent,
         neutral_agent=neutral_agent,
         portfolio_manager=portfolio_manager,
+        structured_runner=structured_runner,
         max_rounds=max_rounds,
     )

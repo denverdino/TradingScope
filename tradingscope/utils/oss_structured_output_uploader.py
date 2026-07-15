@@ -14,6 +14,10 @@ import json
 import logging
 from typing import Dict
 
+from tradingscope.agents.output import AnalysisResult
+from tradingscope.agents.renderers import render_full_report, render_markdown
+from tradingscope.utils.oss_report_uploader import upload_reports
+
 logger = logging.getLogger(__name__)
 
 _OSS_KEY_PREFIX = "tradingscope"
@@ -97,3 +101,62 @@ async def upload_structured_outputs(trade_date: str, ticker: str, outputs: Dict[
     for name, task in tasks.items():
         results[name] = await task
     return results
+
+
+async def persist_analysis_result(result: AnalysisResult) -> None:
+    """Persist a complete schema-v2 result and write its manifest last.
+
+    OSS remains optional. When it is configured, every JSON and Markdown
+    artifact must succeed before the completion manifest is written.
+    """
+    if _get_client() is None:
+        logger.info("[OSSStructuredUploader] OSS not configured; skipping persistence")
+        return
+
+    trade_date = result.trade_date.isoformat()
+    node_outputs = {
+        "market_analyst": result.analysts.market,
+        "fundamentals_analyst": result.analysts.fundamentals,
+        "news_analyst": result.analysts.news,
+        "social_media_analyst": result.analysts.social_media,
+        "research_manager": result.research_manager,
+        "trader": result.trader,
+        "portfolio_manager": result.portfolio_manager,
+        "full_report": result,
+    }
+    json_outputs = {name: output.model_dump_json(indent=2) for name, output in node_outputs.items()}
+    markdown_outputs = {name: render_markdown(output) for name, output in node_outputs.items() if name != "full_report"}
+    markdown_outputs["full_report"] = render_full_report(result)
+
+    json_results = await upload_structured_outputs(
+        trade_date,
+        result.ticker,
+        json_outputs,
+    )
+    markdown_results = await upload_reports(
+        trade_date,
+        result.ticker,
+        markdown_outputs,
+    )
+    failed = [f"{name}.json" for name in json_outputs if not json_results.get(name, False)]
+    failed.extend(f"{name}.md" for name in markdown_outputs if not markdown_results.get(name, False))
+    if failed:
+        raise RuntimeError(f"failed to persist required artifacts: {', '.join(failed)}")
+
+    manifest = json.dumps(
+        {
+            "schema_version": "2.0",
+            "status": "complete",
+            "ticker": result.ticker,
+            "trade_date": trade_date,
+        },
+        ensure_ascii=False,
+        indent=2,
+    )
+    manifest_result = await upload_structured_outputs(
+        trade_date,
+        result.ticker,
+        {"manifest": manifest},
+    )
+    if not manifest_result.get("manifest", False):
+        raise RuntimeError("failed to persist completion manifest")

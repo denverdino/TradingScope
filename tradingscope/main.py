@@ -5,7 +5,7 @@ import os
 import markdown
 from agentscope import logger
 
-from tradingscope.agents.utils.context import AgentContext
+from tradingscope.agents.renderers import render_full_report
 from tradingscope.agents.workflow import analyze
 from tradingscope.default_config import DEFAULT_CONFIG
 from tradingscope.utils.email_utils import send_html_email
@@ -28,11 +28,9 @@ def main():
     # Get ticker from command line argument or use default
     ticker = args.ticker
 
-    # Use AgentContext as the single source of truth for trade_date
-    trade_date = AgentContext().trade_date
-    output = asyncio.run(analyze(ticker))
-    final_report = output.report_md
-    structured_result = output.structured
+    result = asyncio.run(analyze(ticker))
+    trade_date = result.trade_date.isoformat()
+    final_report = render_full_report(result)
 
     logger.info("******************************* Final Report *******************************")
     logger.info(final_report)
@@ -108,17 +106,24 @@ def main():
                 send_html_email(subject, html_with_style, recipient_list, sender_email, sender_password)
 
     if output_mode in ("json", "both"):
-        # Save each individual structured output as a separate JSON file
-        if output.individual_structured:
-            for agent_name, json_content in output.individual_structured.items():
-                agent_json_filename = os.path.join(ticker_data_dir, f"{agent_name}.json")
-                with open(agent_json_filename, "w", encoding="utf-8") as f:
-                    f.write(json_content)
-                logger.info("Structured output saved to: %s", agent_json_filename)
+        node_outputs = {
+            "market_analyst": result.analysts.market,
+            "fundamentals_analyst": result.analysts.fundamentals,
+            "news_analyst": result.analysts.news,
+            "social_media_analyst": result.analysts.social_media,
+            "research_manager": result.research_manager,
+            "trader": result.trader,
+            "portfolio_manager": result.portfolio_manager,
+        }
+        for agent_name, output in node_outputs.items():
+            agent_json_filename = os.path.join(ticker_data_dir, f"{agent_name}.json")
+            with open(agent_json_filename, "w", encoding="utf-8") as f:
+                f.write(output.model_dump_json(indent=2))
+            logger.info("Structured output saved to: %s", agent_json_filename)
 
         # Save combined structured result
         json_filename = os.path.join(ticker_data_dir, f"{ticker}_report_{trade_date}.json")
-        json_content = structured_result.to_json()
+        json_content = result.model_dump_json(indent=2)
         with open(json_filename, "w", encoding="utf-8") as f:
             f.write(json_content)
         logger.info("Combined JSON structured report saved to: %s", json_filename)

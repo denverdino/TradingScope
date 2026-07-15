@@ -1,1 +1,1 @@
-# Test files directory
+"""TradingScope test package."""

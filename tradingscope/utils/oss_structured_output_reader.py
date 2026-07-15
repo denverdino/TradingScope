@@ -11,11 +11,25 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any, Dict, Optional
+from datetime import date as date_type
+from typing import Any, Dict, Literal, Optional
+
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 logger = logging.getLogger(__name__)
 
 _OSS_KEY_PREFIX = "tradingscope"
+
+
+class CompletionManifest(BaseModel):
+    """Strict marker proving that every schema-v2 artifact was written."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["2.0"]
+    status: Literal["complete"]
+    ticker: str
+    trade_date: date_type
 
 
 def _get_client_and_bucket():
@@ -70,3 +84,39 @@ async def async_fetch_structured_output(date: str, ticker: str, agent: str = "po
     """Async wrapper for fetch_structured_output."""
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, fetch_structured_output, date, ticker, agent)
+
+
+def fetch_completed_v2_output(
+    date: str,
+    ticker: str,
+    agent: str = "portfolio_manager",
+) -> Optional[Dict[str, Any]]:
+    """Fetch a schema-v2 artifact only when its completion manifest is valid."""
+    manifest_data = fetch_structured_output(date, ticker, "manifest")
+    try:
+        manifest = CompletionManifest.model_validate(manifest_data)
+    except ValidationError:
+        return None
+    if manifest.ticker != ticker or manifest.trade_date.isoformat() != date:
+        return None
+
+    output = fetch_structured_output(date, ticker, agent)
+    if not isinstance(output, dict) or output.get("schema_version") != "2.0":
+        return None
+    return output
+
+
+async def async_fetch_completed_v2_output(
+    date: str,
+    ticker: str,
+    agent: str = "portfolio_manager",
+) -> Optional[Dict[str, Any]]:
+    """Async wrapper for manifest-gated schema-v2 reads."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        None,
+        fetch_completed_v2_output,
+        date,
+        ticker,
+        agent,
+    )
