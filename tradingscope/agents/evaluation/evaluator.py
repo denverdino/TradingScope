@@ -7,9 +7,10 @@ generates Lessons Learned for the shared memory namespace.
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from agentscope import logger
+from agentscope.agent import Agent
 from agentscope.message import UserMsg
 from agentscope.model import DashScopeChatModel
 
@@ -88,6 +89,7 @@ class AnalysisEvaluator:
         memory_manager: Optional[object] = None,
         results_dir: Optional[str] = None,
         dry_run: bool = False,
+        middlewares: list[Any] | None = None,
     ):
         """Initialize AnalysisEvaluator.
 
@@ -97,8 +99,10 @@ class AnalysisEvaluator:
                             If None, lessons are generated but not stored.
             results_dir: Directory for local tracking files.
             dry_run: If True, skip all side effects (memory writes, record marking).
+            middlewares: AgentScope middleware applied to evaluation calls.
         """
         self._model = model
+        self._middlewares = middlewares
         self._memory_manager = memory_manager
         self._record_store = OSSAnalysisStore(results_dir=results_dir)
         self._dry_run = dry_run
@@ -296,19 +300,17 @@ class AnalysisEvaluator:
         logger.info("[Evaluator] Prompt: %s", prompt)
 
         try:
-            msg = UserMsg(name="evaluator", content=prompt)
-            response = await self._model(messages=[msg])
-
-            # Handle streaming response (async generator)
-            text = ""
-            async for chunk in response:
-                for block in chunk.content:
-                    if hasattr(block, "text"):
-                        text = block.text
-                    elif isinstance(block, dict) and block.get("type") == "text":
-                        text = block["text"]
-
-            return text.strip() if text.strip() else None
+            agent = Agent(
+                name="EvaluationAgent",
+                system_prompt="你是一位客观的投资分析评测专家。",
+                model=self._model,
+                middlewares=self._middlewares,
+            )
+            response = await agent.reply(
+                UserMsg(name="evaluator", content=prompt),
+            )
+            text = response.get_text_content().strip()
+            return text or None
         except Exception as e:
             logger.warning("[Evaluator] LLM call failed: %s", e)
             return None

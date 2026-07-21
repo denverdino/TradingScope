@@ -49,6 +49,7 @@ def create_conservative_debator_agent(
         name=name,
         system_prompt=prompt,
         model=context.non_thinking_model,
+        middlewares=context.middlewares,
         toolkit=toolkit,
         react_config=ReActConfig(max_iters=5),
     )

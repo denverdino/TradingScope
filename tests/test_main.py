@@ -1,6 +1,8 @@
 """Test cases for the TradingScope CLI."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
 
 from tests.test_output_models import _all_outputs
 from tradingscope.agents.output import AnalysisResult, AnalystOutputs
@@ -59,3 +61,40 @@ def test_main_serializes_result_and_renders_markdown(tmp_path) -> None:
     assert next(tmp_path.rglob("portfolio_manager.json")).exists()
     html = next(tmp_path.rglob("AAPL_report_*.html")).read_text()
     assert "最终投资组合决策" in html
+
+
+def test_main_owns_tracing_lifecycle() -> None:
+    from tradingscope import main as main_module
+
+    provider = object()
+    setup_tracing = Mock(return_value=provider)
+    shutdown_tracing = Mock()
+    process = Mock()
+    with (
+        patch.object(main_module, "setup_tracing", setup_tracing),
+        patch.object(main_module, "shutdown_tracing", shutdown_tracing),
+        patch.object(main_module, "_main", process),
+    ):
+        main_module.main()
+
+    process.assert_called_once_with()
+    setup_tracing.assert_called_once_with("tradingscope-main")
+    shutdown_tracing.assert_called_once_with(provider)
+
+
+def test_main_shuts_down_tracing_when_processing_fails() -> None:
+    from tradingscope import main as main_module
+
+    provider = object()
+    setup_tracing = Mock(return_value=provider)
+    shutdown_tracing = Mock()
+    failure = RuntimeError("analysis failed")
+    with (
+        patch.object(main_module, "setup_tracing", setup_tracing),
+        patch.object(main_module, "shutdown_tracing", shutdown_tracing),
+        patch.object(main_module, "_main", side_effect=failure),
+        pytest.raises(RuntimeError, match="analysis failed"),
+    ):
+        main_module.main()
+
+    shutdown_tracing.assert_called_once_with(provider)

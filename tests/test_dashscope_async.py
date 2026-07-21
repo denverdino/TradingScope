@@ -7,6 +7,7 @@ import tempfile
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from agentscope.message import UserMsg
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -87,7 +88,7 @@ def _mock_streaming_model(text="Test content"):
 
 
 class TestEvaluatorGenerateLesson:
-    """Tests for evaluator.py _generate_lesson DashScope calls."""
+    """Tests for evaluator.py _generate_lesson Agent calls."""
 
     def _make_record(self, **kwargs):
         from tradingscope.agents.evaluation.models import AnalysisRecord
@@ -117,31 +118,108 @@ class TestEvaluatorGenerateLesson:
     def test_success(self):
         from tradingscope.agents.evaluation.evaluator import AnalysisEvaluator
 
-        lesson_text = "[AAPL|2025-01-01|得分:80%] 根因: test 教训: test 改进: test"
+        lesson_text = "  [AAPL|2025-01-01|得分:80%] 根因: test 教训: test 改进: test  "
         mock_model = _mock_streaming_model(text=lesson_text)
+        middlewares = [object()]
+        response = MagicMock()
+        response.get_text_content.return_value = lesson_text
         record = self._make_record(entry_price=150.0, target_price=160.0, stop_loss=140.0)
-        with tempfile.TemporaryDirectory() as tmpdir:
-            evaluator = AnalysisEvaluator(model=mock_model, results_dir=tmpdir, dry_run=True)
-            result = self._call_generate_lesson(evaluator, record)
-            assert result is not None
-            assert "AAPL" in result
+        with patch("tradingscope.agents.evaluation.evaluator.Agent") as mock_agent:
+            mock_agent.return_value.reply = AsyncMock(return_value=response)
+            with tempfile.TemporaryDirectory() as tmpdir:
+                evaluator = AnalysisEvaluator(
+                    model=mock_model,
+                    results_dir=tmpdir,
+                    dry_run=True,
+                    middlewares=middlewares,
+                )
+                result = self._call_generate_lesson(evaluator, record)
+
+        assert result == lesson_text.strip()
+        mock_agent.assert_called_once_with(
+            name="EvaluationAgent",
+            system_prompt="你是一位客观的投资分析评测专家。",
+            model=mock_model,
+            middlewares=middlewares,
+        )
+        mock_agent.return_value.reply.assert_awaited_once()
+        message = mock_agent.return_value.reply.await_args.args[0]
+        assert message == UserMsg(
+            name=message.name,
+            content=message.content,
+            metadata=message.metadata,
+            created_at=message.created_at,
+            finished_at=message.finished_at,
+            id=message.id,
+        )
+        assert message.role == "user"
+        assert message.name == "evaluator"
+        assert "AAPL" in message.get_text_content()
+
+    def test_each_lesson_uses_a_fresh_agent(self):
+        from tradingscope.agents.evaluation.evaluator import AnalysisEvaluator
+
+        mock_model = _mock_streaming_model()
+        middlewares = [object()]
+        first_agent = MagicMock()
+        first_response = MagicMock()
+        first_response.get_text_content.return_value = "First lesson"
+        first_agent.reply = AsyncMock(return_value=first_response)
+        second_agent = MagicMock()
+        second_response = MagicMock()
+        second_response.get_text_content.return_value = "Second lesson"
+        second_agent.reply = AsyncMock(return_value=second_response)
+        record = self._make_record()
+
+        with patch(
+            "tradingscope.agents.evaluation.evaluator.Agent",
+            side_effect=[first_agent, second_agent],
+        ) as agent_class:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                evaluator = AnalysisEvaluator(
+                    model=mock_model,
+                    results_dir=tmpdir,
+                    dry_run=True,
+                    middlewares=middlewares,
+                )
+                first_result = self._call_generate_lesson(evaluator, record)
+                second_result = self._call_generate_lesson(evaluator, record)
+
+        assert first_result == "First lesson"
+        assert second_result == "Second lesson"
+        assert agent_class.call_count == 2
+        for call in agent_class.call_args_list:
+            assert call.kwargs["model"] is mock_model
+            assert call.kwargs["middlewares"] is middlewares
+        first_agent.reply.assert_awaited_once()
+        second_agent.reply.assert_awaited_once()
 
     def test_exception_fallback(self):
         from tradingscope.agents.evaluation.evaluator import AnalysisEvaluator
 
-        mock_model = AsyncMock(side_effect=Exception("LLM error"))
+        mock_model = _mock_streaming_model()
         record = self._make_record()
-        with tempfile.TemporaryDirectory() as tmpdir:
-            evaluator = AnalysisEvaluator(model=mock_model, results_dir=tmpdir, dry_run=True)
-            result = self._call_generate_lesson(evaluator, record)
-            assert result is None
+        with patch("tradingscope.agents.evaluation.evaluator.Agent") as mock_agent:
+            mock_agent.return_value.reply = AsyncMock(side_effect=Exception("LLM error"))
+            with tempfile.TemporaryDirectory() as tmpdir:
+                evaluator = AnalysisEvaluator(model=mock_model, results_dir=tmpdir, dry_run=True)
+                result = self._call_generate_lesson(evaluator, record)
+
+        assert result is None
+        mock_agent.return_value.reply.assert_awaited_once()
 
     def test_empty_response(self):
         from tradingscope.agents.evaluation.evaluator import AnalysisEvaluator
 
-        mock_model = _mock_streaming_model(text="")
+        mock_model = _mock_streaming_model()
+        response = MagicMock()
+        response.get_text_content.return_value = "   "
         record = self._make_record()
-        with tempfile.TemporaryDirectory() as tmpdir:
-            evaluator = AnalysisEvaluator(model=mock_model, results_dir=tmpdir, dry_run=True)
-            result = self._call_generate_lesson(evaluator, record)
-            assert result is None
+        with patch("tradingscope.agents.evaluation.evaluator.Agent") as mock_agent:
+            mock_agent.return_value.reply = AsyncMock(return_value=response)
+            with tempfile.TemporaryDirectory() as tmpdir:
+                evaluator = AnalysisEvaluator(model=mock_model, results_dir=tmpdir, dry_run=True)
+                result = self._call_generate_lesson(evaluator, record)
+
+        assert result is None
+        mock_agent.return_value.reply.assert_awaited_once()

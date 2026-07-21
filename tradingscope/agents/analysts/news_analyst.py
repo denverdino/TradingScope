@@ -153,6 +153,7 @@ def create_news_analyst_agent(
         name=name,
         system_prompt=system_prompt,
         model=context.model,
+        middlewares=context.middlewares,
         toolkit=toolkit,
         react_config=ReActConfig(max_iters=8),
     )

@@ -121,6 +121,7 @@ def create_research_manager_agent(
         name=name,
         system_prompt=system_message,
         model=context.model,
+        middlewares=context.middlewares,
         react_config=ReActConfig(max_iters=8),
     )
 

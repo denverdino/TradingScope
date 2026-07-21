@@ -90,6 +90,7 @@ def create_portfolio_manager_agent(
         name=name,
         system_prompt=system_message,
         model=context.code_interpreter_model,
+        middlewares=context.middlewares,
     )
 
     logger.debug("📊 [DEBUG] ===== 投资组合经理 Agent 创建完成 =====")

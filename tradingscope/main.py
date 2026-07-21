@@ -6,13 +6,14 @@ import markdown
 from agentscope import logger
 
 from tradingscope.agents.renderers import render_full_report
+from tradingscope.agents.utils.tracing import setup_tracing, shutdown_tracing
 from tradingscope.agents.workflow import analyze
 from tradingscope.default_config import DEFAULT_CONFIG
 from tradingscope.utils.email_utils import send_html_email
 
 
-def main():
-    """Main entry point for the TradingScope application."""
+def _main() -> None:
+    """Parse arguments and run the TradingScope application."""
     # Create argument parser
     parser = argparse.ArgumentParser(description="TradingScope - Multi-Agents trading framework")
     parser.add_argument("ticker", nargs="?", default="AAPL", help="Stock ticker symbol (e.g., AAPL, BABA)")
@@ -131,6 +132,15 @@ def main():
     if output_mode == "json":
         # When only JSON output is requested, also print it to stdout
         print(json_content)
+
+
+def main() -> None:
+    """Main entry point for the TradingScope application."""
+    provider = setup_tracing("tradingscope-main")
+    try:
+        _main()
+    finally:
+        shutdown_tracing(provider)
 
 
 if __name__ == "__main__":

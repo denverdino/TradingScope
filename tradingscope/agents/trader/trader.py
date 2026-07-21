@@ -274,6 +274,7 @@ def create_trader_agent(
         name=name,
         system_prompt=system_prompt,
         model=context.code_interpreter_model,
+        middlewares=context.middlewares,
     )
 
     logger.debug(f"💰 [DEBUG] 准备调用LLM，系统提示包含货币: {currency}")

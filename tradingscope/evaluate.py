@@ -18,6 +18,8 @@ from datetime import datetime
 
 from agentscope import logger
 
+from tradingscope.agents.utils.tracing import setup_tracing, shutdown_tracing
+
 
 def _configure_memory_debug() -> None:
     """Enable DEBUG logging for memory API when MEMORY_DEBUG env var is set."""
@@ -59,6 +61,7 @@ async def _run(
         memory_manager=None,
         results_dir=results_dir,
         dry_run=dry_run,
+        middlewares=context.middlewares,
     )
     results = await evaluator.run_batch_evaluation(tickers=tickers, date=date)
 
@@ -104,8 +107,8 @@ def _send_evaluation_email(results: list, date: str | None, email_to: list[str])
     send_html_email(subject, html_content, email_to, sender_email, sender_password)
 
 
-def main() -> None:
-    """Main entry point for the evaluation CLI."""
+def _main() -> None:
+    """Parse arguments and run the evaluation CLI."""
     _configure_memory_debug()
 
     parser = argparse.ArgumentParser(
@@ -142,6 +145,15 @@ def main() -> None:
     tickers = [t.strip() for t in args.tickers.split(",") if t.strip()]
     email_to = [e.strip() for e in args.email_to.split(",") if e.strip()] if args.email_to else None
     asyncio.run(_run(tickers=tickers, date=args.date, results_dir=args.results_dir, dry_run=args.dry_run, email_to=email_to))
+
+
+def main() -> None:
+    """Main entry point for the evaluation CLI."""
+    provider = setup_tracing("tradingscope-evaluation")
+    try:
+        _main()
+    finally:
+        shutdown_tracing(provider)
 
 
 if __name__ == "__main__":

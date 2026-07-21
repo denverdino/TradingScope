@@ -23,6 +23,7 @@ from tradingscope.agents.output import (
     TraderOutput,
 )
 from tradingscope.agents.renderers import render_markdown
+from tradingscope.agents.utils.tracing import create_tracing_middlewares
 from tradingscope.default_config import DEFAULT_CONFIG
 
 
@@ -86,6 +87,7 @@ class AgentContext:
     latest_trading_date: Annotated[str, "Latest US trading date"] = ""
 
     def __init__(self) -> None:
+        self.middlewares = create_tracing_middlewares()
         self.trade_date = datetime.now().strftime("%Y-%m-%d")
         self.latest_trading_date = get_latest_us_trading_date()
         self.market_analysis: MarketAnalystOutput | None = None

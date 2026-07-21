@@ -78,6 +78,7 @@ def create_bull_researcher_agent(
         name=name,
         system_prompt=system_message,
         model=context.non_thinking_model,
+        middlewares=context.middlewares,
         react_config=ReActConfig(max_iters=8),
     )
 
