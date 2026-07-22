@@ -13,6 +13,18 @@ from .tool_response_helper import agentscope_tool
 
 logger = logging.getLogger(__name__)
 
+MARKET_ANALYST_INDICATORS = (
+    "close_10_ema",
+    "rsi",
+    "macd",
+    "macds",
+    "macdh",
+    "atr",
+    "boll",
+    "boll_ub",
+    "boll_lb",
+)
+
 
 @agentscope_tool
 def get_weekly_bollinger_signal(
@@ -153,27 +165,35 @@ def get_weekly_bollinger_signal(
 @agentscope_tool
 def get_indicators(
     symbol: Annotated[str, "ticker symbol of the company"],
-    indicator: Annotated[str, "a single technical indicator name, e.g. 'rsi', 'macd'. Call this tool once per indicator."],
     curr_date: Annotated[str, "The current trading date you are trading on, YYYY-mm-dd"],
     look_back_days: Annotated[int, "how many days to look back"] = 30,
 ) -> str:
-    """
-    Retrieve a single technical indicator for a given ticker symbol.
+    """Retrieve the short-term technical indicators used by MarketAnalyst.
+
     Uses the configured technical_indicators vendor.
+
     Args:
         symbol (str): Ticker symbol of the company, e.g. AAPL, TSM
-        indicator (str): A single technical indicator name, e.g. 'rsi', 'macd'. Call this tool once per indicator.
         curr_date (str): The current trading date you are trading on, YYYY-mm-dd
         look_back_days (int): How many days to look back, default is 30
+
     Returns:
-        str: A formatted dataframe containing the technical indicators for the specified ticker symbol and indicator.
+        str: Formatted data for every short-term indicator used by MarketAnalyst.
     """
-    # LLMs sometimes pass multiple indicators as a comma-separated string;
-    # split and process each individually.
-    indicators = [i.strip().lower() for i in indicator.split(",") if i.strip()]
-    if len(indicators) > 1:
-        results = []
-        for ind in indicators:
-            results.append(route_to_vendor("get_indicators", symbol, ind, curr_date, look_back_days))
-        return "\n\n".join(results)
-    return route_to_vendor("get_indicators", symbol, indicator.strip(), curr_date, look_back_days)
+    results = []
+    success_count = 0
+
+    for indicator in MARKET_ANALYST_INDICATORS:
+        try:
+            result = route_to_vendor("get_indicators", symbol, indicator, curr_date, look_back_days)
+        except Exception as exc:
+            logger.warning("Failed to retrieve %s for %s: %s", indicator, symbol, exc)
+            results.append(f"## {indicator} unavailable\n\nError: {exc}")
+        else:
+            results.append(result)
+            success_count += 1
+
+    if success_count == 0:
+        raise RuntimeError("Failed to retrieve all market indicators")
+
+    return "\n\n".join(results)

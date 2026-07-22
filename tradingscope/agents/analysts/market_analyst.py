@@ -93,7 +93,7 @@ def create_market_analyst_agent(
 2) **调用 `get_sector_performance`** 获取该股票所属行业板块的表现，对比个股与板块的相对强弱。
 3) **调用 `get_stock_info`** 获取股票当前信息数据，包括：当前价格（regularMarketPrice）、开盘价（regularMarketOpen）、最高价（regularMarketDayHigh）、最低价（regularMarketDayLow）、前收盘价（regularMarketPreviousClose）、盘前价格（preMarketPrice）、盘前涨跌（preMarketChange）、盘后价格（postMarketPrice）、盘后涨跌（postMarketChange）、成交量（volume）、平均成交量（averageVolume）等短期交易关键数据。
 4) **调用 `get_stock_data`** 获取生成指标所需的股票数据。
-5) **调用 `get_indicators`** 获取技术指标，**优先选择短期指标**（见下方指标池）。
+5) **仅调用一次 `get_indicators`** 获取固定的短期技术指标集合：close_10_ema、rsi、macd、macds、macdh、atr、boll、boll_ub、boll_lb。
 6) **调用 `get_options_analysis`** 获取期权链分析数据（仅适用于美股），包括：Put/Call Ratio（期权情绪指标）、基于未平仓合约（Open Interest）的支撑位和阻力位、Max Pain 价格。若为非美股标的（如港股、A股），跳过此步骤。
 7) **调用 `get_volume_analysis`** 获取成交量深度分析，包括：成交量趋势（放量/缩量）、OBV 趋势、量价背离检测、成交量分布统计。此数据用于确认价格趋势的可靠性。
 8) **调用 `get_weekly_bollinger_signal`** 获取周线布林带买卖信号，判断现价是否接近周线布林上/下轨（偏差 < 0.5%），用于中期超买超卖参考。
@@ -101,9 +101,9 @@ def create_market_analyst_agent(
 - **精确计算规则**：凡涉及乖离率偏离度、盈亏比、ATR 倍数、百分比变化等数值计算，必须在思考过程中逐步列出算式并验证，不得直接给出结论性数值。
 
 ——
-【短期技术指标池（优先选择，最多择 6 个）】
+【一次返回的短期技术指标】
 
-**首选短期指标：**
+**固定返回指标：**
 - close_10_ema：10 EMA，灵敏短期动量，捕捉快速趋势变化（**必选**）。
 - rsi：RSI 动量（超买/超卖）。使用标准 14 周期，阈值：超买 >70，超卖 <30；极端超买 >80，极端超卖 <20。失效条件中应引用相同阈值。（**必选**）。
 - macd / macds / macdh：MACD 系列，关注零轴与金叉/死叉，适合识别短期动能转换。macdh（MACD Histogram）：**必须提供连续至少 3 期数值**，通过数值变化方向判断柱状图是否缩量（而非通过 MACD line 推断），避免方向误判。**MACD 数据不足降级规则**：若工具未返回 macdh 连续 3 期数值，必须在分析中明确标注"macdh 连续数据不足，本指标不可用"，**禁止**仅凭 MACD 线绝对值推断柱状图方向或动能强弱；**必须将 MACD 从交易建议的依据中完全剔除**，不得在"核心理由""趋势判断"等结论性段落中引用 MACD 信号——保留结论同时附免责说明会误导读者。
@@ -113,11 +113,7 @@ def create_market_analyst_agent(
 - atr：ATR 平均真实波幅，用于**波动评估与止损/仓位**设置（短期交易**必选**）。注意：ATR 衡量的是价格波幅（True Range 的均值），**不是**价格分布的离散度（标准差）。
 - boll / boll_ub / boll_lb：布林带，识别短期超买超卖与突破。**布林带计算方法：中轨 = 20日 SMA，上轨 = 中轨 + 2×标准差(σ)，下轨 = 中轨 − 2×标准差(σ)。注意：布林带使用的是标准差（σ），不是 ATR，两者含义不同，严禁混用。** **必须提供当日及前2日共3期数值**，通过数值序列判断是否收口/扩口，不得仅用文字描述趋势。
 
-**次选指标（仅在需要时使用）：**
-- close_50_sma：50 SMA，中期趋势参考（仅作为背景参考，不作为主要判断依据）。
-- vwma：VWMA 成交量加权均线，用于**量价同向确认**。
-
-**注意：不要过度依赖长期指标（如 200 SMA），短期交易应聚焦于快速响应的指标。**
+**注意：本工具不返回长期或可选指标（如 50 SMA、200 SMA、VWMA、MFI），短期交易应聚焦于上述快速响应指标。**
 
 ——
 【分析要求（必须完成）】
@@ -322,7 +318,7 @@ def create_market_analyst_agent(
 
 ### 短期技术指标分析
 
-- 逐项列出所选指标（≤6），给出**具体数值、阈值/形态、日期与解释**
+- 逐项列出工具返回的指标，给出**具体数值、阈值/形态、日期与解释**
 - 重点分析短期买卖信号
 
 ### 周线布林带信号

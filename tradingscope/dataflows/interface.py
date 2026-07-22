@@ -215,6 +215,9 @@ def route_to_vendor(method: str, *args, **kwargs):
             try:
                 logger.debug("Calling %s from vendor '%s'...", impl_func.__name__, vendor_name)
                 result = impl_func(*args, **kwargs)
+                if method == "get_indicators" and isinstance(result, str) and result.lstrip().lower().startswith("error"):
+                    logger.warning("%s from vendor '%s' returned an error: %s", impl_func.__name__, vendor_name, result)
+                    continue
                 vendor_results.append(result)
                 logger.debug("%s from vendor '%s' completed successfully", impl_func.__name__, vendor_name)
 
