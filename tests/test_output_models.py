@@ -191,29 +191,163 @@ def test_decision_rejects_direction_action_conflicts(action: str, direction: str
         _decision(action=action, direction=direction)
 
 
-def test_buy_requires_complete_price_plan() -> None:
-    with pytest.raises(ValidationError, match="target_price"):
-        models.TraderOutput(
-            **_base("trader", action="buy", direction="bullish"),
-            trade_type="short_term",
-            position_advice="light",
-            risk_score=0.3,
-            time_stop_days=3,
-            entry_conditions=["回踩不破"],
-            execution_steps=["分批建仓"],
-            risk_factors=["市场波动"],
-            price_plan=models.PricePlan(
-                entry_price=100.0,
-                target_price=None,
-                stop_loss=95.0,
-                currency="USD",
-                invalidation_conditions=["收盘跌破95"],
-            ),
-        )
+def test_historical_buy_with_incomplete_plan_remains_readable() -> None:
+    historical = _all_outputs()[5].model_dump(mode="json")
+    historical["decision"] = {
+        "direction": "bullish",
+        "action": "buy",
+        "confidence": 0.8,
+        "summary": "历史买入记录",
+        "reasoning": ["历史 schema 没有完整执行计划"],
+    }
+    historical["price_plan"] = {
+        "entry_price": 100.0,
+        "target_price": None,
+        "stop_loss": 95.0,
+        "currency": "USD",
+        "invalidation_conditions": ["历史记录缺少目标价"],
+    }
+
+    restored = models.TraderOutput.model_validate(historical)
+
+    assert restored.decision.action is models.Action.BUY
+    assert restored.price_plan.target_price is None
 
 
 def test_price_plan_computes_long_risk_reward_ratio() -> None:
     assert _price_plan().risk_reward_ratio == pytest.approx(2.0)
+
+
+def test_price_plan_computes_direction_aware_risk_reward_ratio() -> None:
+    long_plan = _price_plan()
+    short_plan = models.PricePlan(
+        entry_price=100.0,
+        target_price=90.0,
+        stop_loss=105.0,
+        currency="USD",
+        invalidation_conditions=["收盘站上105"],
+    )
+
+    assert long_plan.risk_reward_ratio_for(models.Direction.BULLISH) == pytest.approx(2.0)
+    assert short_plan.risk_reward_ratio_for(models.Direction.BEARISH) == pytest.approx(2.0)
+    assert short_plan.risk_reward_ratio_for(models.Direction.NEUTRAL) is None
+
+
+def test_price_plan_accepts_entry_range_surrounding_representative_price() -> None:
+    plan = models.PricePlan(
+        entry_price=101.0,
+        entry_price_low=100.0,
+        entry_price_high=102.0,
+        target_price=110.0,
+        stop_loss=95.0,
+        currency="USD",
+        invalidation_conditions=["收盘跌破95"],
+    )
+
+    assert plan.entry_price_low == 100.0
+    assert plan.entry_price_high == 102.0
+
+
+@pytest.mark.parametrize(
+    ("entry_price_low", "entry_price_high", "message"),
+    [
+        (100.0, None, "together"),
+        (102.0, 100.0, "ordered"),
+    ],
+)
+def test_price_plan_rejects_incomplete_or_reversed_entry_range(
+    entry_price_low: float | None,
+    entry_price_high: float | None,
+    message: str,
+) -> None:
+    with pytest.raises(ValidationError, match=message):
+        models.PricePlan(
+            entry_price=101.0,
+            entry_price_low=entry_price_low,
+            entry_price_high=entry_price_high,
+            target_price=110.0,
+            stop_loss=95.0,
+            currency="USD",
+            invalidation_conditions=["收盘跌破95"],
+        )
+
+
+def test_price_plan_rejects_representative_price_outside_entry_range() -> None:
+    with pytest.raises(ValidationError, match="within"):
+        models.PricePlan(
+            entry_price=99.0,
+            entry_price_low=100.0,
+            entry_price_high=102.0,
+            target_price=110.0,
+            stop_loss=95.0,
+            currency="USD",
+            invalidation_conditions=["收盘跌破95"],
+        )
+
+
+def test_price_plan_keeps_historical_json_without_entry_range_readable() -> None:
+    historical = {
+        "entry_price": 100.0,
+        "target_price": 110.0,
+        "stop_loss": 95.0,
+        "currency": "USD",
+        "invalidation_conditions": ["收盘跌破95"],
+    }
+
+    plan = models.PricePlan.model_validate(historical)
+
+    assert plan.entry_price == 100.0
+    assert plan.entry_price_low is None
+    assert plan.entry_price_high is None
+
+
+def test_historical_sell_output_with_incomplete_plan_remains_readable() -> None:
+    historical = _all_outputs()[6].model_dump(mode="json")
+    historical["decision"] = {
+        "direction": "bearish",
+        "action": "sell",
+        "confidence": 0.85,
+        "summary": "历史卖出记录",
+        "reasoning": ["财报风险"],
+    }
+    historical["price_plan"] = {
+        "entry_price": 606.0,
+        "target_price": None,
+        "stop_loss": None,
+        "currency": "USD",
+        "invalidation_conditions": ["历史记录没有完整价格计划"],
+    }
+
+    restored = models.PortfolioManagerOutput.model_validate(historical)
+
+    assert restored.decision.action is models.Action.SELL
+    assert restored.price_plan.target_price is None
+    assert restored.price_plan.stop_loss is None
+
+
+def test_historical_execution_outputs_remain_readable_without_trade_intent() -> None:
+    outputs = _all_outputs()
+    historical_trader = outputs[5].model_dump(mode="json")
+    historical_portfolio = outputs[6].model_dump(mode="json")
+    historical_trader.pop("trade_intent")
+    historical_portfolio.pop("trade_intent")
+    historical_portfolio.pop("time_stop_days")
+
+    assert models.TraderOutput.model_validate(historical_trader).trade_intent is None
+    restored_portfolio = models.PortfolioManagerOutput.model_validate(historical_portfolio)
+    assert restored_portfolio.trade_intent is None
+    assert restored_portfolio.time_stop_days is None
+
+
+def test_trade_intent_exposes_six_distinct_execution_semantics() -> None:
+    assert {item.value for item in models.TradeIntent} == {
+        "open_long",
+        "reduce_long",
+        "close_long",
+        "open_short",
+        "cover_short",
+        "hold",
+    }
 
 
 def test_market_output_decodes_json_encoded_optional_objects() -> None:

@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 # Import unified logging system
 from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT
 from tradingscope.agents.utils.context import AgentContext
+from tradingscope.agents.utils.decision_policy import MARKET_REGIME_DECISION_POLICY, SHORT_HORIZON_DECISION_POLICY
 
 
 class RecommendationEnum(str, Enum):
@@ -54,14 +55,18 @@ def create_research_manager_agent(
     # 构建系统提示词，鼓励结构化输出
     system_message = f"""{COMPLIANCE_PROMPT}
 
-作为投资组合经理和辩论主持人，您的职责是批判性地评估这轮辩论并做出明确决策：支持看跌分析师、看涨分析师，或者仅在基于所提出论点有强有力理由时选择持有。
+{SHORT_HORIZON_DECISION_POLICY}
+
+{MARKET_REGIME_DECISION_POLICY}
+
+作为头部科技股研究经理和辩论主持人，您的职责是批判性地评估这轮辩论并做出明确的短周期研究判断：支持看跌分析师、看涨分析师，或者仅在基于所提出论点有强有力理由时选择持有。
 简洁地总结双方的关键观点，重点关注最有说服力的证据或推理。您的建议——买入、卖出或持有——必须明确且可操作。
 避免仅仅因为双方都有有效观点就默认选择持有；要基于辩论中最强有力的论点做出承诺。
 
-此外，为交易员制定详细的投资计划。这应该包括
+此外，为交易员提供情景分析，不制定完整订单。这应该包括
 建议：基于最有说服力论点的明确立场。
-理由：解释为什么这些论点导致您的结论。
-战略行动：实施建议的具体步骤。
+理由：解释为什么这些论点导致您的结论，并注明关键证据来源、事件去重结果和最强反证。
+战略行动：给出需要观察的触发条件和失效条件，不要替 Trader 虚构完整入场、目标、止损或时间止损订单。
 📊 目标价格分析：基于所有可用报告（基本面、新闻、情绪），提供全面的目标价格区间和具体价格目标。考虑：
     - 基本面报告中的基本估值
     - 新闻对价格预期的影响
@@ -70,7 +75,6 @@ def create_research_manager_agent(
     - 价格目标的时间范围
         - 1天: 价格情景（保守、基准、乐观）
         - 5天: 价格情景（保守、基准、乐观）
-        - 1个月: 价格情景（保守、基准、乐观）
 
 **注意：**
 
@@ -99,17 +103,16 @@ def create_research_manager_agent(
 
 ### 目标价格分析
 - **短期目标（1-5天）**：保守/基准/乐观价格
-- **中期目标（1个月）**：保守/基准/乐观价格
 - **价格区间**：xxx - xxx
 - **关键支撑/阻力位**：列出关键价位
 
 ### 战略行动建议
-- 列出3-5条具体的实施步骤
+- 列出3-5条观察条件、情景触发器和失效条件；不制定完整订单
 
 ### 风险提示
 - 列出2-3个主要风险点
 
-请输出简洁但完整的分析素材，覆盖事实依据、关键指标、风险、结论与可执行价格计划。
+请输出简洁但完整的研究素材，覆盖事实依据、来源去重、最强反证、关键指标、风险、情景结论与失效条件。
 不要输出 JSON、JSON 代码块或固定 Markdown 报告模板；系统将在下一阶段根据严格 schema 生成正式结果。
 
 # 可用资源：

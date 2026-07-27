@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from agentscope import logger
 from agentscope.message import UserMsg
 
-from tradingscope.agents.output import PortfolioManagerOutput
+from tradingscope.agents.output import AgentOutputBase, PortfolioManagerOutput
 from tradingscope.agents.utils.agent_utils import call_agent_with_retry
 
 
@@ -20,6 +22,7 @@ class RiskDebateOrchestrator:
         portfolio_manager,
         structured_runner,
         max_rounds: int,
+        reference_outputs: Sequence[AgentOutputBase] = (),
     ):
         """Initialize the debate orchestrator.
 
@@ -40,6 +43,7 @@ class RiskDebateOrchestrator:
         # Create the portfolio manager agent
         self.portfolio_manager = portfolio_manager
         self.structured_runner = structured_runner
+        self.reference_outputs = tuple(reference_outputs)
 
         logger.info("✅ Risk Debate Orchestrator initialized with 3 debators and 1 portfolio manager")
 
@@ -202,6 +206,7 @@ class RiskDebateOrchestrator:
             self.portfolio_manager,
             PortfolioManagerOutput,
             portfolio_manager_prompt,
+            reference_outputs=self.reference_outputs,
         )
 
         logger.info("✅ Risk management debate completed")
@@ -216,6 +221,7 @@ def create_debate_orchestrator(
     portfolio_manager,
     structured_runner,
     max_rounds: int = 3,
+    reference_outputs: Sequence[AgentOutputBase] = (),
 ) -> RiskDebateOrchestrator:
     """Create a risk management debate orchestrator.
 
@@ -236,4 +242,5 @@ def create_debate_orchestrator(
         portfolio_manager=portfolio_manager,
         structured_runner=structured_runner,
         max_rounds=max_rounds,
+        reference_outputs=reference_outputs,
     )

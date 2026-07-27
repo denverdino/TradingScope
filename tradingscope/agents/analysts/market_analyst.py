@@ -15,6 +15,7 @@ from tradingscope.agents.utils.core_stock_tools import (
     get_stock_info,
     get_volume_analysis,
 )
+from tradingscope.agents.utils.decision_policy import MARKET_REGIME_DECISION_POLICY
 from tradingscope.agents.utils.stock_utils import StockUtils
 from tradingscope.agents.utils.technical_indicators_tools import get_indicators, get_weekly_bollinger_signal
 
@@ -60,6 +61,8 @@ def create_market_analyst_agent(
     market_name = market_info["market_name"]
 
     system_prompt = f"""{COMPLIANCE_PROMPT}
+
+{MARKET_REGIME_DECISION_POLICY}
 
 你是一位**专业的股票短期技术分析师（Short-Term Tech Analyst）**，与其他分析师协作。你的目标是基于工具返回的**真实行情与指标**，对 {company_name}（股票代码：{ticker}）给出**针对短期交易操作**的技术分析结论。
 > 注意：本分析**聚焦短期交易（1-5个交易日）**，而非长期投资。你**必须**在分析结尾给出明确的投资建议方向——**买入 / 持有 / 卖出**三选一，**禁止**模糊表述（如"观望为主""视情况而定"）或回避给出方向。但**不要**使用"最终交易建议"之类前缀（最终决策由多分析师综合）。

@@ -108,3 +108,56 @@ async def test_runner_fails_after_three_invalid_outputs() -> None:
     assert formatter_model.generate_structured_output.await_count == 3
     assert exc_info.value.errors
     assert "ticker: Field required" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_runner_retries_generated_output_policy_failure() -> None:
+    from tradingscope.agents.utils.structured_output import StructuredAgentRunner
+
+    expected = _all_outputs()[5]
+    invalid = expected.model_dump(mode="json")
+    invalid["decision"] = {
+        "direction": "bearish",
+        "action": "sell",
+        "confidence": 0.6,
+        "summary": "卖出",
+        "reasoning": ["趋势向下"],
+    }
+    invalid["trade_intent"] = "open_short"
+    invalid["position_advice"] = "light"
+    invalid["time_stop_days"] = 3
+    invalid["price_plan"] = {
+        "entry_price": 100.0,
+        "entry_price_low": None,
+        "entry_price_high": None,
+        "target_price": None,
+        "stop_loss": 105.0,
+        "currency": "USD",
+        "invalidation_conditions": ["站上105"],
+    }
+    valid = {
+        **invalid,
+        "price_plan": {
+            **invalid["price_plan"],
+            "entry_price_low": 99.0,
+            "entry_price_high": 101.0,
+            "target_price": 90.0,
+        },
+    }
+    formatter_model = SimpleNamespace(
+        generate_structured_output=AsyncMock(
+            side_effect=[
+                SimpleNamespace(content=invalid),
+                SimpleNamespace(content=valid),
+            ],
+        ),
+    )
+    runner = StructuredAgentRunner(formatter_model=formatter_model)
+    runner._run_analysis = AsyncMock(return_value=SimpleNamespace(get_text_content=lambda: "分析素材"))
+
+    result = await runner.run(SimpleNamespace(name="Trader"), type(expected))
+
+    assert result.price_plan.target_price == 90.0
+    assert formatter_model.generate_structured_output.await_count == 2
+    retry_prompt = formatter_model.generate_structured_output.await_args_list[1].kwargs["messages"][0].get_text_content()
+    assert "price_plan.target_price" in retry_prompt

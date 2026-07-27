@@ -104,14 +104,25 @@ class TestEvaluatorGenerateLesson:
         return AnalysisRecord(**{**defaults, **kwargs})
 
     def _call_generate_lesson(self, evaluator, record):
+        from tradingscope.agents.evaluation.market_outcome import (
+            AssessmentStatus,
+            TradeAssessment,
+        )
+
         return asyncio.run(
             evaluator._generate_lesson(
                 record=record,
-                price_prev=150.0,
-                price_t=155.0,
-                actual_return=0.033,
-                direction_correct=True,
-                stop_loss_triggered=False,
+                assessment=TradeAssessment(
+                    horizon_days=3,
+                    status=AssessmentStatus.CORRECT,
+                    entry_triggered=True,
+                    entry_price=150.0,
+                    exit_reason="target",
+                    benchmark_return=0.033,
+                    strategy_return=0.067,
+                    atr_threshold=0.025,
+                    limitations=("测试限制",),
+                ),
             )
         )
 
@@ -154,7 +165,56 @@ class TestEvaluatorGenerateLesson:
         )
         assert message.role == "user"
         assert message.name == "evaluator"
-        assert "AAPL" in message.get_text_content()
+        prompt = message.get_text_content()
+        assert "AAPL" in prompt
+        assert "3个交易日" in prompt
+        assert "correct" in prompt
+        assert "是" in prompt
+        assert "+3.30%" in prompt
+        assert "+6.70%" in prompt
+        assert "2.50%" in prompt
+        assert "target" in prompt
+        assert "不得改变上述客观状态" in prompt
+        assert "不得把原始分析未提及的信息包装成预测依据" in prompt
+
+    @pytest.mark.parametrize(
+        ("status", "required_copy"),
+        [
+            ("not_filled", "评价执行计划"),
+            ("inconclusive", "不得给出确定性的成功或失败结论"),
+        ],
+    )
+    def test_prompt_preserves_non_deterministic_status_semantics(self, status, required_copy):
+        from tradingscope.agents.evaluation.evaluator import AnalysisEvaluator
+        from tradingscope.agents.evaluation.market_outcome import (
+            AssessmentStatus,
+            TradeAssessment,
+        )
+
+        mock_model = _mock_streaming_model()
+        response = MagicMock()
+        response.get_text_content.return_value = "评估结果: test\n经验教训: test"
+        record = self._make_record()
+        assessment = TradeAssessment(
+            horizon_days=1,
+            status=AssessmentStatus(status),
+            entry_triggered=False,
+            entry_price=None,
+            exit_reason="not_filled" if status == "not_filled" else None,
+            benchmark_return=0.01,
+            strategy_return=None,
+            atr_threshold=0.02,
+            limitations=(),
+        )
+
+        with patch("tradingscope.agents.evaluation.evaluator.Agent") as mock_agent:
+            mock_agent.return_value.reply = AsyncMock(return_value=response)
+            with tempfile.TemporaryDirectory() as tmpdir:
+                evaluator = AnalysisEvaluator(model=mock_model, results_dir=tmpdir, dry_run=True)
+                asyncio.run(evaluator._generate_lesson(record=record, assessment=assessment))
+
+        prompt = mock_agent.return_value.reply.await_args.args[0].get_text_content()
+        assert required_copy in prompt
 
     def test_each_lesson_uses_a_fresh_agent(self):
         from tradingscope.agents.evaluation.evaluator import AnalysisEvaluator

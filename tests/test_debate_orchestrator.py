@@ -114,6 +114,7 @@ class TestRiskDebateOrchestrator:
 
     @pytest.mark.asyncio
     async def test_risk_manager_returns_typed_output(self):
+        trader = _all_outputs()[5]
         expected = _all_outputs()[6]
         self.structured_runner.run.return_value = expected
         orchestrator = RiskDebateOrchestrator(
@@ -123,16 +124,21 @@ class TestRiskDebateOrchestrator:
             portfolio_manager=self.mock_portfolio_manager,
             structured_runner=self.structured_runner,
             max_rounds=0,
+            reference_outputs=(trader,),
         )
 
         result = await orchestrator.run_debate("AAPL")
 
         assert result is expected
+        self.structured_runner.run.assert_awaited_once()
+        assert self.structured_runner.run.await_args.kwargs["reference_outputs"] == (trader,)
 
 
 @pytest.mark.asyncio
 async def test_research_manager_returns_typed_output():
-    expected = _all_outputs()[4]
+    outputs = _all_outputs()
+    references = tuple(outputs[:4])
+    expected = outputs[4]
     structured_runner = SimpleNamespace(run=AsyncMock(return_value=expected))
     orchestrator = ResearchDebateOrchestrator(
         bull_researcher=MockAgent("Bull"),
@@ -140,8 +146,11 @@ async def test_research_manager_returns_typed_output():
         research_manager=MockAgent("ResearchManager"),
         structured_runner=structured_runner,
         max_rounds=0,
+        reference_outputs=references,
     )
 
     result = await orchestrator.run_debate("AAPL")
 
     assert result is expected
+    structured_runner.run.assert_awaited_once()
+    assert structured_runner.run.await_args.kwargs["reference_outputs"] == references

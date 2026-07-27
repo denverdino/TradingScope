@@ -68,7 +68,8 @@ async def _run(
     if results:
         logger.info("=== Evaluation Summary ===")
         for i, result in enumerate(results, 1):
-            logger.info("Result %d [%s]:\n  评估: %s\n  教训: %s\n", i, result.ticker, result.evaluation, result.lesson)
+            label = f"[{result.ticker}|{result.horizon_days}日|{result.status}]"
+            logger.info("Result %d %s:\n  评估: %s\n  教训: %s\n", i, label, result.evaluation, result.lesson)
         logger.info("Total: %d results generated", len(results))
 
         if email_to:
@@ -87,6 +88,7 @@ def _send_evaluation_email(results: list, date: str | None, email_to: list[str])
     for ticker, items in ticker_results.items():
         html_parts.append(f"<h2>{ticker}</h2>")
         for item in items:
+            html_parts.append(f"<h3>[{item.ticker}|{item.horizon_days}日|{item.status}]</h3>")
             if item.evaluation:
                 html_parts.append(f"<p>评估： {item.evaluation}</p>")
             if item.lesson:

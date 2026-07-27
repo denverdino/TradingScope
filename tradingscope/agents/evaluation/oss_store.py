@@ -13,13 +13,19 @@ from datetime import datetime, timedelta
 from typing import List, Optional, Set
 
 from tradingscope.agents.output import PortfolioManagerOutput
-from tradingscope.agents.utils.context import get_latest_us_trading_date
 from tradingscope.default_config import DEFAULT_CONFIG
 from tradingscope.utils.oss_structured_output_reader import async_fetch_completed_v2_output
 
 from .models import AnalysisRecord
 
 logger = logging.getLogger(__name__)
+ALLOWED_EVALUATION_HORIZONS = (1, 3, 5)
+
+
+def _validate_horizon_days(horizon_days: int) -> None:
+    """Reject evaluation horizons that are not supported by the workflow."""
+    if type(horizon_days) is not int or horizon_days not in ALLOWED_EVALUATION_HORIZONS:
+        raise ValueError(f"Invalid evaluation horizon {horizon_days}; allowed horizons are 1, 3, 5.")
 
 
 def build_record_from_portfolio(portfolio: PortfolioManagerOutput) -> AnalysisRecord:
@@ -31,8 +37,14 @@ def build_record_from_portfolio(portfolio: PortfolioManagerOutput) -> AnalysisRe
         action=portfolio.decision.action.value,
         confidence=portfolio.decision.confidence,
         entry_price=portfolio.price_plan.entry_price,
+        entry_price_low=portfolio.price_plan.entry_price_low,
+        entry_price_high=portfolio.price_plan.entry_price_high,
         target_price=portfolio.price_plan.target_price,
         stop_loss=portfolio.price_plan.stop_loss,
+        trade_intent=(portfolio.trade_intent.value if portfolio.trade_intent is not None else None),
+        position_advice=portfolio.position_advice.value,
+        time_stop_days=portfolio.time_stop_days,
+        intent_inferred=portfolio.trade_intent is None,
         reasoning="；".join(portfolio.decision.reasoning)[:100],
         final_decision_summary="；".join(portfolio.adopted_reasoning)[:500],
         status="pending",
@@ -80,8 +92,11 @@ class OSSAnalysisStore:
             else:
                 candidates.extend(self._generate_date_candidates(before_date, tkr))
 
-        evaluated = self._load_evaluated_set()
-        pending = [(d, t) for d, t in candidates if f"{d}/{t}" not in evaluated]
+        pending = [
+            (trade_date, ticker)
+            for trade_date, ticker in candidates
+            if not all(self.is_evaluated(ticker, trade_date, horizon_days) for horizon_days in (1, 3, 5))
+        ]
 
         records: List[AnalysisRecord] = []
         for trade_date, tkr in pending:
@@ -102,33 +117,52 @@ class OSSAnalysisStore:
 
         return records
 
-    def mark_evaluated(self, ticker: str, date: str) -> bool:
+    def is_evaluated(self, ticker: str, date: str, horizon_days: int) -> bool:
+        """Return whether an evaluation horizon has been completed."""
+        _validate_horizon_days(horizon_days)
+        evaluated = self._load_evaluated_set()
+        horizon_key = f"{date}/{ticker}/{horizon_days}"
+        legacy_key = f"{date}/{ticker}"
+        return horizon_key in evaluated or (horizon_days == 1 and legacy_key in evaluated)
+
+    def mark_evaluated(self, ticker: str, date: str, horizon_days: int = 1) -> bool:
         """Mark a report as evaluated.
 
         Args:
             ticker: Stock symbol
             date: Trade date (YYYY-MM-DD)
+            horizon_days: Number of post-analysis trading sessions assessed.
 
         Returns:
             True if successfully updated.
         """
+        _validate_horizon_days(horizon_days)
         try:
             evaluated = self._load_evaluated_set()
-            evaluated.add(f"{date}/{ticker}")
+            evaluated.add(f"{date}/{ticker}/{horizon_days}")
             self._save_evaluated_set(evaluated)
-            logger.info("[OSSStore] Marked as evaluated: %s/%s", date, ticker)
+            logger.info(
+                "[OSSStore] Marked as evaluated: %s/%s/%s",
+                date,
+                ticker,
+                horizon_days,
+            )
             return True
         except Exception as e:
-            logger.warning("[OSSStore] Failed to mark evaluated %s/%s: %s", date, ticker, e)
+            logger.warning(
+                "[OSSStore] Failed to mark evaluated %s/%s/%s: %s",
+                date,
+                ticker,
+                horizon_days,
+                e,
+            )
             return False
 
     @staticmethod
     def _generate_date_candidates(before_date: str, ticker: str) -> List[tuple]:
-        """Generate (date, ticker) pair for the latest US trading day."""
-        latest_trading_date = get_latest_us_trading_date()
-        if latest_trading_date >= before_date:
-            latest_trading_date = (datetime.strptime(before_date, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
-        return [(latest_trading_date, ticker)]
+        """Generate the fourteen calendar dates strictly before ``before_date``."""
+        cutoff = datetime.strptime(before_date, "%Y-%m-%d")
+        return [((cutoff - timedelta(days=offset)).strftime("%Y-%m-%d"), ticker) for offset in range(1, 15)]
 
     def _load_evaluated_set(self) -> Set[str]:
         """Load the set of evaluated report keys from local tracking file."""

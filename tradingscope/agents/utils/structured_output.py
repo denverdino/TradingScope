@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from typing import Generic, TypeVar
 
 from agentscope.message import Msg, UserMsg
@@ -11,6 +12,7 @@ from pydantic import ValidationError
 from tradingscope.agents.output import AgentOutputBase
 
 from .agent_utils import call_agent_with_retry
+from .decision_validation import GeneratedOutputPolicyError, validate_generated_output
 
 OutputT = TypeVar("OutputT", bound=AgentOutputBase)
 logger = logging.getLogger(__name__)
@@ -54,6 +56,7 @@ class StructuredAgentRunner(Generic[OutputT]):
         agent,
         output_model: type[OutputT],
         prompt: Msg | None = None,
+        reference_outputs: Sequence[AgentOutputBase] = (),
     ) -> OutputT:
         draft = await self._run_analysis(agent, prompt)
         draft_text = draft.get_text_content()
@@ -67,7 +70,9 @@ class StructuredAgentRunner(Generic[OutputT]):
                     messages=[UserMsg(name="structured_output", content=content)],
                     structured_model=output_model,
                 )
-                return output_model.model_validate(response.content)
+                output = output_model.model_validate(response.content)
+                validate_generated_output(output, reference_outputs)
+                return output
             except ValidationError as exc:
                 last_errors = exc.errors(
                     include_url=False,
@@ -76,6 +81,10 @@ class StructuredAgentRunner(Generic[OutputT]):
                 )
                 lines = _format_validation_errors(last_errors)
                 validation_feedback = "\n上次输出存在以下问题，请修正：\n" + "\n".join(lines)
+            except GeneratedOutputPolicyError as exc:
+                last_errors = exc.errors
+                lines = _format_validation_errors(last_errors)
+                validation_feedback = "\n上次输出未满足交易决策规则，请修正：\n" + "\n".join(lines)
             except RuntimeError as exc:
                 last_errors = [{"loc": (), "msg": str(exc)}]
                 lines = _format_validation_errors(last_errors)

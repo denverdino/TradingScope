@@ -5,6 +5,27 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
 
+def _progressive_results() -> list:
+    from tradingscope.agents.evaluation.models import EvaluationResult
+
+    return [
+        EvaluationResult(
+            ticker="AAPL",
+            evaluation="one-day evaluation",
+            lesson="one-day lesson",
+            horizon_days=1,
+            status="correct",
+        ),
+        EvaluationResult(
+            ticker="AAPL",
+            evaluation="three-day evaluation",
+            lesson="three-day lesson",
+            horizon_days=3,
+            status="inconclusive",
+        ),
+    ]
+
+
 def test_main_owns_tracing_lifecycle() -> None:
     from tradingscope import evaluate as evaluate_module
 
@@ -58,3 +79,60 @@ def test_run_passes_context_middlewares_to_evaluator() -> None:
         middlewares=context.middlewares,
     )
     assert evaluator_class.call_args.kwargs["middlewares"] is context.middlewares
+
+
+def test_run_labels_progressive_results_with_horizon_and_status() -> None:
+    from tradingscope import evaluate as evaluate_module
+
+    context = SimpleNamespace(non_thinking_model=object(), middlewares=[])
+    evaluator = Mock()
+    evaluator.run_batch_evaluation = AsyncMock(return_value=_progressive_results())
+    logger = Mock()
+
+    with (
+        patch(
+            "tradingscope.agents.utils.context.AgentContext",
+            return_value=context,
+        ),
+        patch(
+            "tradingscope.agents.evaluation.evaluator.AnalysisEvaluator",
+            return_value=evaluator,
+        ),
+        patch.object(evaluate_module, "logger", logger),
+    ):
+        asyncio.run(
+            evaluate_module._run(
+                tickers=["AAPL"],
+                date=None,
+                results_dir=None,
+            ),
+        )
+
+    rendered_logs = "\n".join(str(call) for call in logger.info.call_args_list)
+    assert "[AAPL|1日|correct]" in rendered_logs
+    assert "[AAPL|3日|inconclusive]" in rendered_logs
+
+
+def test_evaluation_email_labels_progressive_results_with_horizon_and_status() -> None:
+    from tradingscope import evaluate as evaluate_module
+
+    send_html_email = Mock()
+    with (
+        patch.dict(
+            "os.environ",
+            {"EMAIL_FROM": "sender@example.com", "EMAIL_PASSWORD": "secret"},
+        ),
+        patch(
+            "tradingscope.utils.email_utils.send_html_email",
+            send_html_email,
+        ),
+    ):
+        evaluate_module._send_evaluation_email(
+            _progressive_results(),
+            "2025-01-21",
+            ["recipient@example.com"],
+        )
+
+    html_content = send_html_email.call_args.args[1]
+    assert "<h3>[AAPL|1日|correct]</h3>" in html_content
+    assert "<h3>[AAPL|3日|inconclusive]</h3>" in html_content

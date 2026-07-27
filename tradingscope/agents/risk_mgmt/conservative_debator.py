@@ -12,6 +12,7 @@ from agentscope.tool import Toolkit
 # Local imports
 from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT
 from tradingscope.agents.utils.context import AgentContext
+from tradingscope.agents.utils.decision_policy import MARKET_REGIME_DECISION_POLICY, SHORT_HORIZON_DECISION_POLICY
 
 
 def create_conservative_debator_agent(
@@ -32,6 +33,10 @@ def create_conservative_debator_agent(
     toolkit = Toolkit()
 
     prompt = f"""{COMPLIANCE_PROMPT}
+
+{SHORT_HORIZON_DECISION_POLICY}
+
+{MARKET_REGIME_DECISION_POLICY}
 
 作为安全/保守风险分析师，您的主要目标是保护资产、最小化波动性，并确保稳定、可靠的增长。您优先考虑稳定性、安全性和风险缓解，仔细评估潜在损失、经济衰退和市场波动。在评估交易员的交易操作计划时，请批判性地审查高风险要素，指出计划中可能使公司面临不当风险的地方，以及更谨慎的替代方案如何能够确保长期收益。
 您的任务是积极反驳激进和中性分析师的论点，突出他们的观点可能忽视的潜在威胁或未能优先考虑可持续性的地方。直接回应他们的观点，利用以下数据来源为交易员操作计划的低风险方法调整建立令人信服的案例：

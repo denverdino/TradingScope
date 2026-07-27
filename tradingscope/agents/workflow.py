@@ -76,12 +76,17 @@ async def analyze(ticker: str, trade_date: str | None = None) -> AnalysisResult:
         research_manager=create_research_manager_agent(context=context),
         structured_runner=structured_runner,
         max_rounds=2,
+        reference_outputs=(market, fundamentals, news, social_media),
     )
     research_manager = await research_orchestrator.run_debate(company_name=ticker)
     context.research_decision = research_manager
 
     trader_agent = create_trader_agent(context=context)
-    trader = await structured_runner.run(trader_agent, TraderOutput)
+    trader = await structured_runner.run(
+        trader_agent,
+        TraderOutput,
+        reference_outputs=(research_manager, market, fundamentals, news, social_media),
+    )
     context.trader_decision = trader
 
     risk_orchestrator = create_debate_orchestrator(
@@ -91,6 +96,7 @@ async def analyze(ticker: str, trade_date: str | None = None) -> AnalysisResult:
         portfolio_manager=create_portfolio_manager_agent(context=context),
         structured_runner=structured_runner,
         max_rounds=2,
+        reference_outputs=(trader, research_manager, market, fundamentals, news, social_media),
     )
     portfolio_manager = await risk_orchestrator.run_debate(company_name=ticker)
     context.portfolio_decision = portfolio_manager

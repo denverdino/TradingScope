@@ -39,14 +39,14 @@ def _workflow_patches(runner: SimpleNamespace, research_orchestrator, risk_orche
         "create_portfolio_manager_agent",
     ):
         stack.enter_context(patch.object(workflow, name, return_value=SimpleNamespace(name=name)))
-    stack.enter_context(
+    research_factory = stack.enter_context(
         patch.object(
             workflow,
             "create_research_debate_orchestrator",
             return_value=research_orchestrator,
         ),
     )
-    stack.enter_context(
+    risk_factory = stack.enter_context(
         patch.object(
             workflow,
             "create_debate_orchestrator",
@@ -54,7 +54,7 @@ def _workflow_patches(runner: SimpleNamespace, research_orchestrator, risk_orche
         ),
     )
     persist = stack.enter_context(patch.object(workflow, "persist_analysis_result", new=AsyncMock()))
-    return stack, persist
+    return stack, persist, research_factory, risk_factory
 
 
 @pytest.mark.asyncio
@@ -64,7 +64,7 @@ async def test_analyze_returns_fully_typed_result() -> None:
     research_orchestrator = SimpleNamespace(run_debate=AsyncMock(return_value=research))
     risk_orchestrator = SimpleNamespace(run_debate=AsyncMock(return_value=portfolio))
 
-    stack, persist = _workflow_patches(runner, research_orchestrator, risk_orchestrator)
+    stack, persist, research_factory, risk_factory = _workflow_patches(runner, research_orchestrator, risk_orchestrator)
     with stack:
         result = await workflow.analyze("AAPL", "2026-07-14")
 
@@ -75,6 +75,16 @@ async def test_analyze_returns_fully_typed_result() -> None:
     assert result.portfolio_manager is portfolio
     assert result.schema_version == "2.0"
     persist.assert_awaited_once_with(result)
+    assert research_factory.call_args.kwargs["reference_outputs"] == (market, fundamentals, news, social)
+    assert runner.run.await_args_list[4].kwargs["reference_outputs"] == (research, market, fundamentals, news, social)
+    assert risk_factory.call_args.kwargs["reference_outputs"] == (
+        trader,
+        research,
+        market,
+        fundamentals,
+        news,
+        social,
+    )
 
 
 @pytest.mark.asyncio
@@ -84,7 +94,7 @@ async def test_analyst_failure_stops_downstream_work() -> None:
     research_orchestrator = SimpleNamespace(run_debate=AsyncMock())
     risk_orchestrator = SimpleNamespace(run_debate=AsyncMock())
 
-    stack, persist = _workflow_patches(runner, research_orchestrator, risk_orchestrator)
+    stack, persist, _, _ = _workflow_patches(runner, research_orchestrator, risk_orchestrator)
     with stack:
         with pytest.raises(StructuredOutputValidationError):
             await workflow.analyze("AAPL", "2026-07-14")

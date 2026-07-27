@@ -35,6 +35,15 @@ class PositionAdvice(StrEnum):
     HEAVY = "heavy"
 
 
+class TradeIntent(StrEnum):
+    OPEN_LONG = "open_long"
+    REDUCE_LONG = "reduce_long"
+    CLOSE_LONG = "close_long"
+    OPEN_SHORT = "open_short"
+    COVER_SHORT = "cover_short"
+    HOLD = "hold"
+
+
 class Decision(StrictModel):
     direction: Direction
     action: Action
@@ -53,19 +62,43 @@ class Decision(StrictModel):
 
 class PricePlan(StrictModel):
     entry_price: float | None = Field(default=None, gt=0)
+    entry_price_low: float | None = Field(default=None, gt=0)
+    entry_price_high: float | None = Field(default=None, gt=0)
     target_price: float | None = Field(default=None, gt=0)
     stop_loss: float | None = Field(default=None, gt=0)
     currency: str = Field(min_length=1)
     invalidation_conditions: list[str] = Field(min_length=1)
 
+    @model_validator(mode="after")
+    def validate_entry_range(self) -> PricePlan:
+        if (self.entry_price_low is None) != (self.entry_price_high is None):
+            raise ValueError("entry_price_low and entry_price_high must be provided together")
+        if self.entry_price_low is None or self.entry_price_high is None:
+            return self
+        if self.entry_price_low > self.entry_price_high:
+            raise ValueError("entry price range must be ordered from low to high")
+        if self.entry_price is not None and not self.entry_price_low <= self.entry_price <= self.entry_price_high:
+            raise ValueError("entry_price must be within the entry price range")
+        return self
+
     @property
     def risk_reward_ratio(self) -> float | None:
+        return self.risk_reward_ratio_for(Direction.BULLISH)
+
+    def risk_reward_ratio_for(self, direction: Direction) -> float | None:
         if self.entry_price is None or self.target_price is None or self.stop_loss is None:
             return None
-        risk = self.entry_price - self.stop_loss
-        if risk <= 0:
+        if direction is Direction.BULLISH:
+            risk = self.entry_price - self.stop_loss
+            reward = self.target_price - self.entry_price
+        elif direction is Direction.BEARISH:
+            risk = self.stop_loss - self.entry_price
+            reward = self.entry_price - self.target_price
+        else:
             return None
-        return (self.target_price - self.entry_price) / risk
+        if risk <= 0 or reward <= 0:
+            return None
+        return reward / risk
 
 
 class Evidence(StrictModel):
@@ -135,18 +168,6 @@ class AgentOutputBase(StrictModel):
     evidence: list[Evidence]
     limitations: list[str]
 
-    @model_validator(mode="after")
-    def require_complete_buy_price_plan(self) -> AgentOutputBase:
-        price_plan = getattr(self, "price_plan", None)
-        if self.decision.action is not Action.BUY:
-            return self
-
-        required_fields = ("entry_price", "target_price", "stop_loss")
-        missing = [field_name for field_name in required_fields if price_plan is None or getattr(price_plan, field_name) is None]
-        if missing:
-            raise ValueError(f"buy action requires price_plan fields: {', '.join(missing)}")
-        return self
-
 
 class MarketAnalystOutput(AgentOutputBase):
     market_environment: str = Field(min_length=1)
@@ -213,6 +234,7 @@ class TraderOutput(AgentOutputBase):
     trade_type: Literal["short_term"]
     position_advice: PositionAdvice
     risk_score: float = Field(ge=0, le=1)
+    trade_intent: TradeIntent | None = None
     time_stop_days: int | None = Field(default=None, ge=1)
     entry_conditions: list[str]
     execution_steps: list[str]
@@ -227,6 +249,8 @@ class PortfolioManagerOutput(AgentOutputBase):
     adopted_reasoning: list[str]
     position_advice: PositionAdvice
     risk_score: float = Field(ge=0, le=1)
+    trade_intent: TradeIntent | None = None
+    time_stop_days: int | None = Field(default=None, ge=1)
     risk_control_measures: list[str]
     price_plan: PricePlan
 

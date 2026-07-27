@@ -7,6 +7,7 @@ from functools import singledispatch
 from .output import (
     AgentOutputBase,
     AnalysisResult,
+    Direction,
     FundamentalsAnalystOutput,
     MarketAnalystOutput,
     NewsAnalystOutput,
@@ -14,12 +15,21 @@ from .output import (
     PricePlan,
     ResearchManagerOutput,
     SocialMediaAnalystOutput,
+    TradeIntent,
     TraderOutput,
 )
 
 ACTION_LABELS = {"buy": "买入", "sell": "卖出", "hold": "持有"}
 DIRECTION_LABELS = {"bullish": "看涨", "bearish": "看跌", "neutral": "中性"}
 POSITION_LABELS = {"none": "不持仓", "light": "轻仓", "medium": "中等仓位", "heavy": "重仓"}
+TRADE_INTENT_LABELS = {
+    "open_long": "开多",
+    "reduce_long": "减多",
+    "close_long": "平多",
+    "open_short": "开空",
+    "cover_short": "平空",
+    "hold": "持有",
+}
 
 
 def _render_list(items: list[str]) -> str:
@@ -48,15 +58,33 @@ def _render_decision(output: AgentOutputBase) -> str:
     )
 
 
-def _render_price_plan(price_plan: PricePlan) -> str:
+def _render_price_plan(price_plan: PricePlan, direction: Direction, trade_intent: TradeIntent | None = None) -> str:
     def price(value: float | None) -> str:
         return "无" if value is None else f"{price_plan.currency} {value:.2f}"
 
-    ratio = price_plan.risk_reward_ratio
+    price_label = (
+        "执行"
+        if trade_intent
+        in {
+            TradeIntent.REDUCE_LONG,
+            TradeIntent.CLOSE_LONG,
+            TradeIntent.COVER_SHORT,
+        }
+        else "入场"
+    )
+    if price_plan.entry_price_low is not None and price_plan.entry_price_high is not None:
+        entry_text = f"{price(price_plan.entry_price_low)}–{price_plan.entry_price_high:.2f}"
+        entry_label = f"{price_label}区间" if trade_intent else "入场价"
+    else:
+        entry_text = price(price_plan.entry_price)
+        entry_label = f"{price_label}价"
+    ratio_direction = Direction.BULLISH if trade_intent is TradeIntent.REDUCE_LONG else direction
+    ratio = price_plan.risk_reward_ratio_for(ratio_direction)
     ratio_text = "无" if ratio is None else f"{ratio:.2f}:1"
     return (
         "### 价格计划\n\n"
-        f"- **入场价**：{price(price_plan.entry_price)}\n"
+        f"- **{entry_label}**：{entry_text}\n"
+        f"- **代表{price_label}价**：{price(price_plan.entry_price)}\n"
         f"- **目标价**：{price(price_plan.target_price)}\n"
         f"- **止损价**：{price(price_plan.stop_loss)}\n"
         f"- **盈亏比**：{ratio_text}\n\n"
@@ -67,6 +95,10 @@ def _render_price_plan(price_plan: PricePlan) -> str:
 
 def _join_sections(*sections: str) -> str:
     return "\n\n".join(section for section in sections if section)
+
+
+def _render_time_stop(time_stop_days: int | None) -> str:
+    return f"### 时间止损\n\n{time_stop_days} 个交易日" if time_stop_days is not None else ""
 
 
 @singledispatch
@@ -84,7 +116,7 @@ def _(output: MarketAnalystOutput) -> str:
         f"### 成交量\n\n{output.volume_analysis}",
         f"### 技术指标\n\n{_render_list(indicators)}",
         _render_decision(output),
-        _render_price_plan(output.price_plan),
+        _render_price_plan(output.price_plan, output.decision.direction),
     )
 
 
@@ -99,7 +131,7 @@ def _(output: FundamentalsAnalystOutput) -> str:
         f"### 催化剂\n\n{_render_list(output.key_catalysts)}",
         f"### 风险\n\n{_render_list(output.key_risks)}",
         _render_decision(output),
-        _render_price_plan(output.price_plan),
+        _render_price_plan(output.price_plan, output.decision.direction),
     )
 
 
@@ -112,7 +144,7 @@ def _(output: NewsAnalystOutput) -> str:
         f"### 宏观环境\n\n{output.macro_environment}",
         f"### 公司影响\n\n{output.company_specific_impact}",
         _render_decision(output),
-        _render_price_plan(output.price_plan),
+        _render_price_plan(output.price_plan, output.decision.direction),
     )
 
 
@@ -126,7 +158,7 @@ def _(output: SocialMediaAnalystOutput) -> str:
         f"### 关键话题\n\n{_render_list(output.key_topics)}",
         f"### 数据质量\n\n{output.data_quality}",
         _render_decision(output),
-        _render_price_plan(output.price_plan),
+        _render_price_plan(output.price_plan, output.decision.direction),
     )
 
 
@@ -140,7 +172,7 @@ def _(output: ResearchManagerOutput) -> str:
         f"### 采纳理由\n\n{_render_list(output.adopted_reasoning)}",
         f"### 价格情景\n\n{_render_list(scenarios)}",
         _render_decision(output),
-        _render_price_plan(output.price_plan),
+        _render_price_plan(output.price_plan, output.decision.direction),
     )
 
 
@@ -149,11 +181,13 @@ def _(output: TraderOutput) -> str:
     return _join_sections(
         _render_header("交易计划", output),
         f"### 仓位建议\n\n{POSITION_LABELS[output.position_advice.value]}",
+        f"### 交易意图\n\n- **交易意图**：{TRADE_INTENT_LABELS[output.trade_intent.value]}" if output.trade_intent else "",
         f"### 入场条件\n\n{_render_list(output.entry_conditions)}",
         f"### 执行步骤\n\n{_render_list(output.execution_steps)}",
         f"### 风险因素\n\n{_render_list(output.risk_factors)}",
+        _render_time_stop(output.time_stop_days),
         _render_decision(output),
-        _render_price_plan(output.price_plan),
+        _render_price_plan(output.price_plan, output.decision.direction, output.trade_intent),
     )
 
 
@@ -166,8 +200,10 @@ def _(output: PortfolioManagerOutput) -> str:
         f"### 中性观点\n\n{_render_list(output.neutral_viewpoints)}",
         f"### 采纳理由\n\n{_render_list(output.adopted_reasoning)}",
         f"### 风险控制\n\n{_render_list(output.risk_control_measures)}",
+        f"### 交易意图\n\n- **交易意图**：{TRADE_INTENT_LABELS[output.trade_intent.value]}" if output.trade_intent else "",
+        _render_time_stop(output.time_stop_days),
         _render_decision(output),
-        _render_price_plan(output.price_plan),
+        _render_price_plan(output.price_plan, output.decision.direction, output.trade_intent),
     )
 
 
