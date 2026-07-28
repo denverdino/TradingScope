@@ -26,6 +26,7 @@ class EvaluationResult:
     entry_triggered: bool = False
     benchmark_return: Optional[float] = None
     strategy_return: Optional[float] = None
+    trade_date: str = ""
 
 
 @dataclass

@@ -129,6 +129,7 @@ def test_all_three_horizons_produce_separate_objective_results() -> None:
     results = asyncio.run(evaluator.evaluate_single(_record()))
 
     assert [result.horizon_days for result in results] == [1, 3, 5]
+    assert [result.trade_date for result in results] == ["2025-01-21"] * 3
     assert all(result.status == AssessmentStatus.CORRECT for result in results)
     assert [result.benchmark_return for result in results] == [0.05, 0.15, 0.25]
 

@@ -236,6 +236,7 @@ class AnalysisEvaluator:
                         ticker=record.ticker,
                         evaluation=evaluation,
                         lesson=lesson,
+                        trade_date=record.trade_date,
                         horizon_days=horizon_days,
                         status=assessment.status.value,
                         entry_triggered=assessment.entry_triggered,

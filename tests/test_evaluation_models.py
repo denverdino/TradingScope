@@ -59,20 +59,39 @@ def test_evaluation_result_keeps_legacy_construction_and_exposes_objective_outco
         ticker="TSLA",
         evaluation="目标价触发",
         lesson="分批止盈",
+        trade_date="2026-07-02",
         horizon_days=3,
         status="correct",
         entry_triggered=True,
         benchmark_return=0.04,
         strategy_return=0.05,
     )
+    positional = EvaluationResult(
+        "MSFT",
+        "方向正确",
+        "保持纪律",
+        3,
+        "correct",
+        True,
+        0.04,
+        0.05,
+    )
 
     assert legacy.horizon_days == 1
+    assert legacy.trade_date == ""
     assert legacy.status == "inconclusive"
     assert legacy.entry_triggered is False
     assert legacy.benchmark_return is None
     assert legacy.strategy_return is None
     assert result.horizon_days == 3
+    assert result.trade_date == "2026-07-02"
     assert result.status == "correct"
     assert result.entry_triggered is True
     assert result.benchmark_return == 0.04
     assert result.strategy_return == 0.05
+    assert positional.trade_date == ""
+    assert positional.horizon_days == 3
+    assert positional.status == "correct"
+    assert positional.entry_triggered is True
+    assert positional.benchmark_return == 0.04
+    assert positional.strategy_return == 0.05

@@ -68,7 +68,7 @@ async def _run(
     if results:
         logger.info("=== Evaluation Summary ===")
         for i, result in enumerate(results, 1):
-            label = f"[{result.ticker}|{result.horizon_days}日|{result.status}]"
+            label = f"[{result.ticker}|{result.trade_date}|{result.horizon_days}日|{result.status}]"
             logger.info("Result %d %s:\n  评估: %s\n  教训: %s\n", i, label, result.evaluation, result.lesson)
         logger.info("Total: %d results generated", len(results))
 
@@ -80,19 +80,21 @@ async def _run(
 
 def _send_evaluation_email(results: list, date: str | None, email_to: list[str]) -> None:
     """Build and send evaluation report email grouped by ticker."""
-    ticker_results: dict[str, list] = defaultdict(list)
+    ticker_results: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
     for result in results:
-        ticker_results[result.ticker].append(result)
+        ticker_results[result.ticker][result.trade_date].append(result)
 
     html_parts = []
-    for ticker, items in ticker_results.items():
+    for ticker, date_results in ticker_results.items():
         html_parts.append(f"<h2>{ticker}</h2>")
-        for item in items:
-            html_parts.append(f"<h3>[{item.ticker}|{item.horizon_days}日|{item.status}]</h3>")
-            if item.evaluation:
-                html_parts.append(f"<p>评估： {item.evaluation}</p>")
-            if item.lesson:
-                html_parts.append(f"<p>教训： {item.lesson}</p>")
+        for trade_date, items in date_results.items():
+            html_parts.append(f"<h3>分析日期：{trade_date}</h3>")
+            for item in items:
+                html_parts.append(f"<h4>[{item.horizon_days}日|{item.status}]</h4>")
+                if item.evaluation:
+                    html_parts.append(f"<p>评估： {item.evaluation}</p>")
+                if item.lesson:
+                    html_parts.append(f"<p>教训： {item.lesson}</p>")
     html_content = "\n".join(html_parts)
 
     eval_date = date or datetime.now().strftime("%Y-%m-%d")

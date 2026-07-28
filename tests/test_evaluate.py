@@ -13,6 +13,7 @@ def _progressive_results() -> list:
             ticker="AAPL",
             evaluation="one-day evaluation",
             lesson="one-day lesson",
+            trade_date="2025-01-20",
             horizon_days=1,
             status="correct",
         ),
@@ -20,7 +21,16 @@ def _progressive_results() -> list:
             ticker="AAPL",
             evaluation="three-day evaluation",
             lesson="three-day lesson",
+            trade_date="2025-01-20",
             horizon_days=3,
+            status="inconclusive",
+        ),
+        EvaluationResult(
+            ticker="AAPL",
+            evaluation="next-day evaluation",
+            lesson="next-day lesson",
+            trade_date="2025-01-21",
+            horizon_days=1,
             status="inconclusive",
         ),
     ]
@@ -81,7 +91,7 @@ def test_run_passes_context_middlewares_to_evaluator() -> None:
     assert evaluator_class.call_args.kwargs["middlewares"] is context.middlewares
 
 
-def test_run_labels_progressive_results_with_horizon_and_status() -> None:
+def test_run_labels_progressive_results_with_trade_date_horizon_and_status() -> None:
     from tradingscope import evaluate as evaluate_module
 
     context = SimpleNamespace(non_thinking_model=object(), middlewares=[])
@@ -109,11 +119,12 @@ def test_run_labels_progressive_results_with_horizon_and_status() -> None:
         )
 
     rendered_logs = "\n".join(str(call) for call in logger.info.call_args_list)
-    assert "[AAPL|1日|correct]" in rendered_logs
-    assert "[AAPL|3日|inconclusive]" in rendered_logs
+    assert "[AAPL|2025-01-20|1日|correct]" in rendered_logs
+    assert "[AAPL|2025-01-20|3日|inconclusive]" in rendered_logs
+    assert "[AAPL|2025-01-21|1日|inconclusive]" in rendered_logs
 
 
-def test_evaluation_email_labels_progressive_results_with_horizon_and_status() -> None:
+def test_evaluation_email_groups_progressive_results_by_trade_date() -> None:
     from tradingscope import evaluate as evaluate_module
 
     send_html_email = Mock()
@@ -134,5 +145,7 @@ def test_evaluation_email_labels_progressive_results_with_horizon_and_status() -
         )
 
     html_content = send_html_email.call_args.args[1]
-    assert "<h3>[AAPL|1日|correct]</h3>" in html_content
-    assert "<h3>[AAPL|3日|inconclusive]</h3>" in html_content
+    assert html_content.count("<h3>分析日期：2025-01-20</h3>") == 1
+    assert html_content.count("<h3>分析日期：2025-01-21</h3>") == 1
+    assert "<h4>[1日|correct]</h4>" in html_content
+    assert "<h4>[3日|inconclusive]</h4>" in html_content
