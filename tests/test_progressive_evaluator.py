@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from datetime import date, timedelta
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 from tradingscope.agents.evaluation.evaluator import (
     AnalysisEvaluator,
@@ -13,10 +13,10 @@ from tradingscope.agents.evaluation.market_outcome import AssessmentStatus
 from tradingscope.agents.evaluation.models import AnalysisRecord, EvaluationResult
 
 
-def _record(ticker: str = "AAPL") -> AnalysisRecord:
+def _record(ticker: str = "AAPL", trade_date: str = "2025-01-21") -> AnalysisRecord:
     return AnalysisRecord(
         ticker=ticker,
-        trade_date="2025-01-21",
+        trade_date=trade_date,
         direction="bullish",
         action="buy",
         confidence=0.8,
@@ -26,8 +26,12 @@ def _record(ticker: str = "AAPL") -> AnalysisRecord:
     )
 
 
-def _market_csv(*, history_days: int = 15, future_days: int = 5) -> str:
-    analysis_day = date(2025, 1, 21)
+def _market_csv(
+    *,
+    analysis_day: date = date(2025, 1, 21),
+    history_days: int = 15,
+    future_days: int = 5,
+) -> str:
     prior_days: list[date] = []
     cursor = analysis_day - timedelta(days=1)
     while len(prior_days) < history_days:
@@ -36,18 +40,17 @@ def _market_csv(*, history_days: int = 15, future_days: int = 5) -> str:
         cursor -= timedelta(days=1)
     prior_days.reverse()
 
-    later_days: list[date] = []
-    cursor = analysis_day + timedelta(days=1)
-    while len(later_days) < future_days:
+    evaluation_days: list[date] = []
+    cursor = analysis_day
+    while len(evaluation_days) < future_days:
         if cursor.weekday() < 5:
-            later_days.append(cursor)
+            evaluation_days.append(cursor)
         cursor += timedelta(days=1)
 
     rows = ["timestamp,open,high,low,close"]
     for day in prior_days:
         rows.append(f"{day.isoformat()},100,102,98,100")
-    rows.append(f"{analysis_day.isoformat()},100,102,98,100")
-    for index, day in enumerate(later_days, start=1):
+    for index, day in enumerate(evaluation_days, start=1):
         close = 100 + index * 5
         rows.append(f"{day.isoformat()},100,{close + 1},99,{close}")
     return "\n".join(rows)
@@ -93,6 +96,33 @@ def test_only_mature_pending_horizons_are_assessed_and_marked() -> None:
 
     assert [result.horizon_days for result in results] == [1]
     assert store.marked == [("AAPL", "2025-01-21", 1)]
+
+
+def test_weekend_record_uses_friday_close_and_monday_for_horizon_one() -> None:
+    weekend = date(2025, 1, 25)
+    evaluator, store = _evaluator(
+        _market_csv(analysis_day=weekend, future_days=1),
+    )
+
+    results = asyncio.run(
+        evaluator.evaluate_single(_record(trade_date=weekend.isoformat())),
+    )
+
+    assert [result.horizon_days for result in results] == [1]
+    assert store.marked == [("AAPL", "2025-01-25", 1)]
+
+
+def test_unavailable_horizons_are_logged_and_left_pending() -> None:
+    evaluator, store = _evaluator(_market_csv(future_days=1))
+
+    with patch("tradingscope.agents.evaluation.evaluator.logger") as logger:
+        results = asyncio.run(evaluator.evaluate_single(_record()))
+
+    assert [result.horizon_days for result in results] == [1]
+    assert store.marked == [("AAPL", "2025-01-21", 1)]
+    message = "[Evaluator] Skipping %s/%s/%s: insufficient market data (history=%s, required_history=15, evaluation_sessions=%s, required_sessions=%s)"
+    logger.info.assert_any_call(message, "AAPL", "2025-01-21", 3, 15, 1, 3)
+    logger.info.assert_any_call(message, "AAPL", "2025-01-21", 5, 15, 1, 5)
 
 
 def test_yfinance_comment_preamble_is_accepted() -> None:

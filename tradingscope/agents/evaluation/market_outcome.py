@@ -15,7 +15,7 @@ from .models import AnalysisRecord
 
 @dataclass(frozen=True)
 class MarketBar:
-    """One completed daily OHLC market bar."""
+    """One daily OHLC snapshot, including a possible current-session bar."""
 
     trade_date: date
     open: float
@@ -35,7 +35,7 @@ class AssessmentStatus(StrEnum):
 
 @dataclass(frozen=True)
 class TradeAssessment:
-    """Observed market outcome over one supported future-session horizon."""
+    """Observed outcome over an evaluation-session horizon from trade_date."""
 
     horizon_days: int
     status: AssessmentStatus
@@ -92,16 +92,16 @@ def assess_trade(
 
     analysis_date = date.fromisoformat(record.trade_date)
     ordered_bars = sorted(bars, key=lambda bar: bar.trade_date)
-    base_bar = next((bar for bar in ordered_bars if bar.trade_date == analysis_date), None)
     history = [bar for bar in ordered_bars if bar.trade_date < analysis_date]
-    future = [bar for bar in ordered_bars if bar.trade_date > analysis_date]
-    if base_bar is None or len(history) < 15 or len(future) < horizon_days:
+    evaluation_bars = [bar for bar in ordered_bars if bar.trade_date >= analysis_date]
+    if len(history) < 15 or len(evaluation_bars) < horizon_days:
         return None
 
+    reference_bar = history[-1]
     atr = _average_true_range(history[-15:])
-    atr_threshold = atr / base_bar.close * math.sqrt(horizon_days)
-    horizon_bar = future[horizon_days - 1]
-    benchmark_return = (horizon_bar.close - base_bar.close) / base_bar.close
+    atr_threshold = atr / reference_bar.close * math.sqrt(horizon_days)
+    horizon_bar = evaluation_bars[horizon_days - 1]
+    benchmark_return = (horizon_bar.close - reference_bar.close) / reference_bar.close
     status = _direction_status(record.direction, benchmark_return, atr_threshold)
 
     if record.trade_intent is None or record.intent_inferred:
@@ -121,7 +121,7 @@ def assess_trade(
             "Hold intent produces no new execution simulation.",
         )
 
-    future_window = future[:horizon_days]
+    future_window = evaluation_bars[:horizon_days]
     if record.trade_intent in {"open_long", "open_short"} and record.time_stop_days is not None:
         fill_window = future_window[: record.time_stop_days]
     else:

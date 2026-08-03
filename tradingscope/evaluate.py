@@ -75,7 +75,7 @@ async def _run(
         if email_to:
             _send_evaluation_email(results, date, email_to)
     else:
-        logger.info("No pending records to evaluate")
+        logger.info("No mature evaluation results available")
 
 
 def _send_evaluation_email(results: list, date: str | None, email_to: list[str]) -> None:

@@ -91,6 +91,36 @@ def test_run_passes_context_middlewares_to_evaluator() -> None:
     assert evaluator_class.call_args.kwargs["middlewares"] is context.middlewares
 
 
+def test_run_reports_when_no_mature_results_are_available() -> None:
+    from tradingscope import evaluate as evaluate_module
+
+    context = SimpleNamespace(non_thinking_model=object(), middlewares=[])
+    evaluator = Mock()
+    evaluator.run_batch_evaluation = AsyncMock(return_value=[])
+    logger = Mock()
+
+    with (
+        patch(
+            "tradingscope.agents.utils.context.AgentContext",
+            return_value=context,
+        ),
+        patch(
+            "tradingscope.agents.evaluation.evaluator.AnalysisEvaluator",
+            return_value=evaluator,
+        ),
+        patch.object(evaluate_module, "logger", logger),
+    ):
+        asyncio.run(
+            evaluate_module._run(
+                tickers=["AAPL"],
+                date=None,
+                results_dir=None,
+            ),
+        )
+
+    logger.info.assert_any_call("No mature evaluation results available")
+
+
 def test_run_labels_progressive_results_with_trade_date_horizon_and_status() -> None:
     from tradingscope import evaluate as evaluate_module
 

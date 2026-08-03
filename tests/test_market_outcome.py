@@ -36,12 +36,12 @@ def _market_csv() -> str:
     # Analysis-day and future ranges must never enter the ATR calculation.
     rows.extend(
         [
-            "2026-01-15,100,1000,1,100",
-            "2026-01-16,100,1000,1,103",
-            "2026-01-17,103,104,102,104",
-            "2026-01-18,104,105,103,105",
-            "2026-01-19,105,106,104,106",
-            "2026-01-20,106,107,105,107",
+            "2026-01-15,110,1000,1,113",
+            "2026-01-16,113,1000,1,114",
+            "2026-01-17,114,115,113,115",
+            "2026-01-18,115,116,114,116",
+            "2026-01-19,116,117,115,117",
+            "2026-01-20,117,118,116,118",
         ]
     )
     return "\n".join(reversed(rows[1:])) + "\n" + rows[0]
@@ -50,10 +50,9 @@ def _market_csv() -> str:
 def _constant_atr_bars(future_close: float, future_count: int = 5) -> list[MarketBar]:
     start = date(2025, 12, 31)
     bars = [MarketBar(start + timedelta(days=index), 100.0, 101.0, 99.0, 100.0) for index in range(15)]
-    bars.append(MarketBar(date(2026, 1, 15), 100.0, 101.0, 99.0, 100.0))
     bars.extend(
         MarketBar(
-            date(2026, 1, 16) + timedelta(days=index),
+            date(2026, 1, 15) + timedelta(days=index),
             100.0,
             max(101.0, future_close),
             min(99.0, future_close),
@@ -65,8 +64,8 @@ def _constant_atr_bars(future_close: float, future_count: int = 5) -> list[Marke
 
 
 def _execution_bars(future_ohlc: list[tuple[float, float, float, float]]) -> list[MarketBar]:
-    bars = _constant_atr_bars(100.0)[:16]
-    bars.extend(MarketBar(date(2026, 1, 16) + timedelta(days=index), *ohlc) for index, ohlc in enumerate(future_ohlc))
+    bars = _constant_atr_bars(100.0, future_count=0)
+    bars.extend(MarketBar(date(2026, 1, 15) + timedelta(days=index), *ohlc) for index, ohlc in enumerate(future_ohlc))
     return bars
 
 
@@ -139,9 +138,43 @@ def test_atr_uses_true_range_from_only_fourteen_pre_analysis_bars() -> None:
     assessment = assess_trade(_record(), bars, horizon_days=1)
 
     assert assessment is not None
-    assert assessment.atr_threshold == pytest.approx(0.02642857142857143)
-    assert assessment.benchmark_return == pytest.approx(0.03)
+    assert assessment.atr_threshold == pytest.approx((11.0 + 13 * 2.0) / 14 / 110.0)
+    assert assessment.benchmark_return == pytest.approx(3.0 / 110.0)
     assert assessment.status is AssessmentStatus.CORRECT
+
+
+def test_preopen_record_uses_previous_close_and_current_session_as_horizon_one() -> None:
+    assessment = assess_trade(
+        _record(trade_date="2026-01-15"),
+        _constant_atr_bars(103.0, future_count=1),
+        horizon_days=1,
+    )
+
+    assert assessment is not None
+    assert assessment.benchmark_return == pytest.approx(0.03)
+
+
+def test_weekend_record_uses_friday_close_and_monday_as_horizon_one() -> None:
+    friday = date(2026, 1, 16)
+    history = [MarketBar(friday - timedelta(days=14 - index), 100.0, 101.0, 99.0, 100.0) for index in range(15)]
+    monday = MarketBar(date(2026, 1, 19), 100.0, 104.0, 99.0, 103.0)
+
+    assessment = assess_trade(
+        _record(trade_date="2026-01-17"),
+        [*history, monday],
+        horizon_days=1,
+    )
+
+    assert assessment is not None
+    assert assessment.benchmark_return == pytest.approx(0.03)
+
+
+def test_only_horizons_with_enough_evaluation_sessions_are_available() -> None:
+    bars = _constant_atr_bars(103.0, future_count=3)
+
+    assert assess_trade(_record(), bars, horizon_days=1) is not None
+    assert assess_trade(_record(), bars, horizon_days=3) is not None
+    assert assess_trade(_record(), bars, horizon_days=5) is None
 
 
 def test_atr_threshold_scales_by_square_root_of_horizon() -> None:

@@ -196,6 +196,10 @@ class AnalysisEvaluator:
             logger.warning("[Evaluator] Invalid stock data for %s: %s", record.ticker, exc)
             return []
 
+        analysis_date = trade_date.date()
+        history_count = sum(bar.trade_date < analysis_date for bar in bars)
+        evaluation_session_count = sum(bar.trade_date >= analysis_date for bar in bars)
+
         results: List[EvaluationResult] = []
         for horizon_days in (1, 3, 5):
             if self._record_store.is_evaluated(record.ticker, record.trade_date, horizon_days):
@@ -203,6 +207,16 @@ class AnalysisEvaluator:
             try:
                 assessment = assess_trade(record, bars, horizon_days)
                 if assessment is None:
+                    logger.info(
+                        "[Evaluator] Skipping %s/%s/%s: insufficient market data "
+                        "(history=%s, required_history=15, evaluation_sessions=%s, required_sessions=%s)",
+                        record.ticker,
+                        record.trade_date,
+                        horizon_days,
+                        history_count,
+                        evaluation_session_count,
+                        horizon_days,
+                    )
                     continue
                 lesson_content = await self._generate_lesson(record, assessment)
                 if not lesson_content:
