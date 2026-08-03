@@ -92,8 +92,11 @@ def assess_trade(
 
     analysis_date = date.fromisoformat(record.trade_date)
     ordered_bars = sorted(bars, key=lambda bar: bar.trade_date)
-    base_bar = next((bar for bar in ordered_bars if bar.trade_date == analysis_date), None)
-    history = [bar for bar in ordered_bars if bar.trade_date < analysis_date]
+    base_bar = next(
+        (bar for bar in reversed(ordered_bars) if bar.trade_date <= analysis_date),
+        None,
+    )
+    history = [bar for bar in ordered_bars if base_bar is not None and bar.trade_date < base_bar.trade_date]
     future = [bar for bar in ordered_bars if bar.trade_date > analysis_date]
     if base_bar is None or len(history) < 15 or len(future) < horizon_days:
         return None

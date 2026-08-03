@@ -143,6 +143,21 @@ def test_insufficient_history_does_not_mark_horizon_complete() -> None:
     assert store.marked == []
 
 
+def test_weekend_analysis_uses_latest_completed_session_as_baseline() -> None:
+    rows = _market_csv(history_days=17).splitlines()
+    rows = [row for row in rows if not row.startswith(("2025-01-17", "2025-01-20"))]
+    csv_text = "\n".join(rows).replace("2025-01-21", "2025-01-17")
+    evaluator, store = _evaluator(csv_text)
+    record = _record()
+    record.trade_date = "2025-01-19"
+
+    results = asyncio.run(evaluator.evaluate_single(record))
+
+    assert [result.horizon_days for result in results] == [1, 3, 5]
+    assert [result.trade_date for result in results] == ["2025-01-19"] * 3
+    assert [marked[1] for marked in store.marked] == ["2025-01-19"] * 3
+
+
 def test_failed_explanation_is_retryable_and_does_not_block_later_horizon() -> None:
     evaluator, store = _evaluator(_market_csv())
     evaluator._generate_lesson = AsyncMock(
