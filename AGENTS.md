@@ -84,8 +84,8 @@ Vendor selection follows this precedence: tool-level `tool_vendors`, category-le
 
 The configured models are:
 
-- `deep_think_llm`: `qwen3.7-max` for analysis and debate with thinking enabled.
-- `quick_think_llm`: `qwen3.6-flash` for fast tasks.
+- `deep_think_llm`: `qwen3.8-max` for analysis and debate with thinking enabled.
+- `quick_think_llm`: `qwen3.7-plus` for fast tasks.
 - `non_thinking_model`: the deep model with thinking disabled for debate agents where extra reasoning is unnecessary.
 
 ### Structured Output and Persistence
