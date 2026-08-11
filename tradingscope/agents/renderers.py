@@ -195,15 +195,16 @@ def _(output: TraderOutput) -> str:
 def _(output: PortfolioManagerOutput) -> str:
     return _join_sections(
         _render_header("最终投资组合决策", output),
-        f"### 激进观点\n\n{_render_list(output.aggressive_viewpoints)}",
-        f"### 保守观点\n\n{_render_list(output.conservative_viewpoints)}",
-        f"### 中性观点\n\n{_render_list(output.neutral_viewpoints)}",
-        f"### 采纳理由\n\n{_render_list(output.adopted_reasoning)}",
-        f"### 风险控制\n\n{_render_list(output.risk_control_measures)}",
         f"### 交易意图\n\n- **交易意图**：{TRADE_INTENT_LABELS[output.trade_intent.value]}" if output.trade_intent else "",
         _render_time_stop(output.time_stop_days),
         _render_decision(output),
         _render_price_plan(output.price_plan, output.decision.direction, output.trade_intent),
+        "### 备注",
+        f"#### 激进观点\n\n{_render_list(output.aggressive_viewpoints)}",
+        f"#### 保守观点\n\n{_render_list(output.conservative_viewpoints)}",
+        f"#### 中性观点\n\n{_render_list(output.neutral_viewpoints)}",
+        f"#### 采纳理由\n\n{_render_list(output.adopted_reasoning)}",
+        f"#### 风险控制\n\n{_render_list(output.risk_control_measures)}",
     )
 
 
