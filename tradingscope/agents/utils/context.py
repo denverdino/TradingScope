@@ -8,9 +8,9 @@ from datetime import datetime, timedelta
 from typing import Annotated, Any
 
 import yfinance as yf
-from agentscope.credential import DashScopeCredential
-from agentscope.formatter import DashScopeChatFormatter
-from agentscope.model import DashScopeChatModel
+from agentscope.credential import DashScopeCredential, OpenAICredential
+from agentscope.formatter import DashScopeChatFormatter, OpenAIResponseFormatter
+from agentscope.model import DashScopeChatModel, OpenAIResponseModel
 from yfinance.exceptions import YFRateLimitError
 
 from tradingscope.agents.output import (
@@ -27,8 +27,8 @@ from tradingscope.agents.utils.tracing import create_tracing_middlewares
 from tradingscope.default_config import DEFAULT_CONFIG
 
 
-class CodeInterpreterModel(DashScopeChatModel):
-    """DashScope model with its server-side code interpreter enabled."""
+class CodeInterpreterModel(OpenAIResponseModel):
+    """DashScope Responses API model with Code Interpreter enabled."""
 
     async def _call_api(
         self,
@@ -38,15 +38,23 @@ class CodeInterpreterModel(DashScopeChatModel):
         tool_choice: Any = None,
         **kwargs: Any,
     ):
-        kwargs.setdefault("extra_body", {})
-        kwargs["extra_body"]["enable_code_interpreter"] = True
+        extra_body = kwargs.setdefault("extra_body", {})
+        extra_body["enable_thinking"] = True
         return await super()._call_api(
             model_name,
             messages,
-            tools=None,
-            tool_choice=None,
+            tools=tools,
+            tool_choice=tool_choice,
             **kwargs,
         )
+
+    def _format_tools(
+        self,
+        tools: list[dict] | None,
+        tool_choice: Any,
+    ) -> tuple[list[dict], None]:
+        """Use DashScope's built-in tool instead of function tools."""
+        return [{"type": "code_interpreter"}], None
 
 
 logger = logging.getLogger(__name__)
@@ -99,6 +107,10 @@ class AgentContext:
         self.portfolio_decision: PortfolioManagerOutput | None = None
 
         credential = DashScopeCredential(api_key=os.environ.get("DASHSCOPE_API_KEY"))
+        responses_credential = OpenAICredential(
+            api_key=os.environ.get("DASHSCOPE_API_KEY"),
+            base_url=DEFAULT_CONFIG["backend_url"],
+        )
         common_parameters = DashScopeChatModel.Parameters(
             thinking_enable=True,
             parallel_tool_calls=False,
@@ -121,14 +133,13 @@ class AgentContext:
             formatter=DashScopeChatFormatter(),
         )
         self.code_interpreter_model = CodeInterpreterModel(
-            credential=credential,
-            model=DEFAULT_CONFIG["deep_think_llm"],
+            credential=responses_credential,
+            model=DEFAULT_CONFIG["builtin_tools_model"],
             parameters=CodeInterpreterModel.Parameters(
                 thinking_enable=True,
-                parallel_tool_calls=False,
             ),
             stream=True,
-            formatter=DashScopeChatFormatter(),
+            formatter=OpenAIResponseFormatter(),
         )
 
     def generate_analyst_reports_md(self) -> str:
