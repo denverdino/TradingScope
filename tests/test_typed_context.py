@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 from tests.test_output_models import _all_outputs
 from tradingscope.agents.utils.context import AgentContext
+from tradingscope.default_config import DEFAULT_CONFIG
 
 
 def _typed_context() -> AgentContext:
@@ -41,3 +44,14 @@ def test_context_renders_typed_downstream_inputs() -> None:
 
     assert context.research_decision.decision.summary in trader_context
     assert context.trader_decision.decision.summary in risk_context
+
+
+def test_code_interpreter_uses_builtin_tools_model() -> None:
+    with (
+        patch("tradingscope.agents.utils.context.get_latest_us_trading_date", return_value="2026-08-10"),
+        patch("tradingscope.agents.utils.context.DashScopeChatModel"),
+        patch("tradingscope.agents.utils.context.CodeInterpreterModel") as code_interpreter_model,
+    ):
+        AgentContext()
+
+    assert code_interpreter_model.call_args.kwargs["model"] == DEFAULT_CONFIG["builtin_tools_model"]

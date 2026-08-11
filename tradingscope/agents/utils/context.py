@@ -122,7 +122,7 @@ class AgentContext:
         )
         self.code_interpreter_model = CodeInterpreterModel(
             credential=credential,
-            model=DEFAULT_CONFIG["deep_think_llm"],
+            model=DEFAULT_CONFIG["builtin_tools_model"],
             parameters=CodeInterpreterModel.Parameters(
                 thinking_enable=True,
                 parallel_tool_calls=False,
