@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
+from unittest.mock import AsyncMock, patch
+
+from agentscope.model import OpenAIResponseModel
+
 from tests.test_output_models import _all_outputs
-from tradingscope.agents.utils.context import AgentContext
+from tradingscope.agents.utils.context import AgentContext, CodeInterpreterModel
+from tradingscope.default_config import DEFAULT_CONFIG
 
 
 def _typed_context() -> AgentContext:
@@ -41,3 +47,27 @@ def test_context_renders_typed_downstream_inputs() -> None:
 
     assert context.research_decision.decision.summary in trader_context
     assert context.trader_decision.decision.summary in risk_context
+
+
+def test_code_interpreter_uses_builtin_tools_model() -> None:
+    with (
+        patch("tradingscope.agents.utils.context.get_latest_us_trading_date", return_value="2026-08-10"),
+        patch("tradingscope.agents.utils.context.DashScopeCredential"),
+        patch("tradingscope.agents.utils.context.DashScopeChatModel"),
+        patch("tradingscope.agents.utils.context.OpenAICredential"),
+        patch("tradingscope.agents.utils.context.CodeInterpreterModel") as code_interpreter_model,
+    ):
+        AgentContext()
+
+    assert code_interpreter_model.call_args.kwargs["model"] == DEFAULT_CONFIG["builtin_tools_model"]
+    assert DEFAULT_CONFIG["builtin_tools_model"] == DEFAULT_CONFIG["deep_think_llm"]
+
+
+def test_code_interpreter_uses_responses_api_builtin_tool() -> None:
+    model = CodeInterpreterModel.__new__(CodeInterpreterModel)
+
+    with patch.object(OpenAIResponseModel, "_call_api", new_callable=AsyncMock) as call_api:
+        asyncio.run(model._call_api("qwen3.8-max", []))
+
+    assert model._format_tools(None, None) == ([{"type": "code_interpreter"}], None)
+    assert call_api.await_args.kwargs["extra_body"] == {"enable_thinking": True}

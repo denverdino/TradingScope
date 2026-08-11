@@ -13,7 +13,7 @@ DEFAULT_CONFIG = {
     "deep_think_llm": "qwen3.8-max",
     "quick_think_llm": "qwen3.7-plus",
     "backend_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    "builtin_tools_model": "qwen3.7-plus",
+    "builtin_tools_model": "qwen3.8-max",
     # Debate and discussion settings
     "max_debate_rounds": 1,
     "max_risk_discuss_rounds": 1,
