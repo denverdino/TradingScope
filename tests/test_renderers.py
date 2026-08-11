@@ -61,6 +61,22 @@ def test_full_report_orders_stages() -> None:
     assert positions == sorted(positions)
 
 
+def test_portfolio_report_shows_conclusion_before_notes() -> None:
+    from tradingscope.agents.renderers import render_markdown
+
+    portfolio_data = _all_outputs()[6].model_dump(mode="json")
+    portfolio_data["trade_intent"] = "hold"
+    portfolio = models.PortfolioManagerOutput.model_validate(portfolio_data)
+
+    markdown = render_markdown(portfolio)
+    conclusion_headings = ["### 交易意图", "### 决策", "### 价格计划"]
+    note_headings = ["### 备注", "#### 激进观点", "#### 保守观点", "#### 中性观点", "#### 采纳理由", "#### 风险控制"]
+    positions = [markdown.index(heading) for heading in conclusion_headings + note_headings]
+
+    assert positions == sorted(positions)
+    assert "### 备注\n\n#### 激进观点" in markdown
+
+
 def test_rendering_is_deterministic_and_does_not_mutate() -> None:
     from tradingscope.agents.renderers import render_markdown
 
