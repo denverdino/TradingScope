@@ -15,8 +15,10 @@ from tradingscope.agents.utils.structured_output import StructuredOutputValidati
 
 
 def _workflow_patches(runner: SimpleNamespace, research_orchestrator, risk_orchestrator):
+    cache_usage = SimpleNamespace(log_summary=MagicMock())
     context = SimpleNamespace(
         non_thinking_model=object(),
+        cache_usage=cache_usage,
         company_of_interest="",
         trade_date="2026-07-14",
         latest_trading_date="2026-07-13",
@@ -54,7 +56,7 @@ def _workflow_patches(runner: SimpleNamespace, research_orchestrator, risk_orche
         ),
     )
     persist = stack.enter_context(patch.object(workflow, "persist_analysis_result", new=AsyncMock()))
-    return stack, persist, research_factory, risk_factory
+    return stack, persist, research_factory, risk_factory, cache_usage
 
 
 @pytest.mark.asyncio
@@ -64,7 +66,11 @@ async def test_analyze_returns_fully_typed_result() -> None:
     research_orchestrator = SimpleNamespace(run_debate=AsyncMock(return_value=research))
     risk_orchestrator = SimpleNamespace(run_debate=AsyncMock(return_value=portfolio))
 
-    stack, persist, research_factory, risk_factory = _workflow_patches(runner, research_orchestrator, risk_orchestrator)
+    stack, persist, research_factory, risk_factory, cache_usage = _workflow_patches(
+        runner,
+        research_orchestrator,
+        risk_orchestrator,
+    )
     with stack:
         result = await workflow.analyze("AAPL", "2026-07-14")
 
@@ -85,6 +91,7 @@ async def test_analyze_returns_fully_typed_result() -> None:
         news,
         social,
     )
+    cache_usage.log_summary.assert_called_once_with()
 
 
 @pytest.mark.asyncio
@@ -94,7 +101,7 @@ async def test_analyst_failure_stops_downstream_work() -> None:
     research_orchestrator = SimpleNamespace(run_debate=AsyncMock())
     risk_orchestrator = SimpleNamespace(run_debate=AsyncMock())
 
-    stack, persist, _, _ = _workflow_patches(runner, research_orchestrator, risk_orchestrator)
+    stack, persist, _, _, cache_usage = _workflow_patches(runner, research_orchestrator, risk_orchestrator)
     with stack:
         with pytest.raises(StructuredOutputValidationError):
             await workflow.analyze("AAPL", "2026-07-14")
@@ -102,3 +109,4 @@ async def test_analyst_failure_stops_downstream_work() -> None:
     research_orchestrator.run_debate.assert_not_awaited()
     risk_orchestrator.run_debate.assert_not_awaited()
     persist.assert_not_awaited()
+    cache_usage.log_summary.assert_not_called()

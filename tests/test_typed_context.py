@@ -9,6 +9,7 @@ from agentscope.model import OpenAIResponseModel
 
 from tests.test_output_models import _all_outputs
 from tradingscope.agents.utils.context import AgentContext, CodeInterpreterModel
+from tradingscope.agents.utils.prompt_cache import CachedDashScopeChatFormatter
 from tradingscope.default_config import DEFAULT_CONFIG
 
 
@@ -53,7 +54,7 @@ def test_code_interpreter_uses_builtin_tools_model() -> None:
     with (
         patch("tradingscope.agents.utils.context.get_latest_us_trading_date", return_value="2026-08-10"),
         patch("tradingscope.agents.utils.context.DashScopeCredential"),
-        patch("tradingscope.agents.utils.context.DashScopeChatModel"),
+        patch("tradingscope.agents.utils.context.CacheAwareDashScopeChatModel"),
         patch("tradingscope.agents.utils.context.OpenAICredential"),
         patch("tradingscope.agents.utils.context.CodeInterpreterModel") as code_interpreter_model,
     ):
@@ -61,6 +62,21 @@ def test_code_interpreter_uses_builtin_tools_model() -> None:
 
     assert code_interpreter_model.call_args.kwargs["model"] == DEFAULT_CONFIG["builtin_tools_model"]
     assert DEFAULT_CONFIG["builtin_tools_model"] == DEFAULT_CONFIG["deep_think_llm"]
+
+
+def test_chat_models_use_cache_aware_formatter() -> None:
+    with (
+        patch("tradingscope.agents.utils.context.get_latest_us_trading_date", return_value="2026-08-10"),
+        patch("tradingscope.agents.utils.context.DashScopeCredential"),
+        patch("tradingscope.agents.utils.context.CacheAwareDashScopeChatModel") as chat_model,
+        patch("tradingscope.agents.utils.context.OpenAICredential"),
+        patch("tradingscope.agents.utils.context.CodeInterpreterModel"),
+    ):
+        AgentContext()
+
+    assert chat_model.call_count == 2
+    assert all(isinstance(call.kwargs["formatter"], CachedDashScopeChatFormatter) for call in chat_model.call_args_list)
+    assert chat_model.call_args_list[0].kwargs["formatter"] is chat_model.call_args_list[1].kwargs["formatter"]
 
 
 def test_code_interpreter_uses_responses_api_builtin_tool() -> None:

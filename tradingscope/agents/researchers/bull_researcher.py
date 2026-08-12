@@ -5,8 +5,8 @@ from agentscope.agent import Agent
 from agentscope.agent._config import ReActConfig
 
 # 导入统一日志系统
-from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT
 from tradingscope.agents.utils.context import AgentContext
+from tradingscope.agents.utils.prompt_cache import build_cacheable_system_prompt
 
 # 导入股票工具类
 from tradingscope.agents.utils.stock_utils import StockUtils
@@ -39,9 +39,7 @@ def create_bull_researcher_agent(
     current_date = trade_date
 
     # 构建系统提示词
-    system_message = f"""{COMPLIANCE_PROMPT}
-
-你是一位看涨分析师，负责为股票 {company_name} 的投资建立强有力的论证。
+    role_instructions = f"""你是一位看涨分析师，负责为股票 {company_name} 的投资建立强有力的论证。
 
 ⚠️ 重要提醒：
 当前分析的是 {market_info["market_name"]}，所有价格和估值请使用 {currency}（{currency_symbol}）作为单位。
@@ -64,12 +62,12 @@ def create_bull_researcher_agent(
 - 反驳看跌观点：用具体数据和合理推理批判性分析看跌论点
 
 
-请使用如下资源提供令人信服的看涨论点，反驳看跌担忧，并参与动态辩论，展示看涨立场的优势。
-请确保所有回答都使用中文。
-
-# 可用资源：
-
-{context.generate_analyst_reports_md()}"""
+请使用共享分析上下文提供令人信服的看涨论点，反驳看跌担忧，并参与动态辩论，展示看涨立场的优势。
+请确保所有回答都使用中文。"""
+    system_message = build_cacheable_system_prompt(
+        shared_context=context.generate_analyst_reports_md(),
+        role_instructions=role_instructions,
+    )
 
     logger.info("[看涨研究员] 已注册工具集")
 

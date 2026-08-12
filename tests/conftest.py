@@ -36,7 +36,10 @@ def mock_context():
     from tradingscope.agents.utils.context import AgentContext
 
     with (
-        patch("tradingscope.agents.utils.context.DashScopeChatModel", return_value=MockModel()),
+        patch(
+            "tradingscope.agents.utils.context.CacheAwareDashScopeChatModel",
+            return_value=MockModel(),
+        ),
         patch("tradingscope.agents.utils.context.CodeInterpreterModel", return_value=MockModel()),
     ):
         context = AgentContext()

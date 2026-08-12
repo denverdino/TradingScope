@@ -51,7 +51,10 @@ async def analyze(ticker: str, trade_date: str | None = None) -> AnalysisResult:
     if trade_date:
         context.trade_date = trade_date
 
-    structured_runner = StructuredAgentRunner(context.non_thinking_model)
+    structured_runner = StructuredAgentRunner(
+        context.non_thinking_model,
+        usage_collector=context.cache_usage,
+    )
 
     market_analyst = create_market_analyst_agent(context=context)
     fundamentals_analyst = create_fundamentals_analyst_agent(context=context)
@@ -116,5 +119,6 @@ async def analyze(ticker: str, trade_date: str | None = None) -> AnalysisResult:
         trader=trader,
         portfolio_manager=portfolio_manager,
     )
+    context.cache_usage.log_summary()
     await persist_analysis_result(result)
     return result

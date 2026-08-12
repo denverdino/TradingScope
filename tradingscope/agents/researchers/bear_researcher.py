@@ -5,8 +5,8 @@ from agentscope.agent import Agent
 from agentscope.agent._config import ReActConfig
 
 # 导入统一日志系统
-from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT
 from tradingscope.agents.utils.context import AgentContext
+from tradingscope.agents.utils.prompt_cache import build_cacheable_system_prompt
 from tradingscope.agents.utils.stock_utils import StockUtils
 
 
@@ -36,9 +36,7 @@ def create_bear_researcher_agent(
     current_date = trade_date
 
     # 构建系统提示词
-    system_message = f"""{COMPLIANCE_PROMPT}
-
-你是一位看跌分析师，负责论证不投资股票 {company_name} 的理由。
+    role_instructions = f"""你是一位看跌分析师，负责论证不投资股票 {company_name} 的理由。
 
 ⚠️ 重要提醒：
 当前分析的是 {market_info["market_name"]}，所有价格和估值请使用 {currency}（{currency_symbol}）作为单位。
@@ -60,12 +58,12 @@ def create_bear_researcher_agent(
 - 负面指标：使用财务数据、市场趋势或最近不利消息的证据来支持你的立场
 - 反驳看涨观点：用具体数据和合理推理批判性分析看涨论点，揭露弱点或过度乐观的假设
 
-请使用如下资源提供令人信服的看跌论点，反驳看涨声明，并参与动态辩论，展示投资该股票的风险和弱点。
-请确保所有回答都使用中文。
-
-# 可用资源：
-
-{context.generate_analyst_reports_md()}"""
+请使用共享分析上下文提供令人信服的看跌论点，反驳看涨声明，并参与动态辩论，展示投资该股票的风险和弱点。
+请确保所有回答都使用中文。"""
+    system_message = build_cacheable_system_prompt(
+        shared_context=context.generate_analyst_reports_md(),
+        role_instructions=role_instructions,
+    )
 
     # 创建 Agent
     agent = Agent(

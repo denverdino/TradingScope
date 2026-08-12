@@ -10,9 +10,9 @@ from agentscope.agent._config import ReActConfig
 from agentscope.tool import Toolkit
 
 # Local imports
-from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.decision_policy import MARKET_REGIME_DECISION_POLICY, SHORT_HORIZON_DECISION_POLICY
+from tradingscope.agents.utils.prompt_cache import build_cacheable_system_prompt
 
 
 def create_aggressive_debator_agent(
@@ -31,9 +31,7 @@ def create_aggressive_debator_agent(
     """
     company_of_interest = context.company_of_interest
 
-    prompt = f"""{COMPLIANCE_PROMPT}
-
-{SHORT_HORIZON_DECISION_POLICY}
+    role_instructions = f"""{SHORT_HORIZON_DECISION_POLICY}
 
 {MARKET_REGIME_DECISION_POLICY}
 
@@ -43,11 +41,11 @@ def create_aggressive_debator_agent(
 请不要虚构，只需提出您的观点。
 积极参与，解决提出的任何具体担忧，反驳他们逻辑中的弱点，并断言承担风险的好处以超越市场常规。专注于辩论和说服，而不仅仅是呈现数据。挑战每个反驳点，强调为什么高风险方法是最优的。请用中文以对话方式输出，就像您在说话一样，不使用任何特殊格式。
 
-公司名称：{company_of_interest}
-
-# 可用资源：
-
-{context.generate_risk_evaluation_context_md()}"""
+公司名称：{company_of_interest}"""
+    prompt = build_cacheable_system_prompt(
+        shared_context=context.generate_risk_evaluation_context_md(),
+        role_instructions=role_instructions,
+    )
 
     toolkit = Toolkit()
 

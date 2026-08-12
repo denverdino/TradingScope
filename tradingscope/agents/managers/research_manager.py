@@ -8,9 +8,9 @@ from agentscope.agent._config import ReActConfig
 from pydantic import BaseModel, Field
 
 # Import unified logging system
-from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.decision_policy import MARKET_REGIME_DECISION_POLICY, SHORT_HORIZON_DECISION_POLICY
+from tradingscope.agents.utils.prompt_cache import build_cacheable_system_prompt
 
 
 class RecommendationEnum(str, Enum):
@@ -53,9 +53,7 @@ def create_research_manager_agent(
     latest_trading_date = context.latest_trading_date
 
     # 构建系统提示词，鼓励结构化输出
-    system_message = f"""{COMPLIANCE_PROMPT}
-
-{SHORT_HORIZON_DECISION_POLICY}
+    role_instructions = f"""{SHORT_HORIZON_DECISION_POLICY}
 
 {MARKET_REGIME_DECISION_POLICY}
 
@@ -113,11 +111,11 @@ def create_research_manager_agent(
 - 列出2-3个主要风险点
 
 请输出简洁但完整的研究素材，覆盖事实依据、来源去重、最强反证、关键指标、风险、情景结论与失效条件。
-不要输出 JSON、JSON 代码块或固定 Markdown 报告模板；系统将在下一阶段根据严格 schema 生成正式结果。
-
-# 可用资源：
-
-{context.generate_analyst_reports_md()}"""
+不要输出 JSON、JSON 代码块或固定 Markdown 报告模板；系统将在下一阶段根据严格 schema 生成正式结果。"""
+    system_message = build_cacheable_system_prompt(
+        shared_context=context.generate_analyst_reports_md(),
+        role_instructions=role_instructions,
+    )
 
     # 创建 Agent
     agent = Agent(

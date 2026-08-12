@@ -9,8 +9,8 @@ from typing import Annotated, Any
 
 import yfinance as yf
 from agentscope.credential import DashScopeCredential, OpenAICredential
-from agentscope.formatter import DashScopeChatFormatter, OpenAIResponseFormatter
-from agentscope.model import DashScopeChatModel, OpenAIResponseModel
+from agentscope.formatter import OpenAIResponseFormatter
+from agentscope.model import OpenAIResponseModel
 from yfinance.exceptions import YFRateLimitError
 
 from tradingscope.agents.output import (
@@ -23,6 +23,9 @@ from tradingscope.agents.output import (
     TraderOutput,
 )
 from tradingscope.agents.renderers import render_markdown
+from tradingscope.agents.utils.cache_usage import CacheUsageCollector, CacheUsageMiddleware
+from tradingscope.agents.utils.dashscope_cache_model import CacheAwareDashScopeChatModel
+from tradingscope.agents.utils.prompt_cache import CachedDashScopeChatFormatter
 from tradingscope.agents.utils.tracing import create_tracing_middlewares
 from tradingscope.default_config import DEFAULT_CONFIG
 
@@ -95,7 +98,8 @@ class AgentContext:
     latest_trading_date: Annotated[str, "Latest US trading date"] = ""
 
     def __init__(self) -> None:
-        self.middlewares = create_tracing_middlewares()
+        self.cache_usage = CacheUsageCollector()
+        self.middlewares = [CacheUsageMiddleware(self.cache_usage), *create_tracing_middlewares()]
         self.trade_date = datetime.now().strftime("%Y-%m-%d")
         self.latest_trading_date = get_latest_us_trading_date()
         self.market_analysis: MarketAnalystOutput | None = None
@@ -111,26 +115,27 @@ class AgentContext:
             api_key=os.environ.get("DASHSCOPE_API_KEY"),
             base_url=DEFAULT_CONFIG["backend_url"],
         )
-        common_parameters = DashScopeChatModel.Parameters(
+        common_parameters = CacheAwareDashScopeChatModel.Parameters(
             thinking_enable=True,
             parallel_tool_calls=False,
         )
-        self.model = DashScopeChatModel(
+        chat_formatter = CachedDashScopeChatFormatter()
+        self.model = CacheAwareDashScopeChatModel(
             credential=credential,
             model=DEFAULT_CONFIG["deep_think_llm"],
             parameters=common_parameters,
             stream=True,
-            formatter=DashScopeChatFormatter(),
+            formatter=chat_formatter,
         )
-        self.non_thinking_model = DashScopeChatModel(
+        self.non_thinking_model = CacheAwareDashScopeChatModel(
             credential=credential,
             model=DEFAULT_CONFIG["deep_think_llm"],
-            parameters=DashScopeChatModel.Parameters(
+            parameters=CacheAwareDashScopeChatModel.Parameters(
                 thinking_enable=False,
                 parallel_tool_calls=False,
             ),
             stream=True,
-            formatter=DashScopeChatFormatter(),
+            formatter=chat_formatter,
         )
         self.code_interpreter_model = CodeInterpreterModel(
             credential=responses_credential,

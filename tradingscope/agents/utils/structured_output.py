@@ -6,6 +6,7 @@ import logging
 from collections.abc import Sequence
 from typing import Generic, TypeVar
 
+from agentscope.exception import ToolJSONDecodeError
 from agentscope.message import Msg, UserMsg
 from pydantic import ValidationError
 
@@ -42,11 +43,12 @@ class StructuredOutputValidationError(RuntimeError):
 class StructuredAgentRunner(Generic[OutputT]):
     """Run an agent draft once, then validate its structured final output."""
 
-    def __init__(self, formatter_model, max_validation_attempts: int = 3) -> None:
+    def __init__(self, formatter_model, max_validation_attempts: int = 3, usage_collector=None) -> None:
         if max_validation_attempts < 1:
             raise ValueError("max_validation_attempts must be at least 1")
         self._formatter_model = formatter_model
         self._max_validation_attempts = max_validation_attempts
+        self._usage_collector = usage_collector
 
     async def _run_analysis(self, agent, prompt: Msg | None) -> Msg:
         return await call_agent_with_retry(agent, prompt)
@@ -70,6 +72,8 @@ class StructuredAgentRunner(Generic[OutputT]):
                     messages=[UserMsg(name="structured_output", content=content)],
                     structured_model=output_model,
                 )
+                if self._usage_collector is not None:
+                    self._usage_collector.record(response)
                 output = output_model.model_validate(response.content)
                 validate_generated_output(output, reference_outputs)
                 return output
@@ -85,7 +89,7 @@ class StructuredAgentRunner(Generic[OutputT]):
                 last_errors = exc.errors
                 lines = _format_validation_errors(last_errors)
                 validation_feedback = "\n上次输出未满足交易决策规则，请修正：\n" + "\n".join(lines)
-            except RuntimeError as exc:
+            except (RuntimeError, ToolJSONDecodeError) as exc:
                 last_errors = [{"loc": (), "msg": str(exc)}]
                 lines = _format_validation_errors(last_errors)
                 validation_feedback = "\n上次未生成符合 schema 的结构化对象，请仅返回指定结构。"

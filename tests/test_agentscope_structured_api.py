@@ -21,8 +21,9 @@ def test_agentscope_exposes_structured_output_api() -> None:
     assert "structured_model" in parameters
 
 
-def test_agent_context_creates_tracing_middlewares(monkeypatch) -> None:
+def test_agent_context_creates_cache_and_tracing_middlewares(monkeypatch) -> None:
     from tradingscope.agents.utils import context as context_module
+    from tradingscope.agents.utils.cache_usage import CacheUsageMiddleware
 
     sentinel_middlewares = [object()]
     monkeypatch.setattr(
@@ -34,7 +35,9 @@ def test_agent_context_creates_tracing_middlewares(monkeypatch) -> None:
 
     context = context_module.AgentContext()
 
-    assert context.middlewares is sentinel_middlewares
+    assert isinstance(context.middlewares[0], CacheUsageMiddleware)
+    assert context.middlewares[0].collector is context.cache_usage
+    assert context.middlewares[1:] == sentinel_middlewares
 
 
 def test_tool_using_factory_receives_context_middlewares(monkeypatch) -> None:

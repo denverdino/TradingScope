@@ -6,8 +6,11 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from agentscope.exception import ToolJSONDecodeError
+from agentscope.model import ChatUsage
 
 from tests.test_output_models import _all_outputs
+from tradingscope.agents.utils.cache_usage import CacheUsageCollector
 
 
 @pytest.mark.asyncio
@@ -29,6 +32,33 @@ async def test_runner_returns_concrete_pydantic_output() -> None:
     assert result == expected
     runner._run_analysis.assert_awaited_once_with(agent, None)
     assert formatter_model.generate_structured_output.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_runner_records_structured_output_usage() -> None:
+    from tradingscope.agents.utils.structured_output import StructuredAgentRunner
+
+    expected = _all_outputs()[0]
+    collector = CacheUsageCollector()
+    formatter_model = SimpleNamespace(
+        generate_structured_output=AsyncMock(
+            return_value=SimpleNamespace(
+                content=expected.model_dump(mode="json"),
+                usage=ChatUsage(
+                    input_tokens=1_000,
+                    output_tokens=100,
+                    cache_input_tokens=800,
+                    time=0.2,
+                ),
+            ),
+        ),
+    )
+    runner = StructuredAgentRunner(formatter_model=formatter_model, usage_collector=collector)
+    runner._run_analysis = AsyncMock(return_value=SimpleNamespace(get_text_content=lambda: "分析素材"))
+
+    await runner.run(SimpleNamespace(name="MarketAnalyst"), type(expected))
+
+    assert collector.snapshot()["cache_input_tokens"] == 800
 
 
 @pytest.mark.asyncio
@@ -79,6 +109,35 @@ async def test_runner_retries_when_model_emits_no_structured_tool_call() -> None
         SimpleNamespace(name="MarketAnalyst"),
         type(expected),
         None,
+    )
+
+    assert result == expected
+    assert runner._run_analysis.await_count == 1
+    assert formatter_model.generate_structured_output.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_runner_retries_when_tool_arguments_are_invalid_json() -> None:
+    """A malformed structured tool call must not abort the workflow."""
+    from tradingscope.agents.utils.structured_output import StructuredAgentRunner
+
+    expected = _all_outputs()[0]
+    formatter_model = SimpleNamespace(
+        generate_structured_output=AsyncMock(
+            side_effect=[
+                ToolJSONDecodeError("Extra data: line 1 column 527"),
+                SimpleNamespace(content=expected.model_dump(mode="json")),
+            ],
+        ),
+    )
+    runner = StructuredAgentRunner(formatter_model=formatter_model)
+    runner._run_analysis = AsyncMock(
+        return_value=SimpleNamespace(get_text_content=lambda: "分析素材"),
+    )
+
+    result = await runner.run(
+        SimpleNamespace(name="MarketAnalyst"),
+        type(expected),
     )
 
     assert result == expected
