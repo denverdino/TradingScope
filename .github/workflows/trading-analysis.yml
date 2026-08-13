@@ -9,8 +9,49 @@ on:
   workflow_dispatch: # Allows manual triggering
 
 jobs:
-  analyze:
+  evaluate:
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: |
+          uv sync --extra dev
+
+      - name: Evaluate stock analysis
+        run: |
+          tickers=(MSFT AAPL TSLA AMZN META NVDA GOOGL BABA TSM)
+
+          ticker_list=$(IFS=,; echo "${tickers[*]}")
+          uv run python -m tradingscope.evaluate --tickers="$ticker_list" --email-to="${{ secrets.EMAIL_TO }}" --dry-run || echo "Evaluate stock analysis failed, continuing..."
+        env:
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+          DASHSCOPE_BASE_URL: ${{ secrets.DASHSCOPE_BASE_URL }}
+          ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
+          OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+          OSS_REGION: ${{ secrets.OSS_REGION }}
+          OSS_BUCKET: ${{ secrets.OSS_BUCKET }}
+          TZ: Asia/Shanghai
+          MEMORY_DEBUG: "1"
+
+  analyze:
+    needs: evaluate
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        ticker: [MSFT, AAPL, TSLA, AMZN, META, NVDA, GOOGL, BABA, TSM]
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -26,14 +67,7 @@ jobs:
 
       - name: Run stock analysis
         run: |
-          tickers=(MSFT AAPL TSLA AMZN META NVDA GOOGL BABA TSM)
-          
-          ticker_list=$(IFS=,; echo "${tickers[*]}")
-          uv run python -m tradingscope.evaluate --tickers="$ticker_list" --email-to="${{ secrets.EMAIL_TO }}" --dry-run || echo "Evaluate stock analysis failed, continuing..."
-
-          for ticker in "${tickers[@]}"; do
-            uv run python -m tradingscope.main "$ticker" --email-to="${{ secrets.EMAIL_TO }}" || echo "Analyze stock $ticker failed, continuing..."
-          done
+          uv run python -m tradingscope.main "${{ matrix.ticker }}" --email-to="${{ secrets.EMAIL_TO }}" || echo "Analyze stock ${{ matrix.ticker }} failed, continuing..."
         env:
           DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
           DASHSCOPE_BASE_URL: ${{ secrets.DASHSCOPE_BASE_URL }}
