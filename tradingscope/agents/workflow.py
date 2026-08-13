@@ -8,7 +8,11 @@ from datetime import date
 from agentscope import logger
 
 from tradingscope.agents.managers.portfolio_manager import create_portfolio_manager_agent
-from tradingscope.utils.oss_structured_output_uploader import persist_analysis_result
+from tradingscope.utils.oss_structured_output_uploader import (
+    analysis_persistence_session,
+    persist_analysis_result,
+    persist_node_output,
+)
 
 from .analysts.fundamentals_analyst import create_fundamentals_analyst_agent
 from .analysts.market_analyst import create_market_analyst_agent
@@ -50,6 +54,13 @@ async def analyze(ticker: str, trade_date: str | None = None) -> AnalysisResult:
     context.company_of_interest = ticker
     if trade_date:
         context.trade_date = trade_date
+    workflow_trade_date = _as_date(context.trade_date).isoformat()
+    async with analysis_persistence_session(workflow_trade_date, ticker):
+        return await _run_analysis(ticker, context, workflow_trade_date)
+
+
+async def _run_analysis(ticker: str, context: AgentContext, workflow_trade_date: str) -> AnalysisResult:
+    """Execute one initialized and persistence-guarded workflow run."""
 
     structured_runner = StructuredAgentRunner(
         context.non_thinking_model,
@@ -61,14 +72,36 @@ async def analyze(ticker: str, trade_date: str | None = None) -> AnalysisResult:
     news_analyst = create_news_analyst_agent(context=context)
     social_media_analyst = create_social_media_analyst_agent(context=context)
 
+    async def run_analyst(agent_name, agent, output_model):
+        output = await structured_runner.run(agent, output_model)
+        await persist_node_output(
+            agent_name,
+            output,
+            ticker=ticker,
+            trade_date=workflow_trade_date,
+        )
+        return output
+
     analyst_tasks = [
-        asyncio.create_task(structured_runner.run(market_analyst, MarketAnalystOutput)),
         asyncio.create_task(
-            structured_runner.run(fundamentals_analyst, FundamentalsAnalystOutput),
+            run_analyst("market_analyst", market_analyst, MarketAnalystOutput),
         ),
-        asyncio.create_task(structured_runner.run(news_analyst, NewsAnalystOutput)),
         asyncio.create_task(
-            structured_runner.run(social_media_analyst, SocialMediaAnalystOutput),
+            run_analyst(
+                "fundamentals_analyst",
+                fundamentals_analyst,
+                FundamentalsAnalystOutput,
+            ),
+        ),
+        asyncio.create_task(
+            run_analyst("news_analyst", news_analyst, NewsAnalystOutput),
+        ),
+        asyncio.create_task(
+            run_analyst(
+                "social_media_analyst",
+                social_media_analyst,
+                SocialMediaAnalystOutput,
+            ),
         ),
     ]
     try:
@@ -95,6 +128,12 @@ async def analyze(ticker: str, trade_date: str | None = None) -> AnalysisResult:
     )
     research_manager = await research_orchestrator.run_debate(company_name=ticker)
     context.research_decision = research_manager
+    await persist_node_output(
+        "research_manager",
+        research_manager,
+        ticker=ticker,
+        trade_date=workflow_trade_date,
+    )
 
     trader_agent = create_trader_agent(context=context)
     trader = await structured_runner.run(
@@ -103,6 +142,12 @@ async def analyze(ticker: str, trade_date: str | None = None) -> AnalysisResult:
         reference_outputs=(research_manager, market, fundamentals, news, social_media),
     )
     context.trader_decision = trader
+    await persist_node_output(
+        "trader",
+        trader,
+        ticker=ticker,
+        trade_date=workflow_trade_date,
+    )
 
     risk_orchestrator = create_debate_orchestrator(
         aggressive_agent=create_aggressive_debator_agent(context=context),
@@ -115,6 +160,12 @@ async def analyze(ticker: str, trade_date: str | None = None) -> AnalysisResult:
     )
     portfolio_manager = await risk_orchestrator.run_debate(company_name=ticker)
     context.portfolio_decision = portfolio_manager
+    await persist_node_output(
+        "portfolio_manager",
+        portfolio_manager,
+        ticker=ticker,
+        trade_date=workflow_trade_date,
+    )
 
     result = AnalysisResult(
         schema_version="2.0",

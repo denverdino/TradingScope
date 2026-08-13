@@ -164,7 +164,7 @@ This project uses:
 
 ## Data Storage
 
-Stock data is cached under `tradingscope/dataflows/data_cache/`. Local analysis outputs are written under `results/data/<date>/<ticker>/` by default; set `TRADINGAGENTS_RESULTS_DIR` to change the root. Depending on `--output`, the CLI writes an HTML report, per-agent JSON files, and a combined JSON result.
+Stock data is cached under `tradingscope/dataflows/data_cache/`. Local analysis outputs are written under `results/data/<date>/<ticker>/` by default; set `TRADINGAGENTS_RESULTS_DIR` to change the root. Each validated workflow node is checkpointed there as JSON and Markdown when it finishes. Depending on `--output`, the CLI additionally writes an HTML report and/or a combined JSON result.
 
 ### OSS Report Storage
 
@@ -174,4 +174,4 @@ When all OSS environment variables are configured, the workflow uploads Markdown
 tradingscope/<date>/<ticker>/<agent_name>.{md,json}
 ```
 
-Artifacts include `market_analyst`, `fundamentals_analyst`, `news_analyst`, `social_media_analyst`, `research_manager`, `trader`, `portfolio_manager`, and `full_report`. A schema-v2 `manifest.json` is written last only after all required artifacts succeed; evaluation uses it as the completion marker. If OSS is not configured, analysis still writes local output and skips OSS persistence.
+Artifacts include `market_analyst`, `fundamentals_analyst`, `news_analyst`, `social_media_analyst`, `research_manager`, `trader`, `portfolio_manager`, and `full_report`. Each node's JSON and Markdown artifacts are uploaded as soon as that node finishes. Starting another run for the same ticker/date first invalidates its previous manifest; same-key runs within one process are serialized. A schema-v2 `manifest.json` is written last only after all required artifacts succeed; evaluation uses it as the completion marker. If OSS is not configured, the workflow still checkpoints every node locally and skips OSS persistence.

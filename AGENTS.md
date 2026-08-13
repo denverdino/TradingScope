@@ -96,7 +96,7 @@ All seven JSON-producing workflow nodes run through `StructuredAgentRunner`; sch
 
 `DashScopeResponseModel` must inline local Pydantic `$ref` definitions before sending structured-output tools because DashScope may otherwise serialize nested objects as JSON strings. Preserve Pydantic model validation when normalizing schemas. Thinking-enabled requests use `tool_choice="auto"`; non-thinking structured-output requests use `tool_choice="required"`.
 
-OSS persistence is optional for analysis. When configured, `persist_analysis_result()` uploads Markdown and JSON for every node and `full_report`, then writes `manifest.json` last. Treat the manifest as the atomic completion marker: consumers must use `fetch_completed_v2_output()` or `async_fetch_completed_v2_output()` rather than reading an artifact without validating the manifest.
+Each validated workflow node is persisted as JSON and Markdown under `<results_dir>/data/<date>/<ticker>/` as soon as it finishes. When OSS is configured, the same node artifacts are uploaded immediately. A new run invalidates any prior local and OSS manifest for that ticker/date, and same-key runs are serialized within one process. After every node succeeds, `persist_analysis_result()` writes `full_report` and then `manifest.json` last. Treat the manifest as the atomic completion marker: consumers must use `fetch_completed_v2_output()` or `async_fetch_completed_v2_output()` rather than reading an artifact without validating the manifest.
 
 ### Post-market Evaluation
 

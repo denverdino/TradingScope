@@ -12,12 +12,29 @@ Environment variables:
 import asyncio
 import logging
 import os
-from typing import Dict
+from collections.abc import Callable
+from typing import Dict, TypeVar
 
 logger = logging.getLogger(__name__)
 
 _client = None
 _bucket_name = None
+_T = TypeVar("_T")
+
+
+async def _run_blocking_oss_operation(func: Callable[..., _T], *args) -> _T:
+    """Drain an executor operation before propagating task cancellation."""
+    future = asyncio.get_running_loop().run_in_executor(None, func, *args)
+    cancelled = False
+    while True:
+        try:
+            result = await asyncio.shield(future)
+            break
+        except asyncio.CancelledError:
+            cancelled = True
+    if cancelled:
+        raise asyncio.CancelledError
+    return result
 
 
 def _get_client():
@@ -90,8 +107,7 @@ def _upload_report(trade_date: str, ticker: str, agent_name: str, content: str) 
 
 async def upload_report(trade_date: str, ticker: str, agent_name: str, content: str) -> bool:
     """Upload a single report to OSS (async wrapper)."""
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, _upload_report, trade_date, ticker, agent_name, content)
+    return await _run_blocking_oss_operation(_upload_report, trade_date, ticker, agent_name, content)
 
 
 async def upload_reports(trade_date: str, ticker: str, reports: Dict[str, str]) -> Dict[str, bool]:
