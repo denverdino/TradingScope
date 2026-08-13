@@ -152,7 +152,7 @@ def create_trader_agent(
     agent = Agent(
         name=name,
         system_prompt=system_prompt,
-        model=context.code_interpreter_model,
+        model=context.model,
         middlewares=context.middlewares,
     )
 

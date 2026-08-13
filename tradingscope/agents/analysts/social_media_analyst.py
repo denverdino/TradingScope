@@ -19,7 +19,7 @@ def create_social_media_analyst_agent(
     name: str = "SocialMediaAnalyst",
 ) -> Agent:
     """
-    创建用于社交媒体与投资者情绪分析的 ReActAgent（DashScopeChatModel）。
+    创建用于社交媒体与投资者情绪分析的 ReActAgent。
     - 优先使用中国社交媒体情绪工具；如受限/无结果，回退到 Reddit 数据。
     - 输出中文与固定结构（含情绪评分与价格影响评估）。
 

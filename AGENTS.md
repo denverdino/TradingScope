@@ -30,7 +30,7 @@ uv run pytest tests/test_foo.py::TestClass::test_method -v
 uv run pytest -m "not slow and not integration"
 ```
 
-Run the application with `uv run python -m tradingscope.main AAPL`.
+Run the application with `source .env && uv run python -m tradingscope.main AAPL` so live model credentials are loaded in the same shell.
 
 Run evaluation with `uv run python -m tradingscope.evaluate --tickers AAPL,MSFT`. The `--tickers` argument is required; `make evaluate` does not supply it.
 
@@ -47,6 +47,7 @@ Run evaluation with `uv run python -m tradingscope.evaluate --tickers AAPL,MSFT`
 - `MEMORY_DEBUG` — enables extra evaluation-related debug logging when set.
 
 Never commit credentials, tokens, generated reports, or local environment files.
+For any live application or integration-test command, source `~/daily/llm_env.sh` in the same shell. Do not print, inspect, or persist the loaded secrets.
 
 ## Architecture and Code Map
 
@@ -70,6 +71,7 @@ Key locations:
 - `tradingscope/agents/output.py` — Pydantic schemas for stage outputs and `AnalysisResult`.
 - `tradingscope/agents/renderers.py` — Markdown renderers for validated structured outputs.
 - `tradingscope/agents/utils/structured_output.py` — shared structured-output execution and validation.
+- `tradingscope/agents/utils/dashscope_response_model.py` — DashScope Responses API adapter, including structured-output schema normalization and thinking-mode tool selection.
 - `tradingscope/agents/evaluation/evaluator.py` — market-result scoring and LLM-generated evaluations/lessons.
 - `tradingscope/agents/evaluation/oss_store.py` — manifest-gated OSS ingestion and local evaluated-state tracking.
 - `tradingscope/agents/utils/tracing.py` — opt-in OpenTelemetry provider and AgentScope middleware lifecycle.
@@ -91,6 +93,8 @@ The configured models are:
 ### Structured Output and Persistence
 
 All seven JSON-producing workflow nodes run through `StructuredAgentRunner`; schema validation failures stop downstream processing. The workflow returns one schema-v2 `AnalysisResult`. Local CLI output goes to `<results_dir>/data/<date>/<ticker>/` as HTML and/or JSON according to `--output`.
+
+`DashScopeResponseModel` must inline local Pydantic `$ref` definitions before sending structured-output tools because DashScope may otherwise serialize nested objects as JSON strings. Preserve Pydantic model validation when normalizing schemas. Thinking-enabled requests use `tool_choice="auto"`; non-thinking structured-output requests use `tool_choice="required"`.
 
 OSS persistence is optional for analysis. When configured, `persist_analysis_result()` uploads Markdown and JSON for every node and `full_report`, then writes `manifest.json` last. Treat the manifest as the atomic completion marker: consumers must use `fetch_completed_v2_output()` or `async_fetch_completed_v2_output()` rather than reading an artifact without validating the manifest.
 
@@ -141,8 +145,9 @@ Summarize:
 2. What was verified, including exact commands.
 3. Any remaining risk, assumption, or follow-up.
 
+- Never commit .env file
 - Never commit AI-generated design, specification, planning, or implementation-plan documents. Keep such artifacts outside the repository or leave them untracked for local use only.
 - Before merging any development branch into a trunk branch such as `main` or `master`, squash all branch commits into a single commit. Do not merge a multi-commit branch history directly into the trunk.
-- After repository changes are complete and verified, automatically create the squashed local commit, merge it into the local `main` branch, and verify the merged result. This is standing authorization for local commits and local merges; do not ask for confirmation each time.
+- After repository changes are complete and verified, automatically create the squashed local commit. This is standing authorization for local commits and local merges; do not ask for confirmation each time.
 
 Do not push, open a pull request, upload reports, or send email unless the user explicitly requests it.

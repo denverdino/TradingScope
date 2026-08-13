@@ -179,3 +179,27 @@ def test_reduce_long_uses_long_price_semantics_and_renders_time_stops() -> None:
     assert "2.00:1" in trader_markdown
     assert "### 时间止损\n\n3 个交易日" in trader_markdown
     assert "### 时间止损\n\n4 个交易日" in portfolio_markdown
+
+
+def test_positioned_hold_omits_inapplicable_empty_price_fields() -> None:
+    from tradingscope.agents.renderers import render_markdown
+
+    portfolio_data = _all_outputs()[6].model_dump(mode="json")
+    portfolio_data.update({"trade_intent": "hold", "position_advice": "light", "time_stop_days": 5})
+    portfolio_data["price_plan"].update(
+        {
+            "entry_price": None,
+            "entry_price_low": None,
+            "entry_price_high": None,
+            "target_price": 129.2,
+            "stop_loss": 120.3,
+        },
+    )
+
+    markdown = render_markdown(models.PortfolioManagerOutput.model_validate(portfolio_data))
+
+    assert "入场价**：无" not in markdown
+    assert "代表入场价**：无" not in markdown
+    assert "盈亏比**：无" not in markdown
+    assert "目标价**：USD 129.20" in markdown
+    assert "止损价**：USD 120.30" in markdown

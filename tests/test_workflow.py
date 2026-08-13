@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import ExitStack
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -110,3 +111,39 @@ async def test_analyst_failure_stops_downstream_work() -> None:
     risk_orchestrator.run_debate.assert_not_awaited()
     persist.assert_not_awaited()
     cache_usage.log_summary.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_analyst_failure_cancels_and_collects_sibling_tasks() -> None:
+    failure = StructuredOutputValidationError("MarketAnalyst", [])
+    cancelled_agents: set[str] = set()
+
+    async def run(agent, output_model):
+        del output_model
+        if agent.name == "create_market_analyst_agent":
+            await asyncio.sleep(0)
+            raise failure
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            cancelled_agents.add(agent.name)
+            raise
+
+    runner = SimpleNamespace(run=run)
+    research_orchestrator = SimpleNamespace(run_debate=AsyncMock())
+    risk_orchestrator = SimpleNamespace(run_debate=AsyncMock())
+
+    stack, _, _, _, _ = _workflow_patches(
+        runner,
+        research_orchestrator,
+        risk_orchestrator,
+    )
+    with stack:
+        with pytest.raises(StructuredOutputValidationError):
+            await workflow.analyze("AAPL", "2026-07-14")
+
+    assert cancelled_agents == {
+        "create_fundamentals_analyst_agent",
+        "create_news_analyst_agent",
+        "create_social_media_analyst_agent",
+    }

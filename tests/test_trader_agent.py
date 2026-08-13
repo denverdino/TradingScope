@@ -58,6 +58,7 @@ class TestTraderAgent:
         # Verify the agent was created
         assert agent is not None
         assert hasattr(agent, "name")
+        assert agent.model is context.model
 
     @patch("tradingscope.agents.utils.agent_utils.get_company_name")
     @patch("tradingscope.agents.utils.stock_utils.StockUtils.get_market_info")

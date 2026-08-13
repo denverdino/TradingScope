@@ -5,12 +5,11 @@ from __future__ import annotations
 import logging
 import os
 from datetime import datetime, timedelta
-from typing import Annotated, Any
+from typing import Annotated
 
 import yfinance as yf
-from agentscope.credential import DashScopeCredential, OpenAICredential
+from agentscope.credential import OpenAICredential
 from agentscope.formatter import OpenAIResponseFormatter
-from agentscope.model import OpenAIResponseModel
 from yfinance.exceptions import YFRateLimitError
 
 from tradingscope.agents.output import (
@@ -24,41 +23,9 @@ from tradingscope.agents.output import (
 )
 from tradingscope.agents.renderers import render_markdown
 from tradingscope.agents.utils.cache_usage import CacheUsageCollector, CacheUsageMiddleware
-from tradingscope.agents.utils.dashscope_cache_model import CacheAwareDashScopeChatModel
-from tradingscope.agents.utils.prompt_cache import CachedDashScopeChatFormatter
+from tradingscope.agents.utils.dashscope_response_model import DashScopeResponseModel
 from tradingscope.agents.utils.tracing import create_tracing_middlewares
 from tradingscope.default_config import DEFAULT_CONFIG
-
-
-class CodeInterpreterModel(OpenAIResponseModel):
-    """DashScope Responses API model with Code Interpreter enabled."""
-
-    async def _call_api(
-        self,
-        model_name: str,
-        messages: list,
-        tools: list[dict] | None = None,
-        tool_choice: Any = None,
-        **kwargs: Any,
-    ):
-        extra_body = kwargs.setdefault("extra_body", {})
-        extra_body["enable_thinking"] = True
-        return await super()._call_api(
-            model_name,
-            messages,
-            tools=tools,
-            tool_choice=tool_choice,
-            **kwargs,
-        )
-
-    def _format_tools(
-        self,
-        tools: list[dict] | None,
-        tool_choice: Any,
-    ) -> tuple[list[dict], None]:
-        """Use DashScope's built-in tool instead of function tools."""
-        return [{"type": "code_interpreter"}], None
-
 
 logger = logging.getLogger(__name__)
 
@@ -110,41 +77,35 @@ class AgentContext:
         self.trader_decision: TraderOutput | None = None
         self.portfolio_decision: PortfolioManagerOutput | None = None
 
-        credential = DashScopeCredential(api_key=os.environ.get("DASHSCOPE_API_KEY"))
-        responses_credential = OpenAICredential(
+        credential = OpenAICredential(
             api_key=os.environ.get("DASHSCOPE_API_KEY"),
             base_url=DEFAULT_CONFIG["backend_url"],
         )
-        common_parameters = CacheAwareDashScopeChatModel.Parameters(
-            thinking_enable=True,
-            parallel_tool_calls=False,
-        )
-        chat_formatter = CachedDashScopeChatFormatter()
-        self.model = CacheAwareDashScopeChatModel(
+        formatter = OpenAIResponseFormatter()
+        client_kwargs = {
+            "default_headers": {
+                "x-dashscope-session-cache": "enable",
+            },
+        }
+        self.model = DashScopeResponseModel(
             credential=credential,
             model=DEFAULT_CONFIG["deep_think_llm"],
-            parameters=common_parameters,
-            stream=True,
-            formatter=chat_formatter,
-        )
-        self.non_thinking_model = CacheAwareDashScopeChatModel(
-            credential=credential,
-            model=DEFAULT_CONFIG["deep_think_llm"],
-            parameters=CacheAwareDashScopeChatModel.Parameters(
-                thinking_enable=False,
-                parallel_tool_calls=False,
-            ),
-            stream=True,
-            formatter=chat_formatter,
-        )
-        self.code_interpreter_model = CodeInterpreterModel(
-            credential=responses_credential,
-            model=DEFAULT_CONFIG["builtin_tools_model"],
-            parameters=CodeInterpreterModel.Parameters(
+            parameters=DashScopeResponseModel.Parameters(
                 thinking_enable=True,
             ),
             stream=True,
-            formatter=OpenAIResponseFormatter(),
+            formatter=formatter,
+            client_kwargs=client_kwargs,
+        )
+        self.non_thinking_model = DashScopeResponseModel(
+            credential=credential,
+            model=DEFAULT_CONFIG["deep_think_llm"],
+            parameters=DashScopeResponseModel.Parameters(
+                thinking_enable=False,
+            ),
+            stream=True,
+            formatter=formatter,
+            client_kwargs=client_kwargs,
         )
 
     def generate_analyst_reports_md(self) -> str:

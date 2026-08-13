@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
-from agentscope.model import OpenAIResponseModel
+from agentscope.formatter import OpenAIResponseFormatter
 
 from tests.test_output_models import _all_outputs
-from tradingscope.agents.utils.context import AgentContext, CodeInterpreterModel
-from tradingscope.agents.utils.prompt_cache import CachedDashScopeChatFormatter
+from tradingscope.agents.utils.context import AgentContext
+from tradingscope.agents.utils.dashscope_response_model import DashScopeResponseModel
 from tradingscope.default_config import DEFAULT_CONFIG
 
 
@@ -50,40 +49,32 @@ def test_context_renders_typed_downstream_inputs() -> None:
     assert context.trader_decision.decision.summary in risk_context
 
 
-def test_code_interpreter_uses_builtin_tools_model() -> None:
+def test_context_uses_two_responses_models() -> None:
     with (
         patch("tradingscope.agents.utils.context.get_latest_us_trading_date", return_value="2026-08-10"),
-        patch("tradingscope.agents.utils.context.DashScopeCredential"),
-        patch("tradingscope.agents.utils.context.CacheAwareDashScopeChatModel"),
-        patch("tradingscope.agents.utils.context.OpenAICredential"),
-        patch("tradingscope.agents.utils.context.CodeInterpreterModel") as code_interpreter_model,
+        patch("tradingscope.agents.utils.context.OpenAICredential") as credential_factory,
+        patch("tradingscope.agents.utils.context.DashScopeResponseModel") as response_model,
+    ):
+        response_model.Parameters = DashScopeResponseModel.Parameters
+        AgentContext()
+
+    assert response_model.call_count == 2
+    assert response_model.call_args_list[0].kwargs["model"] == DEFAULT_CONFIG["deep_think_llm"]
+    assert response_model.call_args_list[0].kwargs["parameters"].thinking_enable is True
+    assert response_model.call_args_list[1].kwargs["parameters"].thinking_enable is False
+    assert all(isinstance(call.kwargs["formatter"], OpenAIResponseFormatter) for call in response_model.call_args_list)
+    assert response_model.call_args_list[0].kwargs["formatter"] is response_model.call_args_list[1].kwargs["formatter"]
+    assert all(call.kwargs["client_kwargs"] == {"default_headers": {"x-dashscope-session-cache": "enable"}} for call in response_model.call_args_list)
+    assert all(call.kwargs["stream"] is True for call in response_model.call_args_list)
+    assert all(call.kwargs["credential"] is credential_factory.return_value for call in response_model.call_args_list)
+
+
+def test_context_configures_responses_credential() -> None:
+    with (
+        patch("tradingscope.agents.utils.context.get_latest_us_trading_date", return_value="2026-08-10"),
+        patch("tradingscope.agents.utils.context.OpenAICredential") as credential_factory,
+        patch("tradingscope.agents.utils.context.DashScopeResponseModel"),
     ):
         AgentContext()
 
-    assert code_interpreter_model.call_args.kwargs["model"] == DEFAULT_CONFIG["builtin_tools_model"]
-    assert DEFAULT_CONFIG["builtin_tools_model"] == DEFAULT_CONFIG["deep_think_llm"]
-
-
-def test_chat_models_use_cache_aware_formatter() -> None:
-    with (
-        patch("tradingscope.agents.utils.context.get_latest_us_trading_date", return_value="2026-08-10"),
-        patch("tradingscope.agents.utils.context.DashScopeCredential"),
-        patch("tradingscope.agents.utils.context.CacheAwareDashScopeChatModel") as chat_model,
-        patch("tradingscope.agents.utils.context.OpenAICredential"),
-        patch("tradingscope.agents.utils.context.CodeInterpreterModel"),
-    ):
-        AgentContext()
-
-    assert chat_model.call_count == 2
-    assert all(isinstance(call.kwargs["formatter"], CachedDashScopeChatFormatter) for call in chat_model.call_args_list)
-    assert chat_model.call_args_list[0].kwargs["formatter"] is chat_model.call_args_list[1].kwargs["formatter"]
-
-
-def test_code_interpreter_uses_responses_api_builtin_tool() -> None:
-    model = CodeInterpreterModel.__new__(CodeInterpreterModel)
-
-    with patch.object(OpenAIResponseModel, "_call_api", new_callable=AsyncMock) as call_api:
-        asyncio.run(model._call_api("qwen3.8-max", []))
-
-    assert model._format_tools(None, None) == ([{"type": "code_interpreter"}], None)
-    assert call_api.await_args.kwargs["extra_body"] == {"enable_thinking": True}
+    assert credential_factory.call_args.kwargs["base_url"] == DEFAULT_CONFIG["backend_url"]

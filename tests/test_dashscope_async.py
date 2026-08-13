@@ -73,7 +73,7 @@ class TestSummarizeForMemory:
 
 
 def _mock_streaming_model(text="Test content"):
-    """Build a mock DashScopeChatModel that returns an async generator."""
+    """Build a mock chat model that returns an async generator."""
 
     async def _mock_call(*args, **kwargs):
         async def _stream():

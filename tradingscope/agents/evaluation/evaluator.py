@@ -12,7 +12,7 @@ from typing import Any, List, Optional
 from agentscope import logger
 from agentscope.agent import Agent
 from agentscope.message import UserMsg
-from agentscope.model import DashScopeChatModel
+from agentscope.model import ChatModelBase
 
 from .market_outcome import (
     AssessmentStatus,
@@ -98,7 +98,7 @@ class AnalysisEvaluator:
 
     def __init__(
         self,
-        model: DashScopeChatModel,
+        model: ChatModelBase,
         memory_manager: Optional[object] = None,
         results_dir: Optional[str] = None,
         dry_run: bool = False,
@@ -107,7 +107,7 @@ class AnalysisEvaluator:
         """Initialize AnalysisEvaluator.
 
         Args:
-            model: DashScopeChatModel instance for LLM calls.
+            model: AgentScope chat model instance for LLM calls.
             memory_manager: FinancialMemoryManager for writing lessons.
                             If None, lessons are generated but not stored.
             results_dir: Directory for local tracking files.

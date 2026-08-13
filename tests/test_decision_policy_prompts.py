@@ -25,7 +25,6 @@ def _manager_context() -> SimpleNamespace:
         latest_trading_date="2026-07-24",
         model=object(),
         non_thinking_model=object(),
-        code_interpreter_model=object(),
         middlewares=[],
         generate_analyst_reports_md=lambda: "analyst reports",
         generate_trader_context_md=lambda: "trader context",

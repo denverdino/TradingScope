@@ -81,6 +81,5 @@ class TestPortfolioManagerAgent:
             name=self.agent_name,
         )
 
-        # Uses built-in code_interpreter model (no toolkit/react_config)
         assert agent is not None
-        assert agent.model is context.code_interpreter_model
+        assert agent.model is context.model

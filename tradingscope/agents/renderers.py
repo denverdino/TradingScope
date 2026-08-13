@@ -72,25 +72,27 @@ def _render_price_plan(price_plan: PricePlan, direction: Direction, trade_intent
         }
         else "入场"
     )
+    price_lines: list[str] = []
     if price_plan.entry_price_low is not None and price_plan.entry_price_high is not None:
         entry_text = f"{price(price_plan.entry_price_low)}–{price_plan.entry_price_high:.2f}"
         entry_label = f"{price_label}区间" if trade_intent else "入场价"
-    else:
-        entry_text = price(price_plan.entry_price)
-        entry_label = f"{price_label}价"
+        price_lines.append(f"- **{entry_label}**：{entry_text}")
+        if price_plan.entry_price is not None:
+            price_lines.append(f"- **代表{price_label}价**：{price(price_plan.entry_price)}")
+    elif price_plan.entry_price is not None:
+        price_lines.append(f"- **{price_label}价**：{price(price_plan.entry_price)}")
+    if price_plan.target_price is not None:
+        price_lines.append(f"- **目标价**：{price(price_plan.target_price)}")
+    if price_plan.stop_loss is not None:
+        price_lines.append(f"- **止损价**：{price(price_plan.stop_loss)}")
+
     ratio_direction = Direction.BULLISH if trade_intent is TradeIntent.REDUCE_LONG else direction
     ratio = price_plan.risk_reward_ratio_for(ratio_direction)
-    ratio_text = "无" if ratio is None else f"{ratio:.2f}:1"
-    return (
-        "### 价格计划\n\n"
-        f"- **{entry_label}**：{entry_text}\n"
-        f"- **代表{price_label}价**：{price(price_plan.entry_price)}\n"
-        f"- **目标价**：{price(price_plan.target_price)}\n"
-        f"- **止损价**：{price(price_plan.stop_loss)}\n"
-        f"- **盈亏比**：{ratio_text}\n\n"
-        "### 失效条件\n\n"
-        f"{_render_list(price_plan.invalidation_conditions)}"
-    )
+    if ratio is not None:
+        price_lines.append(f"- **盈亏比**：{ratio:.2f}:1")
+
+    price_content = "\n".join(price_lines) if price_lines else "当前策略无适用价格项"
+    return f"### 价格计划\n\n{price_content}\n\n### 失效条件\n\n{_render_list(price_plan.invalidation_conditions)}"
 
 
 def _join_sections(*sections: str) -> str:

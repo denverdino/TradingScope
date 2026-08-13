@@ -5,15 +5,17 @@ from __future__ import annotations
 import inspect
 from importlib.metadata import version
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
-from agentscope.model import DashScopeChatModel
 from packaging.version import Version
+
+from tradingscope.agents.utils.dashscope_response_model import DashScopeResponseModel
 
 
 def test_agentscope_exposes_structured_output_api() -> None:
-    assert Version(version("agentscope")) >= Version("2.0.4")
+    assert Version(version("agentscope")) >= Version("2.0.6")
 
-    method = DashScopeChatModel.generate_structured_output
+    method = DashScopeResponseModel.generate_structured_output
     parameters = inspect.signature(method).parameters
 
     assert inspect.iscoroutinefunction(method)
@@ -32,6 +34,10 @@ def test_agent_context_creates_cache_and_tracing_middlewares(monkeypatch) -> Non
         lambda: sentinel_middlewares,
     )
     monkeypatch.setattr(context_module, "get_latest_us_trading_date", lambda: "2026-07-21")
+    monkeypatch.setattr(context_module, "OpenAICredential", lambda **_kwargs: object())
+    response_model = MagicMock()
+    response_model.Parameters = context_module.DashScopeResponseModel.Parameters
+    monkeypatch.setattr(context_module, "DashScopeResponseModel", response_model)
 
     context = context_module.AgentContext()
 
@@ -77,7 +83,7 @@ def test_plain_factory_receives_context_middlewares(monkeypatch) -> None:
         company_of_interest="AAPL",
         trade_date="2026-07-21",
         latest_trading_date="2026-07-20",
-        code_interpreter_model=object(),
+        model=object(),
         middlewares=[object()],
         generate_risk_evaluation_context_md=lambda: "risk context",
     )

@@ -61,12 +61,24 @@ async def analyze(ticker: str, trade_date: str | None = None) -> AnalysisResult:
     news_analyst = create_news_analyst_agent(context=context)
     social_media_analyst = create_social_media_analyst_agent(context=context)
 
-    market, fundamentals, news, social_media = await asyncio.gather(
-        structured_runner.run(market_analyst, MarketAnalystOutput),
-        structured_runner.run(fundamentals_analyst, FundamentalsAnalystOutput),
-        structured_runner.run(news_analyst, NewsAnalystOutput),
-        structured_runner.run(social_media_analyst, SocialMediaAnalystOutput),
-    )
+    analyst_tasks = [
+        asyncio.create_task(structured_runner.run(market_analyst, MarketAnalystOutput)),
+        asyncio.create_task(
+            structured_runner.run(fundamentals_analyst, FundamentalsAnalystOutput),
+        ),
+        asyncio.create_task(structured_runner.run(news_analyst, NewsAnalystOutput)),
+        asyncio.create_task(
+            structured_runner.run(social_media_analyst, SocialMediaAnalystOutput),
+        ),
+    ]
+    try:
+        market, fundamentals, news, social_media = await asyncio.gather(*analyst_tasks)
+    except BaseException:
+        for task in analyst_tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*analyst_tasks, return_exceptions=True)
+        raise
     context.market_analysis = market
     context.fundamentals_analysis = fundamentals
     context.news_analysis = news

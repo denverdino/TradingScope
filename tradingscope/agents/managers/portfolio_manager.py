@@ -103,7 +103,7 @@ def create_portfolio_manager_agent(
     agent = Agent(
         name=name,
         system_prompt=system_message,
-        model=context.code_interpreter_model,
+        model=context.model,
         middlewares=context.middlewares,
     )
 

@@ -121,10 +121,10 @@ The four analyst stages use `asyncio.gather`. All seven JSON-producing nodes are
 
 ### AgentScope 2.0
 
-This project uses AgentScope 2.0 (`agentscope>=2.0.4,<2.1`) with:
+This project uses AgentScope 2.0 (`agentscope>=2.0.6,<2.1`) with:
 
 - `Agent` class with `ReActConfig` for tool-calling agents
-- `DashScopeChatModel` with `DashScopeCredential` for model configuration
+- `DashScopeResponseModel` based on `OpenAIResponseModel`, with `OpenAICredential` for Alibaba Cloud's OpenAI-compatible Responses API and server-side Code Interpreter enabled by default
 - `Toolkit(tools=[FunctionTool(...)])` for tool registration
 - `agent.observe()` for multi-agent message broadcasting (replaces MsgHub)
 - `ToolChunk` return type for all tool functions
