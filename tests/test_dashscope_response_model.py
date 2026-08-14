@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+from datetime import datetime
+from types import SimpleNamespace
 from typing import Literal
 from unittest.mock import AsyncMock, patch
 
@@ -85,13 +87,19 @@ def _model(*, thinking_enable: bool = True, stream: bool = False) -> DashScopeRe
 
 
 def test_model_offers_code_interpreter_without_local_tools() -> None:
-    model = DashScopeResponseModel.__new__(DashScopeResponseModel)
+    model = _model(thinking_enable=True)
 
     assert model._format_tools(None, None) == ([{"type": "code_interpreter"}], None)
 
 
+def test_model_omits_code_interpreter_in_non_thinking_mode() -> None:
+    model = _model(thinking_enable=False)
+
+    assert model._format_tools(None, None) == ([], None)
+
+
 def test_model_keeps_local_function_tools_with_code_interpreter() -> None:
-    model = DashScopeResponseModel.__new__(DashScopeResponseModel)
+    model = _model(thinking_enable=True)
     tools = [
         {
             "type": "function",
@@ -140,6 +148,37 @@ def test_model_passes_thinking_mode_without_discarding_extra_body() -> None:
         "existing": "value",
         "enable_thinking": False,
     }
+
+
+def test_model_surfaces_failed_stream_responses() -> None:
+    model = _model(thinking_enable=False, stream=True)
+
+    async def failed_events():
+        yield SimpleNamespace(
+            type="response.failed",
+            response=SimpleNamespace(
+                error=SimpleNamespace(
+                    code="InvalidParameter",
+                    message="Normal mode does not support Code interpreter.",
+                ),
+            ),
+        )
+
+    async def consume_stream() -> None:
+        async for _chunk in model._parse_stream_response(
+            datetime.now(),
+            failed_events(),
+        ):
+            pass
+
+    with pytest.raises(
+        RuntimeError,
+        match=(
+            r"DashScope response failed \(InvalidParameter\): "
+            r"Normal mode does not support Code interpreter"
+        ),
+    ):
+        asyncio.run(consume_stream())
 
 
 def test_model_inlines_nested_schema_for_structured_output() -> None:

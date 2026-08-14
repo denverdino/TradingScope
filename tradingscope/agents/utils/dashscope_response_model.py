@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 from copy import deepcopy
+from datetime import datetime
 from typing import Any
 
 from agentscope.message import Msg
@@ -53,7 +54,31 @@ def _with_inlined_schema(model: type[BaseModel]) -> type[BaseModel]:
 
 
 class DashScopeResponseModel(OpenAIResponseModel):
-    """Use Alibaba Cloud Responses with Code Interpreter enabled by default."""
+    """Use Alibaba Cloud Responses with thinking-mode Code Interpreter."""
+
+    async def _parse_stream_response(
+        self,
+        start_datetime: datetime,
+        response: Any,
+    ) -> AsyncGenerator[ChatResponse, None]:
+        """Raise DashScope stream failures instead of returning empty text."""
+
+        async def checked_events() -> AsyncGenerator[Any, None]:
+            async for event in response:
+                if event.type == "response.failed":
+                    error = getattr(event.response, "error", None)
+                    code = getattr(error, "code", None) or "unknown"
+                    message = getattr(error, "message", None) or "unknown error"
+                    raise RuntimeError(
+                        f"DashScope response failed ({code}): {message}",
+                    )
+                yield event
+
+        async for chunk in super()._parse_stream_response(
+            start_datetime,
+            checked_events(),
+        ):
+            yield chunk
 
     async def _call_api(
         self,
@@ -86,6 +111,8 @@ class DashScopeResponseModel(OpenAIResponseModel):
             tool_choice,
         )
         if any(tool.get("type") == "function" and tool.get("function", {}).get("name") == "generate_structured_output" for tool in tools or []):
+            return formatted_tools or [], formatted_choice
+        if not self.parameters.thinking_enable:
             return formatted_tools or [], formatted_choice
         return [
             *(formatted_tools or []),
