@@ -178,13 +178,25 @@ class TestEvaluatorGenerateLesson:
         assert "不得把原始分析未提及的信息包装成预测依据" in prompt
 
     @pytest.mark.parametrize(
-        ("status", "required_copy"),
+        ("status", "required_copies"),
         [
-            ("not_filled", "评价执行计划"),
-            ("inconclusive", "不得给出确定性的成功或失败结论"),
+            (
+                "not_filled",
+                (
+                    "评价执行计划",
+                    "不得声称未成交计划避免、降低、防范或保护了任何风险",
+                ),
+            ),
+            (
+                "inconclusive",
+                (
+                    "不得给出确定性的成功或失败结论",
+                    "不得把方向判断、执行质量、风控组件或整体策略描述为已验证、有效、成功或正确",
+                ),
+            ),
         ],
     )
-    def test_prompt_preserves_non_deterministic_status_semantics(self, status, required_copy):
+    def test_prompt_preserves_non_deterministic_status_semantics(self, status, required_copies):
         from tradingscope.agents.evaluation.evaluator import AnalysisEvaluator
         from tradingscope.agents.evaluation.market_outcome import (
             AssessmentStatus,
@@ -214,7 +226,57 @@ class TestEvaluatorGenerateLesson:
                 asyncio.run(evaluator._generate_lesson(record=record, assessment=assessment))
 
         prompt = mock_agent.return_value.reply.await_args.args[0].get_text_content()
-        assert required_copy in prompt
+        assert all(required_copy in prompt for required_copy in required_copies)
+
+    def test_prompt_prevents_overclaiming_objective_assessment(self):
+        from tradingscope.agents.evaluation.evaluator import AnalysisEvaluator
+        from tradingscope.agents.evaluation.market_outcome import (
+            AssessmentStatus,
+            TradeAssessment,
+        )
+
+        mock_model = _mock_streaming_model()
+        response = MagicMock()
+        response.get_text_content.return_value = "评估结果: test\n经验教训: test"
+        record = self._make_record(
+            action="hold",
+            trade_intent="hold",
+            position_advice="light",
+        )
+
+        with patch("tradingscope.agents.evaluation.evaluator.Agent") as mock_agent:
+            mock_agent.return_value.reply = AsyncMock(return_value=response)
+            with tempfile.TemporaryDirectory() as tmpdir:
+                evaluator = AnalysisEvaluator(model=mock_model, results_dir=tmpdir, dry_run=True)
+                asyncio.run(
+                    evaluator._generate_lesson(
+                        record=record,
+                        assessment=TradeAssessment(
+                            horizon_days=3,
+                            status=AssessmentStatus.CORRECT,
+                            entry_triggered=False,
+                            entry_price=None,
+                            exit_reason=None,
+                            benchmark_return=0.033,
+                            strategy_return=None,
+                            atr_threshold=0.025,
+                            limitations=("Hold intent produces no new execution simulation.",),
+                        ),
+                    )
+                )
+
+        prompt = mock_agent.return_value.reply.await_args.args[0].get_text_content()
+        assert "交易意图: hold" in prompt
+        assert "仓位建议: light" in prompt
+        assert "correct只表示满足程序判定标准" in prompt
+        assert "不得使用“规避上涨”或“规避风险”" in prompt
+        assert "不得据此得出风险已被规避的结论；应说明" in prompt
+        assert "只能说明" not in prompt
+        assert "hold不会模拟目标价、止损价或时间止损" in prompt
+        assert "仓位建议为none时只说明未执行新交易" in prompt
+        assert "不得使用“有效”“成功”“正确”“验证”等确定性表述" in prompt
+        assert "只评价已经模拟的部分" in prompt
+        assert "经验教训只能来自原始分析和上述客观评估数据" in prompt
 
     def test_each_lesson_uses_a_fresh_agent(self):
         from tradingscope.agents.evaluation.evaluator import AnalysisEvaluator

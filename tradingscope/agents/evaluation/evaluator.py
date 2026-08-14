@@ -56,6 +56,8 @@ _LESSON_PROMPT = """你是一位客观的投资分析评测专家。请解释已
 - 分析日期: {trade_date}
 - 预测方向: {direction}
 - 操作建议: {action}
+- 交易意图: {trade_intent}
+- 仓位建议: {position_advice}
 - 置信度: {confidence:.0%}
 - 入场价: {entry_price}
 - 目标价: {target_price}
@@ -84,7 +86,13 @@ _LESSON_PROMPT = """你是一位客观的投资分析评测专家。请解释已
 
 不得改变上述客观状态。不得把原始分析未提及的信息包装成预测依据。
 必须区分方向判断与交易计划可执行性。状态为not_filled时只评价执行计划，不得评价为方向错误。
-状态为inconclusive时不得给出确定性的成功或失败结论。
+correct只表示满足程序判定标准；若策略收益率为“-”，不得据此声称策略盈利、跑赢基准或整体计划有效。
+状态为inconclusive时，不得给出确定性的成功或失败结论，也不得使用“有效”“成功”“正确”“验证”等确定性表述；不得把方向判断、执行质量、风控组件或整体策略描述为已验证、有效、成功或正确。
+当是否成交为否且基准收益率为正时，不得使用“规避上涨”或“规避风险”，也不得声称未成交计划避免、降低、防范或保护了任何风险；不得据此得出风险已被规避的结论；应说明未产生新交易收益，并可解释未成交原因、机会成本及适用限制。
+trade_intent为hold时，hold不会模拟目标价、止损价或时间止损。仓位建议为none时只说明未执行新交易；仓位建议非none时还必须说明现有仓位及其风控执行未被本次评测模拟。
+评估限制不为“无”时，只评价已经模拟的部分，不得把部分结果扩展为完整交易计划或组合收益的结论。
+基准收益率仅按其实际用途解释，不得仅因策略跑赢或落后基准而改变客观状态。
+经验教训只能来自原始分析和上述客观评估数据，不得编造新的市场事实、因果机制或已执行动作。
 不要使用Markdown格式，直接输出纯文本。"""
 
 
@@ -282,6 +290,8 @@ class AnalysisEvaluator:
             trade_date=record.trade_date,
             direction=record.direction,
             action=record.action,
+            trade_intent=record.trade_intent or "-",
+            position_advice=record.position_advice or "-",
             confidence=record.confidence,
             entry_price=record.entry_price or "-",
             target_price=record.target_price or "-",
