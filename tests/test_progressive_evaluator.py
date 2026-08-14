@@ -173,7 +173,7 @@ def test_insufficient_history_does_not_mark_horizon_complete() -> None:
     assert store.marked == []
 
 
-def test_failed_explanation_is_retryable_and_does_not_block_later_horizon() -> None:
+def test_failed_explanation_falls_back_to_objective_result() -> None:
     evaluator, store = _evaluator(_market_csv())
     evaluator._generate_lesson = AsyncMock(
         side_effect=[None, "评估结果: 可解释\n经验教训: 可复用", "评估结果: 可解释\n经验教训: 可复用"],
@@ -181,8 +181,10 @@ def test_failed_explanation_is_retryable_and_does_not_block_later_horizon() -> N
 
     results = asyncio.run(evaluator.evaluate_single(_record()))
 
-    assert [result.horizon_days for result in results] == [3, 5]
-    assert [marked[2] for marked in store.marked] == [3, 5]
+    assert [result.horizon_days for result in results] == [1, 3, 5]
+    assert results[0].evaluation == "客观状态: correct；是否成交: 否；基准收益率: +5.00%；策略收益率: -"
+    assert results[0].lesson == ""
+    assert [marked[2] for marked in store.marked] == [1, 3, 5]
 
 
 def test_horizon_exception_does_not_block_later_horizons() -> None:

@@ -219,12 +219,9 @@ class AnalysisEvaluator:
                     )
                     continue
                 lesson_content = await self._generate_lesson(record, assessment)
-                if not lesson_content:
-                    continue
-
                 lesson_type = _lesson_type_for_status(assessment.status)
                 weight = calculate_lesson_weight(lesson_type=lesson_type)
-                if self._memory_manager and not self._dry_run:
+                if lesson_content and self._memory_manager and not self._dry_run:
                     lessons_mem = self._memory_manager.lessons_memory
                     if lessons_mem:
                         await lessons_mem.add_reflection_lesson(
@@ -244,7 +241,11 @@ class AnalysisEvaluator:
                 if not self._dry_run:
                     self._record_store.mark_evaluated(record.ticker, record.trade_date, horizon_days)
 
-                evaluation, lesson = _parse_evaluation_and_lesson(lesson_content)
+                if lesson_content:
+                    evaluation, lesson = _parse_evaluation_and_lesson(lesson_content)
+                else:
+                    evaluation = _format_objective_evaluation(assessment)
+                    lesson = ""
                 results.append(
                     EvaluationResult(
                         ticker=record.ticker,
@@ -310,7 +311,8 @@ class AnalysisEvaluator:
             response = await agent.reply(
                 UserMsg(name="evaluator", content=prompt),
             )
-            text = response.get_text_content().strip()
+            text_content = response.get_text_content()
+            text = text_content.strip() if text_content else ""
             return text or None
         except Exception as e:
             logger.warning("[Evaluator] LLM call failed: %s", e)
@@ -331,6 +333,16 @@ def _format_price(value: float | None) -> str:
 
 def _format_percent(value: float | None) -> str:
     return f"{value:+.2%}" if value is not None else "-"
+
+
+def _format_objective_evaluation(assessment: TradeAssessment) -> str:
+    """Format the computed market outcome when LLM enrichment is unavailable."""
+    entry_triggered = "是" if assessment.entry_triggered else "否"
+    return (
+        f"客观状态: {assessment.status.value}；是否成交: {entry_triggered}；"
+        f"基准收益率: {assessment.benchmark_return:+.2%}；"
+        f"策略收益率: {_format_percent(assessment.strategy_return)}"
+    )
 
 
 def _strip_vendor_preamble(csv_text: str) -> str:

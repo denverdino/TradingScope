@@ -283,3 +283,22 @@ class TestEvaluatorGenerateLesson:
 
         assert result is None
         mock_agent.return_value.reply.assert_awaited_once()
+
+    def test_none_text_response_does_not_log_an_llm_failure(self):
+        from tradingscope.agents.evaluation.evaluator import AnalysisEvaluator
+
+        mock_model = _mock_streaming_model()
+        response = MagicMock()
+        response.get_text_content.return_value = None
+        record = self._make_record()
+        with (
+            patch("tradingscope.agents.evaluation.evaluator.Agent") as mock_agent,
+            patch("tradingscope.agents.evaluation.evaluator.logger") as logger,
+        ):
+            mock_agent.return_value.reply = AsyncMock(return_value=response)
+            with tempfile.TemporaryDirectory() as tmpdir:
+                evaluator = AnalysisEvaluator(model=mock_model, results_dir=tmpdir, dry_run=True)
+                result = self._call_generate_lesson(evaluator, record)
+
+        assert result is None
+        logger.warning.assert_not_called()
