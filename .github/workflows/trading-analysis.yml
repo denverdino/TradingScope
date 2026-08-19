@@ -26,7 +26,7 @@ jobs:
 
       - name: Evaluate stock analysis
         run: |
-          tickers=(MSFT AAPL TSLA AMZN META NVDA GOOGL BABA TSM)
+          tickers=(MSFT AMZN INTC NVDA GOOGL BABA TSM)
 
           ticker_list=$(IFS=,; echo "${tickers[*]}")
           uv run python -m tradingscope.evaluate --tickers="$ticker_list" --email-to="${{ secrets.EMAIL_TO }}" --dry-run || echo "Evaluate stock analysis failed, continuing..."
@@ -51,7 +51,7 @@ jobs:
       fail-fast: false
       max-parallel: 2
       matrix:
-        ticker: [MSFT, AAPL, TSLA, AMZN, META, NVDA, GOOGL, BABA, TSM]
+        ticker: [MSFT, AMZN, INTC, NVDA, GOOGL, BABA, TSM]
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
