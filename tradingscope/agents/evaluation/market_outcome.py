@@ -35,7 +35,12 @@ class AssessmentStatus(StrEnum):
 
 @dataclass(frozen=True)
 class TradeAssessment:
-    """Observed outcome over an evaluation-session horizon from trade_date."""
+    """Observed outcome over an evaluation-session horizon from trade_date.
+
+    For reduce_long, status and strategy_return describe only the sold portion's
+    relative performance. Residual events carry no full-position return; a
+    residual_exit_reason of horizon denotes valuation rather than execution.
+    """
 
     horizon_days: int
     status: AssessmentStatus
@@ -46,6 +51,10 @@ class TradeAssessment:
     strategy_return: float | None
     atr_threshold: float
     limitations: tuple[str, ...]
+    strategy_return_basis: str | None = None
+    residual_exit_reason: str | None = None
+    residual_exit_date: str | None = None
+    residual_exit_price: float | None = None
 
 
 def parse_market_bars(csv_text: str) -> list[MarketBar]:
@@ -126,13 +135,20 @@ def assess_trade(
         fill_window = future_window[: record.time_stop_days]
     else:
         fill_window = future_window
-    limitations = (
-        ("The residual-position time stop for reduce_long is not simulated.",)
-        if record.trade_intent == "reduce_long" and record.time_stop_days is not None
-        else ()
-    )
+    limitations: tuple[str, ...] = ()
+    return_basis = None
+    if record.trade_intent == "reduce_long":
+        return_basis = "exit_relative_performance"
+        limitations = (
+            "strategy_return measures only the reduced portion's avoided loss or opportunity cost, not full-position return. "
+            "Full-position return is unavailable without position quantity, reduction size and cost basis.",
+            "OHLC range touches and exits are simulations, not evidence of actual execution. "
+            "Narrative conditions are not evaluated; time stops use trading sessions from the analysis date.",
+        )
     fill = _first_fill(record, fill_window)
     if fill is None:
+        if record.trade_intent == "reduce_long":
+            limitations += ("Reduction was not filled; existing-position exits are not simulated.",)
         return TradeAssessment(
             horizon_days=horizon_days,
             status=AssessmentStatus.NOT_FILLED,
@@ -143,9 +159,13 @@ def assess_trade(
             strategy_return=None,
             atr_threshold=atr_threshold,
             limitations=limitations,
+            strategy_return_basis=return_basis,
         )
 
     fill_index, execution_price = fill
+    residual_exit_reason = None
+    residual_exit_date = None
+    residual_exit_price = None
     if record.trade_intent in {"open_long", "open_short"}:
         strategy_return, exit_reason = _simulate_open_trade(
             record,
@@ -156,6 +176,22 @@ def assess_trade(
     elif record.trade_intent in {"reduce_long", "close_long"}:
         strategy_return = (execution_price - horizon_bar.close) / execution_price
         exit_reason = "execution"
+        if record.trade_intent == "reduce_long":
+            if record.position_advice == "none":
+                limitations += ("position_advice=none specifies no residual position; residual exits are not simulated.",)
+            elif record.time_stop_days is None:
+                limitations += ("No residual time-stop deadline was specified; residual exits are not simulated.",)
+            elif fill_index + 1 > record.time_stop_days:
+                limitations += ("Reduction filled after the time-stop deadline; pre-reduction position exits are not simulated.",)
+            else:
+                residual_bar, residual_exit_price, residual_exit_reason = _simulate_position_exit(record, future_window, fill_index, is_long=True)
+                residual_exit_date = residual_bar.trade_date.isoformat()
+                limitations += (
+                    "Residual exits assume the position remains after reduction. Daily OHLC cannot determine same-session event order; "
+                    "stop_loss precedes target and time_stop. A horizon result is a valuation, not an exit.",
+                )
+                if residual_exit_reason == "horizon":
+                    limitations += ("Residual time-stop deadline is beyond the evaluation horizon; no time-stop exit is simulated yet.",)
     elif record.trade_intent == "cover_short":
         strategy_return = (horizon_bar.close - execution_price) / execution_price
         exit_reason = "execution"
@@ -178,6 +214,10 @@ def assess_trade(
         strategy_return=strategy_return,
         atr_threshold=atr_threshold,
         limitations=limitations,
+        strategy_return_basis=return_basis,
+        residual_exit_reason=residual_exit_reason,
+        residual_exit_date=residual_exit_date,
+        residual_exit_price=residual_exit_price,
     )
 
 
@@ -225,18 +265,30 @@ def _simulate_open_trade(
     execution_price: float,
 ) -> tuple[float, str]:
     is_long = record.trade_intent == "open_long"
+    _bar, exit_price, exit_reason = _simulate_position_exit(record, future_bars, fill_index, is_long=is_long)
+    return _directional_return(is_long, execution_price, exit_price), exit_reason
+
+
+def _simulate_position_exit(
+    record: AnalysisRecord,
+    future_bars: Sequence[MarketBar],
+    fill_index: int,
+    *,
+    is_long: bool,
+) -> tuple[MarketBar, float, str]:
+    """Simulate price exits before the analysis-relative time stop, or value at horizon."""
     for index in range(fill_index, len(future_bars)):
         bar = future_bars[index]
         stop_hit = record.stop_loss is not None and (bar.low <= record.stop_loss if is_long else bar.high >= record.stop_loss)
         target_hit = record.target_price is not None and (bar.high >= record.target_price if is_long else bar.low <= record.target_price)
         if stop_hit:
-            return _directional_return(is_long, execution_price, record.stop_loss), "stop_loss"
+            return bar, record.stop_loss, "stop_loss"
         if target_hit:
-            return _directional_return(is_long, execution_price, record.target_price), "target"
+            return bar, record.target_price, "target"
         if record.time_stop_days is not None and index + 1 >= record.time_stop_days:
-            return _directional_return(is_long, execution_price, bar.close), "time_stop"
+            return bar, bar.close, "time_stop"
 
-    return _directional_return(is_long, execution_price, future_bars[-1].close), "horizon"
+    return future_bars[-1], future_bars[-1].close, "horizon"
 
 
 def _directional_return(is_long: bool, entry_price: float, exit_price: float) -> float:

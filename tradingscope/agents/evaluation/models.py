@@ -27,6 +27,11 @@ class EvaluationResult:
     benchmark_return: Optional[float] = None
     strategy_return: Optional[float] = None
     trade_date: str = ""
+    strategy_return_basis: Optional[str] = None
+    residual_exit_reason: Optional[str] = None
+    residual_exit_date: Optional[str] = None
+    residual_exit_price: Optional[float] = None
+    limitations: tuple[str, ...] = ()
 
 
 @dataclass
