@@ -5,6 +5,8 @@ from datetime import date, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
+import pytest
+
 from tradingscope.agents.evaluation.evaluator import (
     AnalysisEvaluator,
     _lesson_type_for_status,
@@ -238,3 +240,58 @@ def test_all_objective_statuses_map_to_the_expected_lesson_type() -> None:
     assert _lesson_type_for_status(AssessmentStatus.INCORRECT) == "failure"
     assert _lesson_type_for_status(AssessmentStatus.INCONCLUSIVE) == "partial"
     assert _lesson_type_for_status(AssessmentStatus.NOT_FILLED) == "partial"
+
+
+@pytest.mark.parametrize("lesson_content", [None, "评估结果: 可解释\n经验教训: 可复用"])
+def test_reduce_long_result_preserves_residual_event_and_return_basis(lesson_content: str | None) -> None:
+    evaluator, _store = _evaluator(_market_csv())
+    evaluator._generate_lesson = AsyncMock(return_value=lesson_content)
+    record = _record()
+    record.intent_inferred = False
+    record.trade_intent = "reduce_long"
+    record.entry_price = 100.0
+    record.position_advice = "light"
+    record.time_stop_days = 3
+
+    results = asyncio.run(evaluator.evaluate_single(record))
+
+    assert [result.strategy_return for result in results] == [-0.05, -0.15, -0.25]
+    assert all(result.strategy_return_basis == "exit_relative_performance" for result in results)
+    assert [result.residual_exit_reason for result in results] == ["horizon", "time_stop", "time_stop"]
+    assert [result.residual_exit_date for result in results] == ["2025-01-21", "2025-01-23", "2025-01-23"]
+    assert [result.residual_exit_price for result in results] == [105.0, 115.0, 115.0]
+    assert all(result.limitations for result in results)
+    if lesson_content is None:
+        assert "是否模拟成交: 是" in results[-1].evaluation
+        assert "减仓部分相对表现: -25.00%" in results[-1].evaluation
+        assert "time_stop" in results[-1].evaluation
+        assert "2025-01-23" in results[-1].evaluation
+        assert "115.00" in results[-1].evaluation
+        assert "cost basis" in results[-1].evaluation
+
+
+def test_reduce_long_lesson_receives_simulated_event_and_metric_scope() -> None:
+    evaluator, _store = _evaluator(_market_csv(), completed={1, 5})
+    del evaluator._generate_lesson
+    record = _record()
+    record.intent_inferred = False
+    record.trade_intent = "reduce_long"
+    record.entry_price = 100.0
+    record.time_stop_days = 3
+
+    captured: list[str] = []
+
+    async def reply(message):
+        captured.append(message.get_text_content())
+        return SimpleNamespace(get_text_content=lambda: "评估结果: 可解释\n经验教训: 可复用")
+
+    with patch("tradingscope.agents.evaluation.evaluator.Agent", return_value=SimpleNamespace(reply=reply)):
+        results = asyncio.run(evaluator.evaluate_single(record))
+
+    assert len(results) == 1
+    assert "exit_relative_performance" in captured[0]
+    assert "time_stop" in captured[0]
+    assert "2025-01-23" in captured[0]
+    assert "$115.00" in captured[0]
+    assert "完整持仓收益" in captured[0]
+    assert "actual execution" in captured[0]

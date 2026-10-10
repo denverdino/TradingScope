@@ -578,7 +578,121 @@ def test_reduce_long_can_fill_after_residual_position_time_stop() -> None:
     assert assessment is not None
     assert assessment.entry_triggered is True
     assert assessment.entry_price == 105.0
-    assert any("not simulated" in limitation for limitation in assessment.limitations)
+    assert assessment.residual_exit_reason is None
+    assert assessment.residual_exit_date is None
+    assert assessment.residual_exit_price is None
+    assert any("after the time-stop deadline" in limitation for limitation in assessment.limitations)
+
+
+@pytest.mark.parametrize(
+    ("horizon", "reason", "exit_date", "exit_price", "relative_return"),
+    [
+        (1, "horizon", "2026-01-15", 98.0, 0.02),
+        (3, "time_stop", "2026-01-19", 94.0, 0.06),
+        (5, "time_stop", "2026-01-19", 94.0, 0.20),
+    ],
+)
+def test_reduce_long_separates_residual_exit_from_sold_portion_performance(
+    horizon: int, reason: str, exit_date: str, exit_price: float, relative_return: float
+) -> None:
+    bars = _execution_bars([(100.0, 101.0, 97.0, 98.0), (98.0, 99.0, 95.0, 96.0), (96.0, 97.0, 93.0, 94.0), (94.0, 95.0, 89.0, 90.0), (90.0, 91.0, 79.0, 80.0)])
+    # Observed trading sessions cross a weekend; days without bars do not count.
+    bars[-3:] = [MarketBar(date(2026, 1, day), bar.open, bar.high, bar.low, bar.close) for day, bar in zip((19, 20, 21), bars[-3:], strict=True)]
+    assessment = assess_trade(
+        _record(trade_intent="reduce_long", position_advice="light", entry_price=100.0, time_stop_days=3),
+        bars,
+        horizon_days=horizon,  # type: ignore[arg-type]
+    )
+
+    assert assessment is not None
+    assert assessment.exit_reason == "execution"
+    assert assessment.strategy_return_basis == "exit_relative_performance"
+    assert assessment.strategy_return == pytest.approx(relative_return)
+    assert assessment.residual_exit_reason == reason
+    assert assessment.residual_exit_date == exit_date
+    assert assessment.residual_exit_price == exit_price
+    assert any("quantity" in item and "cost basis" in item for item in assessment.limitations)
+    assert any("actual execution" in item for item in assessment.limitations)
+    if horizon == 1:
+        assert any("beyond the evaluation horizon" in item for item in assessment.limitations)
+
+
+@pytest.mark.parametrize("time_stop_days", [1, 3, 5])
+def test_reduce_long_time_stop_uses_deadline_not_fill_day(time_stop_days: int) -> None:
+    bars = _execution_bars([(100.0, 101.0, 99.0, 100.0)] * (time_stop_days - 1) + [(105.0, 107.0, 104.0, 106.0)] * (6 - time_stop_days))
+    assessment = assess_trade(
+        _record(trade_intent="reduce_long", entry_price=105.0, time_stop_days=time_stop_days),
+        bars,
+        horizon_days=5,
+    )
+
+    assert assessment is not None
+    assert assessment.residual_exit_reason == "time_stop"
+    assert assessment.residual_exit_date == (date(2026, 1, 14) + timedelta(days=time_stop_days)).isoformat()
+    assert assessment.residual_exit_price == 106.0
+
+
+@pytest.mark.parametrize("horizon", [1, 3, 5])
+@pytest.mark.parametrize("entry_price", [None, 120.0])
+def test_unfilled_reduction_does_not_create_a_residual_position_exit(horizon: int, entry_price: float | None) -> None:
+    assessment = assess_trade(
+        _record(trade_intent="reduce_long", entry_price=entry_price, time_stop_days=1),
+        _execution_bars([(100.0, 101.0, 99.0, 100.0)] * 5),
+        horizon_days=horizon,  # type: ignore[arg-type]
+    )
+
+    assert assessment is not None
+    assert assessment.status is AssessmentStatus.NOT_FILLED
+    assert assessment.strategy_return is None
+    assert assessment.residual_exit_reason is None
+    assert assessment.residual_exit_date is None
+    assert assessment.residual_exit_price is None
+    assert any("not simulated" in item for item in assessment.limitations)
+
+
+@pytest.mark.parametrize(
+    ("high", "low", "reason", "price"),
+    [(110.0, 99.0, "target", 110.0), (101.0, 90.0, "stop_loss", 90.0), (110.0, 90.0, "stop_loss", 90.0)],
+)
+def test_residual_price_exit_precedes_time_stop(high: float, low: float, reason: str, price: float) -> None:
+    assessment = assess_trade(
+        _record(trade_intent="reduce_long", entry_price=100.0, target_price=110.0, stop_loss=90.0, time_stop_days=1),
+        _execution_bars([(100.0, high, low, 100.0)] * 5),
+        horizon_days=5,
+    )
+
+    assert assessment is not None
+    assert assessment.residual_exit_reason == reason
+    assert assessment.residual_exit_date == "2026-01-15"
+    assert assessment.residual_exit_price == price
+    assert assessment.strategy_return == 0.0
+    assert assessment.status is AssessmentStatus.INCONCLUSIVE
+
+
+@pytest.mark.parametrize("position_advice", [None, "none"])
+def test_reduce_long_without_time_stop_does_not_invent_residual_event(position_advice: str | None) -> None:
+    assessment = assess_trade(
+        _record(trade_intent="reduce_long", entry_price=100.0, position_advice=position_advice),
+        _constant_atr_bars(100.0),
+        horizon_days=5,
+    )
+
+    assert assessment is not None
+    assert assessment.residual_exit_reason is None
+    assert assessment.residual_exit_price is None
+    assert assessment.limitations
+
+
+def test_no_remaining_position_does_not_simulate_a_residual_time_stop() -> None:
+    assessment = assess_trade(
+        _record(trade_intent="reduce_long", entry_price=100.0, position_advice="none", time_stop_days=1),
+        _constant_atr_bars(100.0),
+        horizon_days=1,
+    )
+
+    assert assessment is not None
+    assert assessment.residual_exit_reason is None
+    assert any("position_advice=none" in item for item in assessment.limitations)
 
 
 @pytest.mark.parametrize(

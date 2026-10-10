@@ -70,10 +70,12 @@ _LESSON_PROMPT = """你是一位客观的投资分析评测专家。请解释已
 ## 客观评估结果
 - 评估周期: {horizon_days}个交易日
 - 客观状态: {status}
-- 是否成交: {entry_triggered}
-- 实际成交价: {actual_entry_price}
+- 是否模拟成交: {entry_triggered}
+- 模拟成交价: {actual_entry_price}
 - 基准收益率: {benchmark_return}
 - 策略收益率: {strategy_return}
+- 收益口径: {strategy_return_basis}
+- 剩余仓位模拟事件（horizon仅表示期末估值）: {residual_exit}
 - ATR有效波动边界: {atr_threshold}
 - 退出原因: {exit_reason}
 - 评估限制: {limitations}
@@ -91,6 +93,8 @@ correct只表示满足程序判定标准；若策略收益率为“-”，不得
 当是否成交为否且基准收益率为正时，不得使用“规避上涨”或“规避风险”，也不得声称未成交计划避免、降低、防范或保护了任何风险；不得据此得出风险已被规避的结论；应说明未产生新交易收益，并可解释未成交原因、机会成本及适用限制。
 trade_intent为hold时，hold不会模拟目标价、止损价或时间止损。仓位建议为none时只说明未执行新交易；仓位建议非none时还必须说明现有仓位及其风控执行未被本次评测模拟。
 评估限制不为“无”时，只评价已经模拟的部分，不得把部分结果扩展为完整交易计划或组合收益的结论。
+reduce_long的策略收益率仅衡量减仓部分卖出后的相对避险收益或机会成本，客观状态只评价该指标；不得将其称为完整持仓收益。
+剩余仓位退出日期和价格是OHLC模拟事件，不是实际成交；缺少数量、减仓比例和持仓成本时不得计算或推断完整持仓收益。
 基准收益率仅按其实际用途解释，不得仅因策略跑赢或落后基准而改变客观状态。
 经验教训只能来自原始分析和上述客观评估数据，不得编造新的市场事实、因果机制或已执行动作。
 不要使用Markdown格式，直接输出纯文本。"""
@@ -265,6 +269,11 @@ class AnalysisEvaluator:
                         entry_triggered=assessment.entry_triggered,
                         benchmark_return=assessment.benchmark_return,
                         strategy_return=assessment.strategy_return,
+                        strategy_return_basis=assessment.strategy_return_basis,
+                        residual_exit_reason=assessment.residual_exit_reason,
+                        residual_exit_date=assessment.residual_exit_date,
+                        residual_exit_price=assessment.residual_exit_price,
+                        limitations=assessment.limitations,
                     ),
                 )
             except Exception as exc:
@@ -304,6 +313,8 @@ class AnalysisEvaluator:
             actual_entry_price=_format_price(assessment.entry_price),
             benchmark_return=f"{assessment.benchmark_return:+.2%}",
             strategy_return=_format_percent(assessment.strategy_return),
+            strategy_return_basis=assessment.strategy_return_basis or "-",
+            residual_exit=_format_residual_exit(assessment),
             atr_threshold=f"{assessment.atr_threshold:.2%}",
             exit_reason=assessment.exit_reason or "-",
             limitations="；".join(assessment.limitations) or "无",
@@ -348,11 +359,22 @@ def _format_percent(value: float | None) -> str:
 def _format_objective_evaluation(assessment: TradeAssessment) -> str:
     """Format the computed market outcome when LLM enrichment is unavailable."""
     entry_triggered = "是" if assessment.entry_triggered else "否"
-    return (
-        f"客观状态: {assessment.status.value}；是否成交: {entry_triggered}；"
+    return_label = "减仓部分相对表现" if assessment.strategy_return_basis == "exit_relative_performance" else "策略收益率"
+    fill_label = "是否模拟成交" if assessment.strategy_return_basis == "exit_relative_performance" else "是否成交"
+    evaluation = (
+        f"客观状态: {assessment.status.value}；{fill_label}: {entry_triggered}；"
         f"基准收益率: {assessment.benchmark_return:+.2%}；"
-        f"策略收益率: {_format_percent(assessment.strategy_return)}"
+        f"{return_label}: {_format_percent(assessment.strategy_return)}"
     )
+    if assessment.strategy_return_basis == "exit_relative_performance":
+        evaluation += f"；剩余仓位模拟事件: {_format_residual_exit(assessment)}；评估限制: {'；'.join(assessment.limitations)}"
+    return evaluation
+
+
+def _format_residual_exit(assessment: TradeAssessment) -> str:
+    if assessment.residual_exit_reason is None:
+        return "-"
+    return f"{assessment.residual_exit_reason}, {assessment.residual_exit_date}, {_format_price(assessment.residual_exit_price)}"
 
 
 def _strip_vendor_preamble(csv_text: str) -> str:
