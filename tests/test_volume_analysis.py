@@ -211,7 +211,7 @@ class TestMarketAnalystWithVolumeAnalysis:
         from tradingscope.agents.utils.context import AgentContext
 
         context = AgentContext()
-        context.company_of_interest = "AAPL"
+        context.ticker = "AAPL"
 
         agent = create_market_analyst_agent(context=context)
         tool_names = [t.name for t in agent.toolkit.tool_groups[0].tools]
@@ -224,7 +224,7 @@ class TestMarketAnalystWithVolumeAnalysis:
         from tradingscope.agents.utils.context import AgentContext
 
         context = AgentContext()
-        context.company_of_interest = "AAPL"
+        context.ticker = "AAPL"
 
         agent = create_market_analyst_agent(context=context)
         assert "get_volume_analysis" in agent._system_prompt

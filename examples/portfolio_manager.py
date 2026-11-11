@@ -12,7 +12,7 @@ from tradingscope.agents.utils.context import AgentContext
 
 async def main():
     context = AgentContext()
-    context.company_of_interest = "AAPL"
+    context.ticker = "AAPL"
 
     portfolio_manager = create_portfolio_manager_agent(
         context=context,

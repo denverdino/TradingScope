@@ -51,11 +51,11 @@ def _get_bucket_name():
     return _md_bucket
 
 
-def _upload_structured_output(trade_date: str, ticker: str, agent_name: str, content: str) -> bool:
+def _upload_structured_output(analysis_date: str, ticker: str, agent_name: str, content: str) -> bool:
     """Upload a single structured output (JSON) to OSS (blocking).
 
     Args:
-        trade_date: Trading date, e.g. "2026-02-16"
+        analysis_date: Analysis date, e.g. "2026-02-16"
         ticker: Stock ticker, e.g. "MSFT"
         agent_name: Agent name, e.g. "market_analyst"
         content: JSON content as string
@@ -70,7 +70,7 @@ def _upload_structured_output(trade_date: str, ticker: str, agent_name: str, con
     if client is None or bucket_name is None:
         return False
 
-    key = f"{_OSS_KEY_PREFIX}/{trade_date}/{ticker}/{agent_name}.json"
+    key = f"{_OSS_KEY_PREFIX}/{analysis_date}/{ticker}/{agent_name}.json"
     try:
         client.put_object(
             oss.PutObjectRequest(
@@ -87,16 +87,16 @@ def _upload_structured_output(trade_date: str, ticker: str, agent_name: str, con
         return False
 
 
-async def upload_structured_output(trade_date: str, ticker: str, agent_name: str, content: str) -> bool:
+async def upload_structured_output(analysis_date: str, ticker: str, agent_name: str, content: str) -> bool:
     """Upload a single structured output to OSS (async wrapper)."""
-    return await _run_blocking_oss_operation(_upload_structured_output, trade_date, ticker, agent_name, content)
+    return await _run_blocking_oss_operation(_upload_structured_output, analysis_date, ticker, agent_name, content)
 
 
-async def upload_structured_outputs(trade_date: str, ticker: str, outputs: Dict[str, str]) -> Dict[str, bool]:
+async def upload_structured_outputs(analysis_date: str, ticker: str, outputs: Dict[str, str]) -> Dict[str, bool]:
     """Upload multiple agent structured outputs to OSS concurrently.
 
     Args:
-        trade_date: Trading date, e.g. "2026-02-16"
+        analysis_date: Analysis date, e.g. "2026-02-16"
         ticker: Stock ticker, e.g. "MSFT"
         outputs: Mapping of agent_name -> JSON content string
 
@@ -109,30 +109,30 @@ async def upload_structured_outputs(trade_date: str, ticker: str, outputs: Dict[
     if _get_client() is None:
         return dict.fromkeys(outputs, False)
 
-    tasks = {name: upload_structured_output(trade_date, ticker, name, content) for name, content in outputs.items() if content}
+    tasks = {name: upload_structured_output(analysis_date, ticker, name, content) for name, content in outputs.items() if content}
     results = {}
     for name, task in tasks.items():
         results[name] = await task
     return results
 
 
-def _local_output_dir(trade_date: str, ticker: str) -> Path:
+def _local_output_dir(analysis_date: str, ticker: str) -> Path:
     if not ticker or ticker in {".", ".."} or "/" in ticker or "\\" in ticker:
         raise ValueError("ticker must be a single safe path component")
-    return Path(DEFAULT_CONFIG["results_dir"]) / "data" / trade_date / ticker
+    return Path(DEFAULT_CONFIG["results_dir"]) / "data" / analysis_date / ticker
 
 
-def _write_local_artifacts(trade_date: str, ticker: str, outputs: Dict[str, str]) -> None:
-    output_dir = _local_output_dir(trade_date, ticker)
+def _write_local_artifacts(analysis_date: str, ticker: str, outputs: Dict[str, str]) -> None:
+    output_dir = _local_output_dir(analysis_date, ticker)
     output_dir.mkdir(parents=True, exist_ok=True)
     for filename, content in outputs.items():
         (output_dir / filename).write_text(content, encoding="utf-8")
 
 
-def _delete_oss_manifest(client, bucket_name: str, trade_date: str, ticker: str) -> None:
+def _delete_oss_manifest(client, bucket_name: str, analysis_date: str, ticker: str) -> None:
     import alibabacloud_oss_v2 as oss
 
-    key = f"{_OSS_KEY_PREFIX}/{trade_date}/{ticker}/manifest.json"
+    key = f"{_OSS_KEY_PREFIX}/{analysis_date}/{ticker}/manifest.json"
     try:
         client.delete_object(
             oss.DeleteObjectRequest(
@@ -145,9 +145,9 @@ def _delete_oss_manifest(client, bucket_name: str, trade_date: str, ticker: str)
         raise RuntimeError(f"failed to invalidate completion manifest: {key}") from exc
 
 
-async def prepare_analysis_persistence(trade_date: str, ticker: str) -> None:
+async def prepare_analysis_persistence(analysis_date: str, ticker: str) -> None:
     """Invalidate a prior completion marker before writing a new run."""
-    (_local_output_dir(trade_date, ticker) / "manifest.json").unlink(missing_ok=True)
+    (_local_output_dir(analysis_date, ticker) / "manifest.json").unlink(missing_ok=True)
 
     client = _get_client()
     if client is None:
@@ -159,20 +159,20 @@ async def prepare_analysis_persistence(trade_date: str, ticker: str) -> None:
         _delete_oss_manifest,
         client,
         bucket_name,
-        trade_date,
+        analysis_date,
         ticker,
     )
 
 
 async def _upload_json_and_markdown(
-    trade_date: str,
+    analysis_date: str,
     ticker: str,
     json_outputs: Dict[str, str],
     markdown_outputs: Dict[str, str],
 ) -> tuple[Dict[str, bool], Dict[str, bool]]:
     tasks = [
-        asyncio.create_task(upload_structured_outputs(trade_date, ticker, json_outputs)),
-        asyncio.create_task(upload_reports(trade_date, ticker, markdown_outputs)),
+        asyncio.create_task(upload_structured_outputs(analysis_date, ticker, json_outputs)),
+        asyncio.create_task(upload_reports(analysis_date, ticker, markdown_outputs)),
     ]
     try:
         json_results, markdown_results = await asyncio.gather(*tasks)
@@ -186,9 +186,9 @@ async def _upload_json_and_markdown(
 
 
 @asynccontextmanager
-async def analysis_persistence_session(trade_date: str, ticker: str) -> AsyncIterator[None]:
+async def analysis_persistence_session(analysis_date: str, ticker: str) -> AsyncIterator[None]:
     """Serialize and initialize runs that target the same artifact directory."""
-    key = (trade_date, ticker)
+    key = (analysis_date, ticker)
     state = _persistence_locks.get(key)
     if state is None:
         state = _PersistenceLock(lock=asyncio.Lock())
@@ -196,7 +196,7 @@ async def analysis_persistence_session(trade_date: str, ticker: str) -> AsyncIte
     state.users += 1
     try:
         async with state.lock:
-            await prepare_analysis_persistence(trade_date, ticker)
+            await prepare_analysis_persistence(analysis_date, ticker)
             yield
     finally:
         state.users -= 1
@@ -209,13 +209,13 @@ async def persist_node_output(
     output: AgentOutputBase,
     *,
     ticker: str,
-    trade_date: str,
+    analysis_date: str,
 ) -> None:
     """Persist one validated workflow node locally and, when configured, to OSS."""
     json_content = output.model_dump_json(indent=2)
     markdown_content = render_markdown(output)
     _write_local_artifacts(
-        trade_date,
+        analysis_date,
         ticker,
         {
             f"{agent_name}.json": json_content,
@@ -228,7 +228,7 @@ async def persist_node_output(
         return
 
     json_results, markdown_results = await _upload_json_and_markdown(
-        trade_date,
+        analysis_date,
         ticker,
         {agent_name: json_content},
         {agent_name: markdown_content},
@@ -249,11 +249,11 @@ async def persist_analysis_result(result: AnalysisResult) -> None:
     optional; when configured, the full report must upload successfully before
     the completion manifest is written.
     """
-    trade_date = result.trade_date.isoformat()
+    analysis_date = result.analysis_date.isoformat()
     full_report_json = result.model_dump_json(indent=2)
     full_report_markdown = render_full_report(result)
     _write_local_artifacts(
-        trade_date,
+        analysis_date,
         result.ticker,
         {
             "full_report.json": full_report_json,
@@ -263,22 +263,22 @@ async def persist_analysis_result(result: AnalysisResult) -> None:
 
     manifest = json.dumps(
         {
-            "schema_version": "2.0",
+            "schema_version": "3.0",
             "status": "complete",
             "ticker": result.ticker,
-            "trade_date": trade_date,
+            "analysis_date": analysis_date,
         },
         ensure_ascii=False,
         indent=2,
     )
 
     if _get_client() is None:
-        _write_local_artifacts(trade_date, result.ticker, {"manifest.json": manifest})
+        _write_local_artifacts(analysis_date, result.ticker, {"manifest.json": manifest})
         logger.info("[OSSStructuredUploader] OSS not configured; persisted completed result locally")
         return
 
     json_results, markdown_results = await _upload_json_and_markdown(
-        trade_date,
+        analysis_date,
         result.ticker,
         {"full_report": full_report_json},
         {"full_report": full_report_markdown},
@@ -292,10 +292,10 @@ async def persist_analysis_result(result: AnalysisResult) -> None:
         raise RuntimeError(f"failed to persist required artifacts: {', '.join(failed)}")
 
     manifest_result = await upload_structured_outputs(
-        trade_date,
+        analysis_date,
         result.ticker,
         {"manifest": manifest},
     )
     if not manifest_result.get("manifest", False):
         raise RuntimeError("failed to persist completion manifest")
-    _write_local_artifacts(trade_date, result.ticker, {"manifest.json": manifest})
+    _write_local_artifacts(analysis_date, result.ticker, {"manifest.json": manifest})

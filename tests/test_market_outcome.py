@@ -17,7 +17,7 @@ from tradingscope.agents.evaluation.models import AnalysisRecord
 def _record(**overrides: object) -> AnalysisRecord:
     values: dict[str, object] = {
         "ticker": "AAPL",
-        "trade_date": "2026-01-15",
+        "analysis_date": "2026-01-15",
         "direction": "bullish",
         "action": "buy",
         "confidence": 0.8,
@@ -69,15 +69,16 @@ def _execution_bars(future_ohlc: list[tuple[float, float, float, float]]) -> lis
     return bars
 
 
-def test_parse_market_bars_accepts_case_insensitive_ohlc_and_sorts_dates() -> None:
+@pytest.mark.parametrize("date_header", ["Timestamp", "trade_date"])
+def test_parse_market_bars_accepts_case_insensitive_ohlc_and_sorts_dates(date_header: str) -> None:
     csv_lines = _market_csv().splitlines()
-    csv_text = "\n".join([csv_lines[-1], *csv_lines[:-1]])
+    csv_text = "\n".join([csv_lines[-1].replace("Timestamp", date_header), *csv_lines[:-1]])
 
     bars = parse_market_bars(csv_text)
 
     assert len(bars) == 21
-    assert bars[0].trade_date.isoformat() == "2025-12-31"
-    assert bars[-1].trade_date.isoformat() == "2026-01-20"
+    assert bars[0].session_date.isoformat() == "2025-12-31"
+    assert bars[-1].session_date.isoformat() == "2026-01-20"
     assert bars[14].open == 110.0
     assert bars[14].high == 111.0
     assert bars[14].low == 109.0
@@ -116,7 +117,7 @@ def test_parse_market_bars_skips_vendor_row_when_all_ohlc_values_are_missing() -
 
     bars = parse_market_bars(csv_text)
 
-    assert [bar.trade_date.isoformat() for bar in bars] == ["2026-07-23"]
+    assert [bar.session_date.isoformat() for bar in bars] == ["2026-07-23"]
 
 
 def test_parse_market_bars_rejects_partially_missing_ohlc_values() -> None:
@@ -139,19 +140,19 @@ def test_atr_uses_true_range_from_only_fourteen_pre_analysis_bars() -> None:
 
     assert assessment is not None
     assert assessment.atr_threshold == pytest.approx((11.0 + 13 * 2.0) / 14 / 110.0)
-    assert assessment.benchmark_return == pytest.approx(3.0 / 110.0)
+    assert assessment.underlying_return == pytest.approx(3.0 / 110.0)
     assert assessment.status is AssessmentStatus.CORRECT
 
 
 def test_preopen_record_uses_previous_close_and_current_session_as_horizon_one() -> None:
     assessment = assess_trade(
-        _record(trade_date="2026-01-15"),
+        _record(analysis_date="2026-01-15"),
         _constant_atr_bars(103.0, future_count=1),
         horizon_days=1,
     )
 
     assert assessment is not None
-    assert assessment.benchmark_return == pytest.approx(0.03)
+    assert assessment.underlying_return == pytest.approx(0.03)
 
 
 def test_weekend_record_uses_friday_close_and_monday_as_horizon_one() -> None:
@@ -160,13 +161,13 @@ def test_weekend_record_uses_friday_close_and_monday_as_horizon_one() -> None:
     monday = MarketBar(date(2026, 1, 19), 100.0, 104.0, 99.0, 103.0)
 
     assessment = assess_trade(
-        _record(trade_date="2026-01-17"),
+        _record(analysis_date="2026-01-17"),
         [*history, monday],
         horizon_days=1,
     )
 
     assert assessment is not None
-    assert assessment.benchmark_return == pytest.approx(0.03)
+    assert assessment.underlying_return == pytest.approx(0.03)
 
 
 def test_only_horizons_with_enough_evaluation_sessions_are_available() -> None:
@@ -319,9 +320,9 @@ def test_direction_assessment_requires_base_history_and_requested_horizon(
             _record(
                 direction="bullish",
                 trade_intent="open_long",
-                entry_price=100.0,
-                entry_price_low=99.0,
-                entry_price_high=101.0,
+                execution_price=100.0,
+                execution_price_low=99.0,
+                execution_price_high=101.0,
                 target_price=110.0,
                 stop_loss=90.0,
                 time_stop_days=3,
@@ -339,9 +340,9 @@ def test_direction_assessment_requires_base_history_and_requested_horizon(
             _record(
                 direction="bearish",
                 trade_intent="open_short",
-                entry_price=101.0,
-                entry_price_low=100.0,
-                entry_price_high=102.0,
+                execution_price=101.0,
+                execution_price_low=100.0,
+                execution_price_high=102.0,
                 target_price=90.0,
                 stop_loss=110.0,
                 time_stop_days=3,
@@ -365,8 +366,8 @@ def test_open_trade_uses_first_fill_and_clamps_representative_price(
     assessment = assess_trade(record, bars, horizon_days=3)
 
     assert assessment is not None
-    assert assessment.entry_triggered is True
-    assert assessment.entry_price == expected_entry
+    assert assessment.filled is True
+    assert assessment.fill_price == expected_entry
 
 
 @pytest.mark.parametrize("trade_intent", ["open_long", "open_short"])
@@ -376,9 +377,9 @@ def test_open_trade_range_never_touched_is_not_filled(trade_intent: str) -> None
         _record(
             direction="bullish" if is_long else "bearish",
             trade_intent=trade_intent,
-            entry_price=90.5,
-            entry_price_low=90.0,
-            entry_price_high=91.0,
+            execution_price=90.5,
+            execution_price_low=90.0,
+            execution_price_high=91.0,
             target_price=110.0 if is_long else 80.0,
             stop_loss=80.0 if is_long else 110.0,
             time_stop_days=3,
@@ -389,8 +390,8 @@ def test_open_trade_range_never_touched_is_not_filled(trade_intent: str) -> None
 
     assert assessment is not None
     assert assessment.status is AssessmentStatus.NOT_FILLED
-    assert assessment.entry_triggered is False
-    assert assessment.entry_price is None
+    assert assessment.filled is False
+    assert assessment.fill_price is None
     assert assessment.exit_reason == "not_filled"
     assert assessment.strategy_return is None
 
@@ -399,9 +400,9 @@ def test_open_trade_does_not_fill_after_time_stop_deadline() -> None:
     assessment = assess_trade(
         _record(
             trade_intent="open_long",
-            entry_price=100.0,
-            entry_price_low=99.0,
-            entry_price_high=101.0,
+            execution_price=100.0,
+            execution_price_low=99.0,
+            execution_price_high=101.0,
             target_price=120.0,
             stop_loss=80.0,
             time_stop_days=2,
@@ -418,8 +419,8 @@ def test_open_trade_does_not_fill_after_time_stop_deadline() -> None:
 
     assert assessment is not None
     assert assessment.status is AssessmentStatus.NOT_FILLED
-    assert assessment.entry_triggered is False
-    assert assessment.entry_price is None
+    assert assessment.filled is False
+    assert assessment.fill_price is None
     assert assessment.exit_reason == "not_filled"
     assert assessment.strategy_return is None
 
@@ -442,9 +443,9 @@ def test_open_long_target_stop_and_same_day_stop_precedence(
     assessment = assess_trade(
         _record(
             trade_intent="open_long",
-            entry_price=100.0,
-            entry_price_low=99.0,
-            entry_price_high=101.0,
+            execution_price=100.0,
+            execution_price_low=99.0,
+            execution_price_high=101.0,
             target_price=103.0,
             stop_loss=97.0,
             time_stop_days=1,
@@ -478,9 +479,9 @@ def test_open_short_target_stop_and_same_day_stop_precedence(
         _record(
             direction="bearish",
             trade_intent="open_short",
-            entry_price=100.0,
-            entry_price_low=99.0,
-            entry_price_high=101.0,
+            execution_price=100.0,
+            execution_price_low=99.0,
+            execution_price_high=101.0,
             target_price=97.0,
             stop_loss=103.0,
             time_stop_days=1,
@@ -499,9 +500,9 @@ def test_open_trade_time_stop_uses_configured_future_session_close() -> None:
     assessment = assess_trade(
         _record(
             trade_intent="open_long",
-            entry_price=100.0,
-            entry_price_low=99.0,
-            entry_price_high=101.0,
+            execution_price=100.0,
+            execution_price_low=99.0,
+            execution_price_high=101.0,
             target_price=120.0,
             stop_loss=80.0,
             time_stop_days=3,
@@ -537,17 +538,17 @@ def test_long_exit_measures_avoided_loss_or_opportunity_cost(
     assessment = assess_trade(
         _record(
             trade_intent=trade_intent,
-            entry_price=101.0,
-            entry_price_low=100.0,
-            entry_price_high=102.0,
+            execution_price=101.0,
+            execution_price_low=100.0,
+            execution_price_high=102.0,
         ),
         _execution_bars([(100.0, 100.5, 99.0, horizon_close)]),
         horizon_days=1,
     )
 
     assert assessment is not None
-    assert assessment.entry_triggered is True
-    assert assessment.entry_price == 100.5
+    assert assessment.filled is True
+    assert assessment.fill_price == 100.5
     assert assessment.exit_reason == "execution"
     assert assessment.strategy_return == pytest.approx((100.5 - horizon_close) / 100.5)
     assert assessment.status is expected_status
@@ -558,9 +559,9 @@ def test_reduce_long_can_fill_after_residual_position_time_stop() -> None:
         _record(
             trade_intent="reduce_long",
             position_advice="light",
-            entry_price=105.0,
-            entry_price_low=104.0,
-            entry_price_high=106.0,
+            execution_price=105.0,
+            execution_price_low=104.0,
+            execution_price_high=106.0,
             time_stop_days=3,
         ),
         _execution_bars(
@@ -576,8 +577,8 @@ def test_reduce_long_can_fill_after_residual_position_time_stop() -> None:
     )
 
     assert assessment is not None
-    assert assessment.entry_triggered is True
-    assert assessment.entry_price == 105.0
+    assert assessment.filled is True
+    assert assessment.fill_price == 105.0
     assert assessment.residual_exit_reason is None
     assert assessment.residual_exit_date is None
     assert assessment.residual_exit_price is None
@@ -599,7 +600,7 @@ def test_reduce_long_separates_residual_exit_from_sold_portion_performance(
     # Observed trading sessions cross a weekend; days without bars do not count.
     bars[-3:] = [MarketBar(date(2026, 1, day), bar.open, bar.high, bar.low, bar.close) for day, bar in zip((19, 20, 21), bars[-3:], strict=True)]
     assessment = assess_trade(
-        _record(trade_intent="reduce_long", position_advice="light", entry_price=100.0, time_stop_days=3),
+        _record(trade_intent="reduce_long", position_advice="light", execution_price=100.0, time_stop_days=3),
         bars,
         horizon_days=horizon,  # type: ignore[arg-type]
     )
@@ -621,7 +622,7 @@ def test_reduce_long_separates_residual_exit_from_sold_portion_performance(
 def test_reduce_long_time_stop_uses_deadline_not_fill_day(time_stop_days: int) -> None:
     bars = _execution_bars([(100.0, 101.0, 99.0, 100.0)] * (time_stop_days - 1) + [(105.0, 107.0, 104.0, 106.0)] * (6 - time_stop_days))
     assessment = assess_trade(
-        _record(trade_intent="reduce_long", entry_price=105.0, time_stop_days=time_stop_days),
+        _record(trade_intent="reduce_long", execution_price=105.0, time_stop_days=time_stop_days),
         bars,
         horizon_days=5,
     )
@@ -633,10 +634,10 @@ def test_reduce_long_time_stop_uses_deadline_not_fill_day(time_stop_days: int) -
 
 
 @pytest.mark.parametrize("horizon", [1, 3, 5])
-@pytest.mark.parametrize("entry_price", [None, 120.0])
-def test_unfilled_reduction_does_not_create_a_residual_position_exit(horizon: int, entry_price: float | None) -> None:
+@pytest.mark.parametrize("execution_price", [None, 120.0])
+def test_unfilled_reduction_does_not_create_a_residual_position_exit(horizon: int, execution_price: float | None) -> None:
     assessment = assess_trade(
-        _record(trade_intent="reduce_long", entry_price=entry_price, time_stop_days=1),
+        _record(trade_intent="reduce_long", execution_price=execution_price, time_stop_days=1),
         _execution_bars([(100.0, 101.0, 99.0, 100.0)] * 5),
         horizon_days=horizon,  # type: ignore[arg-type]
     )
@@ -656,7 +657,7 @@ def test_unfilled_reduction_does_not_create_a_residual_position_exit(horizon: in
 )
 def test_residual_price_exit_precedes_time_stop(high: float, low: float, reason: str, price: float) -> None:
     assessment = assess_trade(
-        _record(trade_intent="reduce_long", entry_price=100.0, target_price=110.0, stop_loss=90.0, time_stop_days=1),
+        _record(trade_intent="reduce_long", execution_price=100.0, target_price=110.0, stop_loss=90.0, time_stop_days=1),
         _execution_bars([(100.0, high, low, 100.0)] * 5),
         horizon_days=5,
     )
@@ -672,7 +673,7 @@ def test_residual_price_exit_precedes_time_stop(high: float, low: float, reason:
 @pytest.mark.parametrize("position_advice", [None, "none"])
 def test_reduce_long_without_time_stop_does_not_invent_residual_event(position_advice: str | None) -> None:
     assessment = assess_trade(
-        _record(trade_intent="reduce_long", entry_price=100.0, position_advice=position_advice),
+        _record(trade_intent="reduce_long", execution_price=100.0, position_advice=position_advice),
         _constant_atr_bars(100.0),
         horizon_days=5,
     )
@@ -685,7 +686,7 @@ def test_reduce_long_without_time_stop_does_not_invent_residual_event(position_a
 
 def test_no_remaining_position_does_not_simulate_a_residual_time_stop() -> None:
     assessment = assess_trade(
-        _record(trade_intent="reduce_long", entry_price=100.0, position_advice="none", time_stop_days=1),
+        _record(trade_intent="reduce_long", execution_price=100.0, position_advice="none", time_stop_days=1),
         _constant_atr_bars(100.0),
         horizon_days=1,
     )
@@ -707,17 +708,17 @@ def test_cover_short_measures_avoided_loss_or_opportunity_cost(
         _record(
             direction="bearish",
             trade_intent="cover_short",
-            entry_price=100.0,
-            entry_price_low=99.0,
-            entry_price_high=101.0,
+            execution_price=100.0,
+            execution_price_low=99.0,
+            execution_price_high=101.0,
         ),
         _execution_bars([(100.0, 101.0, 99.0, horizon_close)]),
         horizon_days=1,
     )
 
     assert assessment is not None
-    assert assessment.entry_triggered is True
-    assert assessment.entry_price == 100.0
+    assert assessment.filled is True
+    assert assessment.fill_price == 100.0
     assert assessment.exit_reason == "execution"
     assert assessment.strategy_return == pytest.approx((horizon_close - 100.0) / 100.0)
     assert assessment.status is expected_status
@@ -732,7 +733,7 @@ def test_historical_missing_or_inferred_intent_never_fakes_strategy_return() -> 
 
         assert assessment is not None
         assert assessment.strategy_return is None
-        assert assessment.entry_triggered is False
+        assert assessment.filled is False
         assert assessment.limitations
 
 
@@ -745,6 +746,6 @@ def test_hold_is_direction_only_and_does_not_fake_zero_return() -> None:
 
     assert assessment is not None
     assert assessment.status is AssessmentStatus.CORRECT
-    assert assessment.entry_triggered is False
+    assert assessment.filled is False
     assert assessment.strategy_return is None
     assert "hold" in " ".join(assessment.limitations).lower()

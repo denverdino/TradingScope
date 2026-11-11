@@ -14,7 +14,7 @@ from typing import List, Optional, Set
 
 from tradingscope.agents.output import PortfolioManagerOutput
 from tradingscope.default_config import DEFAULT_CONFIG
-from tradingscope.utils.oss_structured_output_reader import async_fetch_completed_v2_output
+from tradingscope.utils.oss_structured_output_reader import async_fetch_completed_output
 
 from .models import AnalysisRecord
 
@@ -32,13 +32,13 @@ def build_record_from_portfolio(portfolio: PortfolioManagerOutput) -> AnalysisRe
     """Build an evaluation record from a validated portfolio decision."""
     return AnalysisRecord(
         ticker=portfolio.ticker,
-        trade_date=portfolio.trade_date.isoformat(),
+        analysis_date=portfolio.analysis_date.isoformat(),
         direction=portfolio.decision.direction.value,
         action=portfolio.decision.action.value,
         confidence=portfolio.decision.confidence,
-        entry_price=portfolio.price_plan.entry_price,
-        entry_price_low=portfolio.price_plan.entry_price_low,
-        entry_price_high=portfolio.price_plan.entry_price_high,
+        execution_price=portfolio.price_plan.execution_price,
+        execution_price_low=portfolio.price_plan.execution_price_low,
+        execution_price_high=portfolio.price_plan.execution_price_high,
         target_price=portfolio.price_plan.target_price,
         stop_loss=portfolio.price_plan.stop_loss,
         trade_intent=(portfolio.trade_intent.value if portfolio.trade_intent is not None else None),
@@ -47,7 +47,6 @@ def build_record_from_portfolio(portfolio: PortfolioManagerOutput) -> AnalysisRe
         intent_inferred=portfolio.trade_intent is None,
         reasoning="；".join(portfolio.decision.reasoning)[:100],
         final_decision_summary="；".join(portfolio.adopted_reasoning)[:500],
-        status="pending",
     )
 
 
@@ -71,9 +70,9 @@ class OSSAnalysisStore:
         """List pending records from OSS that haven't been evaluated yet.
 
         Args:
-            before_date: Only consider reports with trade_date < this value.
+            before_date: Only consider reports with analysis_date < this value.
             tickers: List of stock symbols to evaluate (required).
-            date: Filter by specific trade date.
+            date: Filter by specific analysis date.
 
         Returns:
             List of AnalysisRecord objects built from OSS JSON reports.
@@ -93,19 +92,19 @@ class OSSAnalysisStore:
                 candidates.extend(self._generate_date_candidates(before_date, tkr))
 
         pending = [
-            (trade_date, ticker)
-            for trade_date, ticker in candidates
-            if not all(self.is_evaluated(ticker, trade_date, horizon_days) for horizon_days in (1, 3, 5))
+            (analysis_date, ticker)
+            for analysis_date, ticker in candidates
+            if not all(self.is_evaluated(ticker, analysis_date, horizon_days) for horizon_days in (1, 3, 5))
         ]
 
         records: List[AnalysisRecord] = []
-        for trade_date, tkr in pending:
-            data = await async_fetch_completed_v2_output(trade_date, tkr)
+        for analysis_date, tkr in pending:
+            data = await async_fetch_completed_output(analysis_date, tkr)
             if not data:
                 logger.debug(
-                    "[OSSStore] No completed v2 report found for %s/%s",
+                    "[OSSStore] No completed report found for %s/%s",
                     tkr,
-                    trade_date,
+                    analysis_date,
                 )
                 continue
             portfolio = PortfolioManagerOutput.model_validate(data)

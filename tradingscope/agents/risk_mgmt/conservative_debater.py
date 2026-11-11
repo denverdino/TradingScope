@@ -1,4 +1,4 @@
-"""Conservative Risk Debator Agent for TradingScope using AgentScope ReAct framework."""
+"""Conservative Risk Debater Agent for TradingScope using AgentScope ReAct framework."""
 
 from __future__ import annotations
 
@@ -15,21 +15,21 @@ from tradingscope.agents.utils.decision_policy import MARKET_REGIME_DECISION_POL
 from tradingscope.agents.utils.prompt_cache import build_cacheable_system_prompt
 
 
-def create_conservative_debator_agent(
+def create_conservative_debater_agent(
     context: AgentContext,
-    name: str = "ConservativeRiskDebator",
+    name: str = "ConservativeRiskDebater",
 ) -> Agent:
-    """Create an AgentScope agent for the conservative risk debator.
+    """Create an AgentScope agent for the conservative risk debater.
 
     Args:
         model: The language model to use for the agent
         context: AgentContext containing all necessary context information
-        name: The name of the agent (default: "ConservativeRiskDebator")
+        name: The name of the agent (default: "ConservativeRiskDebater")
 
     Returns:
         A configured agent instance
     """
-    company_of_interest = context.company_of_interest
+    ticker = context.ticker
     toolkit = Toolkit()
 
     role_instructions = f"""{SHORT_HORIZON_DECISION_POLICY}
@@ -41,7 +41,7 @@ def create_conservative_debator_agent(
 请不要虚构，只需提出您的观点。
 通过质疑他们的乐观态度并强调他们可能忽视的潜在下行风险来参与讨论。解决他们的每个反驳点，展示为什么保守立场最终是公司资产最安全的道路。专注于辩论和批评他们的论点，证明低风险策略相对于他们方法的优势。请用中文以对话方式输出，就像您在说话一样，不使用任何特殊格式。
 
-公司名称：{company_of_interest}"""
+股票代码：{ticker}"""
     prompt = build_cacheable_system_prompt(
         shared_context=context.generate_risk_evaluation_context_md(),
         role_instructions=role_instructions,

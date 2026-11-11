@@ -22,11 +22,11 @@ def create_equity_analyst_agent(
     """
     agent = QwenDeepResearchAgent(name=name)
 
-    ticker = context.company_of_interest
-    trade_date = context.trade_date
-    latest_trading_date = context.latest_trading_date or trade_date
+    ticker = context.ticker
+    analysis_date = context.analysis_date
+    last_completed_session = context.last_completed_session or analysis_date
 
-    dt = datetime.strptime(trade_date, "%Y-%m-%d")
+    dt = datetime.strptime(analysis_date, "%Y-%m-%d")
     start_date = (dt - timedelta(days=30)).strftime("%Y-%m-%d")
 
     agent._equity_initial_prompt = f"""{COMPLIANCE_PROMPT}
@@ -41,15 +41,15 @@ def create_equity_analyst_agent(
     agent._equity_research_prompt = f"""
 1. 研究报告目标是辅助短期交易决策，需要重点关注关键事件、与市场风险排查和预警。
 2. 研究报告目标读者是股票交易员。
-3. 需要聚焦从 {start_date} 到 {trade_date} 时间范围内的关键事件。
+3. 需要聚焦从 {start_date} 到 {analysis_date} 时间范围内的关键事件。
 
 ⸻
 
 【核心约束（极其重要）】
 
 1️⃣ 时间与信息新鲜度（强约束）
-    * 当前日期为 {trade_date}，最新美股交易日期为 {latest_trading_date}
-    * 对于日度数据(股价、资金流向、机构报告、ETF flows、新闻等) 仅允许使用 {start_date} 到 {trade_date} 之间的信息进行分析
+    * 分析日期为 {analysis_date}，最近完成交易日为 {last_completed_session}
+    * 对于日度数据(股价、资金流向、机构报告、ETF flows、新闻等) 仅允许使用 {start_date} 到 {analysis_date} 之间的信息进行分析
     * 对于季度数据（季度财报、基金持仓、宏观正常与行业数据）等：
         * 必须采用最新可得数据（如最近一期年报/季报，且尚未更新）
         * 被明确标注为「历史背景信息」，不得作为核心论据

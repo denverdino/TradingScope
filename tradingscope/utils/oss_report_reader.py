@@ -113,7 +113,7 @@ def fetch_report(date: str, ticker: str, agent: str = "portfolio_manager") -> Op
     """Fetch a single report's content from OSS via SDK.
 
     Args:
-        date: Trade date (YYYY-MM-DD)
+        date: Analysis date (YYYY-MM-DD)
         ticker: Stock ticker (e.g. "AAPL")
         agent: Agent name (default: "portfolio_manager")
 
@@ -164,7 +164,7 @@ def fetch_json_report(date: str, ticker: str, agent: str = "portfolio_manager") 
     Reads tradingscope/<date>/<ticker>/<agent>.json and returns the parsed dict.
 
     Args:
-        date: Trade date (YYYY-MM-DD)
+        date: Analysis date (YYYY-MM-DD)
         ticker: Stock ticker (e.g. "AAPL")
         agent: Agent name (default: "portfolio_manager")
 

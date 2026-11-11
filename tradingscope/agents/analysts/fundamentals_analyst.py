@@ -24,9 +24,9 @@ def create_fundamentals_analyst_agent(
     创建用于基本面分析的 Agent
     """
     # Extract values from context
-    ticker = context.company_of_interest
-    current_date = context.trade_date
-    latest_trading_date = context.latest_trading_date
+    ticker = context.ticker
+    analysis_date = context.analysis_date
+    last_completed_session = context.last_completed_session
     logger.debug("📊 [DEBUG] ===== 基本面分析师 Agent 创建开始 =====")
 
     logger.info(f"📊 [基本面分析师] 正在分析股票: {ticker}")
@@ -63,8 +63,8 @@ def create_fundamentals_analyst_agent(
 - 公司：{company_name}
 - 市场：{market_name}
 - 股票代码：{ticker}
-- 当前日期：{current_date}
-- 最新美股交易日期：{latest_trading_date}
+- 分析日期：{analysis_date}
+- 最近完成交易日：{last_completed_session}
 - 货币：{currency_name}（{currency_symbol}）
 - 可用工具：{tool_names}
 
@@ -102,7 +102,7 @@ def create_fundamentals_analyst_agent(
 5) **严禁**编造公司信息、编造指标、编造比较组或历史分位。
 
 # 工具调用（统一规范）
-- 立即使用 {tool_names} 调用：参数 **严格**为 ticker="{ticker}", curr_date="{current_date}"。
+- 立即使用 {tool_names} 调用：参数 **严格**为 ticker="{ticker}", curr_date="{analysis_date}"。
 - 若返回数据缺失，以**最多两次**补采为限。
 
 # 计算与口径（全部以工具数据为准）

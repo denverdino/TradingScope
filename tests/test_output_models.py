@@ -1,4 +1,4 @@
-"""Tests for schema-v2 agent output models."""
+"""Tests for schema-v3 agent output models."""
 
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ from pydantic import ValidationError
 
 from tradingscope.agents import output as models
 
-TRADE_DATE = date(2026, 7, 14)
-LATEST_TRADING_DATE = date(2026, 7, 13)
+ANALYSIS_DATE = date(2026, 7, 14)
+LAST_COMPLETED_SESSION = date(2026, 7, 13)
 
 
 def _decision(action: str = "hold", direction: str = "neutral"):
@@ -26,7 +26,7 @@ def _decision(action: str = "hold", direction: str = "neutral"):
 
 def _price_plan(*, complete: bool = True):
     return models.PricePlan(
-        entry_price=100.0 if complete else None,
+        execution_price=100.0 if complete else None,
         target_price=110.0 if complete else None,
         stop_loss=95.0 if complete else None,
         currency="USD",
@@ -36,18 +36,18 @@ def _price_plan(*, complete: bool = True):
 
 def _base(agent_name: str, *, action: str = "hold", direction: str = "neutral") -> dict:
     return {
-        "schema_version": "2.0",
+        "schema_version": "3.0",
         "agent_name": agent_name,
         "ticker": "AAPL",
-        "trade_date": TRADE_DATE,
-        "latest_trading_date": LATEST_TRADING_DATE,
+        "analysis_date": ANALYSIS_DATE,
+        "last_completed_session": LAST_COMPLETED_SESSION,
         "decision": _decision(action=action, direction=direction),
         "evidence": [
             models.Evidence(
                 claim="价格维持强势",
                 supporting_data="收盘价高于10日均线",
                 source="market_data",
-                as_of_date=LATEST_TRADING_DATE,
+                as_of_date=LAST_COMPLETED_SESSION,
             ),
         ],
         "limitations": [],
@@ -96,7 +96,7 @@ def _all_outputs() -> list:
         key_events=[
             models.NewsEvent(
                 title="新品发布",
-                event_date=TRADE_DATE,
+                event_date=ANALYSIS_DATE,
                 source="company",
                 sentiment="positive",
                 impact="短期利好",
@@ -201,7 +201,7 @@ def test_historical_buy_with_incomplete_plan_remains_readable() -> None:
         "reasoning": ["历史 schema 没有完整执行计划"],
     }
     historical["price_plan"] = {
-        "entry_price": 100.0,
+        "execution_price": 100.0,
         "target_price": None,
         "stop_loss": 95.0,
         "currency": "USD",
@@ -221,7 +221,7 @@ def test_price_plan_computes_long_risk_reward_ratio() -> None:
 def test_price_plan_computes_direction_aware_risk_reward_ratio() -> None:
     long_plan = _price_plan()
     short_plan = models.PricePlan(
-        entry_price=100.0,
+        execution_price=100.0,
         target_price=90.0,
         stop_loss=105.0,
         currency="USD",
@@ -233,38 +233,38 @@ def test_price_plan_computes_direction_aware_risk_reward_ratio() -> None:
     assert short_plan.risk_reward_ratio_for(models.Direction.NEUTRAL) is None
 
 
-def test_price_plan_accepts_entry_range_surrounding_representative_price() -> None:
+def test_price_plan_accepts_execution_range_surrounding_representative_price() -> None:
     plan = models.PricePlan(
-        entry_price=101.0,
-        entry_price_low=100.0,
-        entry_price_high=102.0,
+        execution_price=101.0,
+        execution_price_low=100.0,
+        execution_price_high=102.0,
         target_price=110.0,
         stop_loss=95.0,
         currency="USD",
         invalidation_conditions=["收盘跌破95"],
     )
 
-    assert plan.entry_price_low == 100.0
-    assert plan.entry_price_high == 102.0
+    assert plan.execution_price_low == 100.0
+    assert plan.execution_price_high == 102.0
 
 
 @pytest.mark.parametrize(
-    ("entry_price_low", "entry_price_high", "message"),
+    ("execution_price_low", "execution_price_high", "message"),
     [
         (100.0, None, "together"),
         (102.0, 100.0, "ordered"),
     ],
 )
-def test_price_plan_rejects_incomplete_or_reversed_entry_range(
-    entry_price_low: float | None,
-    entry_price_high: float | None,
+def test_price_plan_rejects_incomplete_or_reversed_execution_range(
+    execution_price_low: float | None,
+    execution_price_high: float | None,
     message: str,
 ) -> None:
     with pytest.raises(ValidationError, match=message):
         models.PricePlan(
-            entry_price=101.0,
-            entry_price_low=entry_price_low,
-            entry_price_high=entry_price_high,
+            execution_price=101.0,
+            execution_price_low=execution_price_low,
+            execution_price_high=execution_price_high,
             target_price=110.0,
             stop_loss=95.0,
             currency="USD",
@@ -272,12 +272,12 @@ def test_price_plan_rejects_incomplete_or_reversed_entry_range(
         )
 
 
-def test_price_plan_rejects_representative_price_outside_entry_range() -> None:
+def test_price_plan_rejects_representative_price_outside_execution_range() -> None:
     with pytest.raises(ValidationError, match="within"):
         models.PricePlan(
-            entry_price=99.0,
-            entry_price_low=100.0,
-            entry_price_high=102.0,
+            execution_price=99.0,
+            execution_price_low=100.0,
+            execution_price_high=102.0,
             target_price=110.0,
             stop_loss=95.0,
             currency="USD",
@@ -285,9 +285,9 @@ def test_price_plan_rejects_representative_price_outside_entry_range() -> None:
         )
 
 
-def test_price_plan_keeps_historical_json_without_entry_range_readable() -> None:
+def test_price_plan_keeps_historical_json_without_execution_range_readable() -> None:
     historical = {
-        "entry_price": 100.0,
+        "execution_price": 100.0,
         "target_price": 110.0,
         "stop_loss": 95.0,
         "currency": "USD",
@@ -296,9 +296,9 @@ def test_price_plan_keeps_historical_json_without_entry_range_readable() -> None
 
     plan = models.PricePlan.model_validate(historical)
 
-    assert plan.entry_price == 100.0
-    assert plan.entry_price_low is None
-    assert plan.entry_price_high is None
+    assert plan.execution_price == 100.0
+    assert plan.execution_price_low is None
+    assert plan.execution_price_high is None
 
 
 def test_historical_sell_output_with_incomplete_plan_remains_readable() -> None:
@@ -311,7 +311,7 @@ def test_historical_sell_output_with_incomplete_plan_remains_readable() -> None:
         "reasoning": ["财报风险"],
     }
     historical["price_plan"] = {
-        "entry_price": 606.0,
+        "execution_price": 606.0,
         "target_price": None,
         "stop_loss": None,
         "currency": "USD",
@@ -393,10 +393,10 @@ def test_all_outputs_round_trip_through_json() -> None:
 def test_analysis_result_is_fully_typed() -> None:
     market, fundamentals, news, social, research, trader, portfolio = _all_outputs()
     result = models.AnalysisResult(
-        schema_version="2.0",
+        schema_version="3.0",
         ticker="AAPL",
-        trade_date=TRADE_DATE,
-        latest_trading_date=LATEST_TRADING_DATE,
+        analysis_date=ANALYSIS_DATE,
+        last_completed_session=LAST_COMPLETED_SESSION,
         analysts=models.AnalystOutputs(
             market=market,
             fundamentals=fundamentals,

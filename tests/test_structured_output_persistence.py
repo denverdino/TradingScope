@@ -1,4 +1,4 @@
-"""Tests for atomic schema-v2 OSS persistence."""
+"""Tests for atomic schema-v3 OSS persistence."""
 
 from __future__ import annotations
 
@@ -35,10 +35,10 @@ def local_results_dir(tmp_path):
 def analysis_result() -> AnalysisResult:
     market, fundamentals, news, social, research, trader, portfolio = _all_outputs()
     return AnalysisResult(
-        schema_version="2.0",
+        schema_version="3.0",
         ticker="AAPL",
-        trade_date="2026-07-14",
-        latest_trading_date="2026-07-13",
+        analysis_date="2026-07-14",
+        last_completed_session="2026-07-13",
         analysts=AnalystOutputs(
             market=market,
             fundamentals=fundamentals,
@@ -179,7 +179,7 @@ async def test_local_persistence_rejects_unsafe_ticker_path(analysis_result: Ana
                 "market_analyst",
                 analysis_result.analysts.market,
                 ticker="../AAPL",
-                trade_date="2026-07-14",
+                analysis_date="2026-07-14",
             )
 
 
@@ -225,7 +225,7 @@ async def test_node_persistence_writes_local_json_and_markdown_without_oss(
             "market_analyst",
             output,
             ticker="AAPL",
-            trade_date="2026-07-14",
+            analysis_date="2026-07-14",
         )
 
     output_dir = tmp_path / "data" / "2026-07-14" / "AAPL"
@@ -261,7 +261,7 @@ async def test_node_persistence_uploads_json_and_markdown_when_oss_is_configured
             "trader",
             output,
             ticker="AAPL",
-            trade_date="2026-07-14",
+            analysis_date="2026-07-14",
         )
 
     assert list(upload_json.await_args.args[2]) == ["trader"]
@@ -291,7 +291,7 @@ async def test_node_persistence_fails_when_configured_oss_upload_is_incomplete(
                 "trader",
                 output,
                 ticker="AAPL",
-                trade_date="2026-07-14",
+                analysis_date="2026-07-14",
             )
 
     output_dir = tmp_path / "data" / "2026-07-14" / "AAPL"
@@ -300,7 +300,7 @@ async def test_node_persistence_fails_when_configured_oss_upload_is_incomplete(
 
 
 @pytest.mark.asyncio
-async def test_persistence_serializes_full_v2_result(analysis_result: AnalysisResult) -> None:
+async def test_persistence_serializes_full_v3_result(analysis_result: AnalysisResult) -> None:
     captured: dict[str, str] = {}
 
     async def capture(_date: str, _ticker: str, values: dict[str, str]):
@@ -320,7 +320,7 @@ async def test_persistence_serializes_full_v2_result(analysis_result: AnalysisRe
     ):
         await persist_analysis_result(analysis_result)
 
-    assert json.loads(captured["full_report"])["schema_version"] == "2.0"
+    assert json.loads(captured["full_report"])["schema_version"] == "3.0"
 
 
 @pytest.mark.asyncio

@@ -1,4 +1,4 @@
-"""Tests for strict schema-v2 evaluation ingestion."""
+"""Tests for strict schema-v3 evaluation ingestion."""
 
 from unittest.mock import AsyncMock, patch
 
@@ -13,16 +13,16 @@ from tradingscope.agents.evaluation.oss_store import (
 from tradingscope.agents.output import PortfolioManagerOutput
 
 
-def test_build_record_requires_valid_v2_portfolio() -> None:
+def test_build_record_requires_valid_v3_portfolio() -> None:
     data = _all_outputs()[-1].model_dump(mode="json")
     data["trade_intent"] = "open_long"
     data["position_advice"] = "medium"
     data["time_stop_days"] = 3
     data["price_plan"].update(
         {
-            "entry_price": 101.0,
-            "entry_price_low": 100.0,
-            "entry_price_high": 102.0,
+            "execution_price": 101.0,
+            "execution_price_low": 100.0,
+            "execution_price_high": 102.0,
         },
     )
     portfolio = PortfolioManagerOutput.model_validate(data)
@@ -32,8 +32,8 @@ def test_build_record_requires_valid_v2_portfolio() -> None:
     assert record.confidence == portfolio.decision.confidence
     assert record.reasoning == "；".join(portfolio.decision.reasoning)[:100]
     assert record.trade_intent == "open_long"
-    assert record.entry_price_low == 100.0
-    assert record.entry_price_high == 102.0
+    assert record.execution_price_low == 100.0
+    assert record.execution_price_high == 102.0
     assert record.position_advice == "medium"
     assert record.time_stop_days == 3
     assert record.intent_inferred is False
@@ -46,18 +46,18 @@ def test_build_record_marks_missing_portfolio_intent_as_inferred() -> None:
     assert record.intent_inferred is True
 
 
-def test_malformed_v2_portfolio_is_rejected() -> None:
+def test_malformed_v3_portfolio_is_rejected() -> None:
     with pytest.raises(ValidationError):
-        PortfolioManagerOutput.model_validate({"schema_version": "2.0"})
+        PortfolioManagerOutput.model_validate({"schema_version": "3.0"})
 
 
 @pytest.mark.asyncio
-async def test_store_reads_only_manifest_completed_v2_output(tmp_path) -> None:
+async def test_store_reads_only_manifest_completed_v3_output(tmp_path) -> None:
     portfolio = _all_outputs()[-1]
     fetch = AsyncMock(return_value=portfolio.model_dump(mode="json"))
 
     with patch(
-        "tradingscope.agents.evaluation.oss_store.async_fetch_completed_v2_output",
+        "tradingscope.agents.evaluation.oss_store.async_fetch_completed_output",
         fetch,
     ):
         records = await OSSAnalysisStore(str(tmp_path)).list_pending(
@@ -107,7 +107,7 @@ async def test_store_skips_report_only_after_all_evaluation_horizons_complete(tm
         assert store.mark_evaluated("AAPL", "2026-07-14", horizon_days)
 
     with patch(
-        "tradingscope.agents.evaluation.oss_store.async_fetch_completed_v2_output",
+        "tradingscope.agents.evaluation.oss_store.async_fetch_completed_output",
         AsyncMock(),
     ) as fetch:
         records = await store.list_pending(tickers=["AAPL"], date="2026-07-14")
@@ -123,7 +123,7 @@ async def test_store_keeps_report_pending_when_only_one_horizon_is_complete(tmp_
     assert store.mark_evaluated("AAPL", "2026-07-14", 1)
 
     with patch(
-        "tradingscope.agents.evaluation.oss_store.async_fetch_completed_v2_output",
+        "tradingscope.agents.evaluation.oss_store.async_fetch_completed_output",
         AsyncMock(return_value=portfolio.model_dump(mode="json")),
     ) as fetch:
         records = await store.list_pending(tickers=["AAPL"], date="2026-07-14")

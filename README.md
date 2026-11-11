@@ -74,7 +74,7 @@ make evaluate      # Run post-market evaluation (requires --tickers)
 Evaluation compares a completed portfolio decision with market closes, then asks the non-thinking Qwen model to produce a concise Chinese evaluation and lesson:
 
 ```bash
-# Evaluate the latest eligible US trading day for selected tickers
+# Evaluate pending analyses from the previous 14 calendar dates for selected tickers
 uv run python -m tradingscope.evaluate --tickers AAPL,MSFT
 
 # Evaluate a specific analysis date
@@ -89,7 +89,7 @@ uv run python -m tradingscope.evaluate --tickers AAPL --email-to team@example.co
 
 The installed `tradingscope-evaluate` command provides the same interface. `make evaluate` invokes the module directly, so pass arguments with `uv run python -m tradingscope.evaluate ...` when ticker selection is required.
 
-Evaluation requires DashScope, access to the selected market-data vendor, and configured OSS storage. It reads only completed schema-v2 results from `tradingscope/<date>/<ticker>/portfolio_manager.json`, gated by a valid `manifest.json`. It calculates the return from the previous trading-day close to the analysis-date close, checks direction and stop-loss behavior, and logs the generated result. Successfully processed records are tracked locally in `<results_dir>/oss_evaluated.json`; set `TRADINGAGENTS_RESULTS_DIR` or use `--results-dir` to change that location. `--dry-run` skips this tracking update.
+Evaluation requires DashScope, access to the selected market-data vendor, and configured OSS storage. It reads completed schema-v3 results from `tradingscope/<date>/<ticker>/portfolio_manager.json` through `fetch_completed_output()` or `async_fetch_completed_output()`, gated by a valid `manifest.json`; historical v2 results are migrated at read time. The schema uses `analysis_date`, `last_completed_session`, and `execution_price` / `execution_price_low` / `execution_price_high`. Evaluation calculates the underlying return from the session before the analysis date to the close of each mature 1-, 3-, or 5-session horizon, assesses simulated fills and exits, and logs the generated result. Successfully processed records are tracked locally in `<results_dir>/oss_evaluated.json`; set `TRADINGAGENTS_RESULTS_DIR` or use `--results-dir` to change that location. `--dry-run` skips this tracking update.
 
 ### OpenTelemetry Tracing
 
@@ -117,7 +117,7 @@ The system uses a 7-stage pipeline with multiple AI agents:
 6. **Risk Management** — Portfolio Manager makes final risk-adjusted decision
 7. **Report Generation** — Markdown report + structured JSON output
 
-The four analyst stages use `asyncio.gather`. All seven JSON-producing nodes are validated against strict Pydantic schema v2 models before downstream stages continue. Bull/Bear and risk debates exchange messages through their orchestrators and `agent.observe()`.
+The four analyst stages use `asyncio.gather`. All seven JSON-producing nodes are validated against strict Pydantic schema v3 models before downstream stages continue. Bull/Bear and risk debates exchange messages through their orchestrators and `agent.observe()`.
 
 ### AgentScope 2.0
 
@@ -174,4 +174,4 @@ When all OSS environment variables are configured, the workflow uploads Markdown
 tradingscope/<date>/<ticker>/<agent_name>.{md,json}
 ```
 
-Artifacts include `market_analyst`, `fundamentals_analyst`, `news_analyst`, `social_media_analyst`, `research_manager`, `trader`, `portfolio_manager`, and `full_report`. Each node's JSON and Markdown artifacts are uploaded as soon as that node finishes. Starting another run for the same ticker/date first invalidates its previous manifest; same-key runs within one process are serialized. A schema-v2 `manifest.json` is written last only after all required artifacts succeed; evaluation uses it as the completion marker. If OSS is not configured, the workflow still checkpoints every node locally and skips OSS persistence.
+Artifacts include `market_analyst`, `fundamentals_analyst`, `news_analyst`, `social_media_analyst`, `research_manager`, `trader`, `portfolio_manager`, and `full_report`. Each node's JSON and Markdown artifacts are uploaded as soon as that node finishes. Starting another run for the same ticker/date first invalidates its previous manifest; same-key runs within one process are serialized. A schema-v3 `manifest.json` is written last only after all required artifacts succeed; evaluation uses it as the completion marker. If OSS is not configured, the workflow still checkpoints every node locally and skips OSS persistence.

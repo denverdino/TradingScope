@@ -11,10 +11,10 @@ from tradingscope.agents.output import AnalysisResult, AnalystOutputs
 def _analysis_result() -> AnalysisResult:
     market, fundamentals, news, social, research, trader, portfolio = _all_outputs()
     return AnalysisResult(
-        schema_version="2.0",
+        schema_version="3.0",
         ticker="AAPL",
-        trade_date="2026-07-14",
-        latest_trading_date="2026-07-13",
+        analysis_date="2026-07-14",
+        last_completed_session="2026-07-13",
         analysts=AnalystOutputs(
             market=market,
             fundamentals=fundamentals,

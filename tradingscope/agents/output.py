@@ -1,4 +1,4 @@
-"""Strict schema-v2 output contracts for TradingScope agents."""
+"""Strict schema-v3 output contracts for TradingScope agents."""
 
 from __future__ import annotations
 
@@ -61,24 +61,24 @@ class Decision(StrictModel):
 
 
 class PricePlan(StrictModel):
-    entry_price: float | None = Field(default=None, gt=0)
-    entry_price_low: float | None = Field(default=None, gt=0)
-    entry_price_high: float | None = Field(default=None, gt=0)
+    execution_price: float | None = Field(default=None, gt=0)
+    execution_price_low: float | None = Field(default=None, gt=0)
+    execution_price_high: float | None = Field(default=None, gt=0)
     target_price: float | None = Field(default=None, gt=0)
     stop_loss: float | None = Field(default=None, gt=0)
     currency: str = Field(min_length=1)
     invalidation_conditions: list[str] = Field(min_length=1)
 
     @model_validator(mode="after")
-    def validate_entry_range(self) -> PricePlan:
-        if (self.entry_price_low is None) != (self.entry_price_high is None):
-            raise ValueError("entry_price_low and entry_price_high must be provided together")
-        if self.entry_price_low is None or self.entry_price_high is None:
+    def validate_execution_range(self) -> PricePlan:
+        if (self.execution_price_low is None) != (self.execution_price_high is None):
+            raise ValueError("execution_price_low and execution_price_high must be provided together")
+        if self.execution_price_low is None or self.execution_price_high is None:
             return self
-        if self.entry_price_low > self.entry_price_high:
-            raise ValueError("entry price range must be ordered from low to high")
-        if self.entry_price is not None and not self.entry_price_low <= self.entry_price <= self.entry_price_high:
-            raise ValueError("entry_price must be within the entry price range")
+        if self.execution_price_low > self.execution_price_high:
+            raise ValueError("execution price range must be ordered from low to high")
+        if self.execution_price is not None and not self.execution_price_low <= self.execution_price <= self.execution_price_high:
+            raise ValueError("execution_price must be within the execution price range")
         return self
 
     @property
@@ -86,14 +86,14 @@ class PricePlan(StrictModel):
         return self.risk_reward_ratio_for(Direction.BULLISH)
 
     def risk_reward_ratio_for(self, direction: Direction) -> float | None:
-        if self.entry_price is None or self.target_price is None or self.stop_loss is None:
+        if self.execution_price is None or self.target_price is None or self.stop_loss is None:
             return None
         if direction is Direction.BULLISH:
-            risk = self.entry_price - self.stop_loss
-            reward = self.target_price - self.entry_price
+            risk = self.execution_price - self.stop_loss
+            reward = self.target_price - self.execution_price
         elif direction is Direction.BEARISH:
-            risk = self.stop_loss - self.entry_price
-            reward = self.entry_price - self.target_price
+            risk = self.stop_loss - self.execution_price
+            reward = self.execution_price - self.target_price
         else:
             return None
         if risk <= 0 or reward <= 0:
@@ -159,11 +159,11 @@ class PriceScenario(StrictModel):
 
 
 class AgentOutputBase(StrictModel):
-    schema_version: Literal["2.0"]
+    schema_version: Literal["3.0"]
     agent_name: str = Field(min_length=1)
     ticker: str = Field(min_length=1)
-    trade_date: date
-    latest_trading_date: date
+    analysis_date: date
+    last_completed_session: date
     decision: Decision
     evidence: list[Evidence]
     limitations: list[str]
@@ -263,10 +263,10 @@ class AnalystOutputs(StrictModel):
 
 
 class AnalysisResult(StrictModel):
-    schema_version: Literal["2.0"]
+    schema_version: Literal["3.0"]
     ticker: str = Field(min_length=1)
-    trade_date: date
-    latest_trading_date: date
+    analysis_date: date
+    last_completed_session: date
     created_at: datetime = Field(default_factory=datetime.now)
     analysts: AnalystOutputs
     research_manager: ResearchManagerOutput

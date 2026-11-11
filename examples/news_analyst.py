@@ -10,7 +10,7 @@ from tradingscope.agents.utils.context import AgentContext
 
 async def main():
     context = AgentContext()
-    context.company_of_interest = "TSM"
+    context.ticker = "TSM"
 
     agent = create_news_analyst_agent(context=context)
     response = await call_agent_with_retry(agent, None)

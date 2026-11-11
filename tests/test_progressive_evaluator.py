@@ -15,10 +15,10 @@ from tradingscope.agents.evaluation.market_outcome import AssessmentStatus
 from tradingscope.agents.evaluation.models import AnalysisRecord, EvaluationResult
 
 
-def _record(ticker: str = "AAPL", trade_date: str = "2025-01-21") -> AnalysisRecord:
+def _record(ticker: str = "AAPL", analysis_date: str = "2025-01-21") -> AnalysisRecord:
     return AnalysisRecord(
         ticker=ticker,
-        trade_date=trade_date,
+        analysis_date=analysis_date,
         direction="bullish",
         action="buy",
         confidence=0.8,
@@ -67,11 +67,11 @@ class _FakeStore:
     async def list_pending(self, **_kwargs) -> list[AnalysisRecord]:
         return self.records
 
-    def is_evaluated(self, _ticker: str, _trade_date: str, horizon_days: int) -> bool:
+    def is_evaluated(self, _ticker: str, _analysis_date: str, horizon_days: int) -> bool:
         return horizon_days in self.completed
 
-    def mark_evaluated(self, ticker: str, trade_date: str, horizon_days: int) -> bool:
-        self.marked.append((ticker, trade_date, horizon_days))
+    def mark_evaluated(self, ticker: str, analysis_date: str, horizon_days: int) -> bool:
+        self.marked.append((ticker, analysis_date, horizon_days))
         return True
 
 
@@ -107,7 +107,7 @@ def test_weekend_record_uses_friday_close_and_monday_for_horizon_one() -> None:
     )
 
     results = asyncio.run(
-        evaluator.evaluate_single(_record(trade_date=weekend.isoformat())),
+        evaluator.evaluate_single(_record(analysis_date=weekend.isoformat())),
     )
 
     assert [result.horizon_days for result in results] == [1]
@@ -161,9 +161,9 @@ def test_all_three_horizons_produce_separate_objective_results() -> None:
     results = asyncio.run(evaluator.evaluate_single(_record()))
 
     assert [result.horizon_days for result in results] == [1, 3, 5]
-    assert [result.trade_date for result in results] == ["2025-01-21"] * 3
+    assert [result.analysis_date for result in results] == ["2025-01-21"] * 3
     assert all(result.status == AssessmentStatus.CORRECT for result in results)
-    assert [result.benchmark_return for result in results] == [0.05, 0.15, 0.25]
+    assert [result.underlying_return for result in results] == [0.05, 0.15, 0.25]
 
 
 def test_insufficient_history_does_not_mark_horizon_complete() -> None:
@@ -184,7 +184,7 @@ def test_failed_explanation_falls_back_to_objective_result() -> None:
     results = asyncio.run(evaluator.evaluate_single(_record()))
 
     assert [result.horizon_days for result in results] == [1, 3, 5]
-    assert results[0].evaluation == "客观状态: correct；是否成交: 否；基准收益率: +5.00%；策略收益率: -"
+    assert results[0].evaluation == "客观状态: correct；是否成交: 否；标的收益率: +5.00%；策略收益率: -"
     assert results[0].lesson == ""
     assert [marked[2] for marked in store.marked] == [1, 3, 5]
 
@@ -249,7 +249,7 @@ def test_reduce_long_result_preserves_residual_event_and_return_basis(lesson_con
     record = _record()
     record.intent_inferred = False
     record.trade_intent = "reduce_long"
-    record.entry_price = 100.0
+    record.execution_price = 100.0
     record.position_advice = "light"
     record.time_stop_days = 3
 
@@ -276,7 +276,7 @@ def test_reduce_long_lesson_receives_simulated_event_and_metric_scope() -> None:
     record = _record()
     record.intent_inferred = False
     record.trade_intent = "reduce_long"
-    record.entry_price = 100.0
+    record.execution_price = 100.0
     record.time_stop_days = 3
 
     captured: list[str] = []

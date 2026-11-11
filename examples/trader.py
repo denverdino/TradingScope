@@ -10,7 +10,7 @@ from tradingscope.agents.utils.context import AgentContext
 
 async def main():
     context = AgentContext()
-    context.company_of_interest = "AAPL"
+    context.ticker = "AAPL"
     context.market_report = "Technical indicators show a bullish trend with strong support at $180."
     context.sentiment_report = "Social media sentiment is positive with increasing mentions of the company."
     context.news_report = "Recent news indicates strong quarterly earnings and product launches."

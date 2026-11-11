@@ -77,7 +77,7 @@ Key locations:
 - `tradingscope/agents/utils/tracing.py` — opt-in OpenTelemetry provider and AgentScope middleware lifecycle.
 - `tradingscope/dataflows/interface.py` — `VENDOR_METHODS` and `route_to_vendor()` fallback routing.
 - `tradingscope/dataflows/config.py` — runtime dataflow configuration.
-- `tradingscope/utils/oss_structured_output_uploader.py` — schema-v2 JSON/Markdown persistence and completion manifest.
+- `tradingscope/utils/oss_structured_output_uploader.py` — schema-v3 JSON/Markdown persistence and completion manifest.
 - `tradingscope/utils/oss_structured_output_reader.py` — strict completion-manifest validation and structured OSS reads.
 - `tradingscope/agents/utils/*_tools.py` — AgentScope tool wrappers returning `ToolChunk` values through `@agentscope_tool`.
 - `tests/` — pytest suite; mirror the source area when adding focused tests.
@@ -92,17 +92,17 @@ The configured models are:
 
 ### Structured Output and Persistence
 
-All seven JSON-producing workflow nodes run through `StructuredAgentRunner`; schema validation failures stop downstream processing. The workflow returns one schema-v2 `AnalysisResult`. Local CLI output goes to `<results_dir>/data/<date>/<ticker>/` as HTML and/or JSON according to `--output`.
+All seven JSON-producing workflow nodes run through `StructuredAgentRunner`; schema validation failures stop downstream processing. The workflow returns one schema-v3 `AnalysisResult` with `analysis_date`, `last_completed_session`, and `execution_price*` price-plan fields. Use the domain vocabulary in `GLOSSARY.md` when changing model names or terminology. Local CLI output goes to `<results_dir>/data/<date>/<ticker>/` as HTML and/or JSON according to `--output`.
 
 `DashScopeResponseModel` must inline local Pydantic `$ref` definitions before sending structured-output tools because DashScope may otherwise serialize nested objects as JSON strings. Preserve Pydantic model validation when normalizing schemas. Thinking-enabled requests use `tool_choice="auto"`; non-thinking structured-output requests use `tool_choice="required"`.
 
-Each validated workflow node is persisted as JSON and Markdown under `<results_dir>/data/<date>/<ticker>/` as soon as it finishes. When OSS is configured, the same node artifacts are uploaded immediately. A new run invalidates any prior local and OSS manifest for that ticker/date, and same-key runs are serialized within one process. After every node succeeds, `persist_analysis_result()` writes `full_report` and then `manifest.json` last. Treat the manifest as the atomic completion marker: consumers must use `fetch_completed_v2_output()` or `async_fetch_completed_v2_output()` rather than reading an artifact without validating the manifest.
+Each validated workflow node is persisted as JSON and Markdown under `<results_dir>/data/<date>/<ticker>/` as soon as it finishes. When OSS is configured, the same node artifacts are uploaded immediately. A new run invalidates any prior local and OSS manifest for that ticker/date, and same-key runs are serialized within one process. After every node succeeds, `persist_analysis_result()` writes `full_report` and then `manifest.json` last. Treat the manifest as the atomic completion marker: consumers must use `fetch_completed_output()` or `async_fetch_completed_output()` rather than reading an artifact without validating the manifest.
 
 ### Post-market Evaluation
 
-The evaluation CLI requires `--tickers` and optionally accepts `--date`, `--results-dir`, `--dry-run`, and `--email-to`. `OSSAnalysisStore` reads only manifest-completed schema-v2 `portfolio_manager.json` objects from OSS and converts validated `PortfolioManagerOutput` values into `AnalysisRecord` objects.
+The evaluation CLI requires `--tickers` and optionally accepts `--date`, `--results-dir`, `--dry-run`, and `--email-to`. `OSSAnalysisStore` reads manifest-completed `portfolio_manager.json` objects from OSS, migrates historical v2 data at read time, and converts validated schema-v3 `PortfolioManagerOutput` values into `AnalysisRecord` objects.
 
-`AnalysisEvaluator` fetches market data through `route_to_vendor("get_stock_data", ...)`, compares the analysis-date close with the immediately preceding trading-day close, checks direction and stop-loss behavior, and uses `Agent` plus `non_thinking_model` to generate a Chinese evaluation and lesson. The CLI currently passes `memory_manager=None`, so lessons are returned/logged but not written to shared memory. Unless `--dry-run` is used, completed keys are recorded in `<results_dir>/oss_evaluated.json`; optional evaluation email uses the same email environment variables as analysis delivery.
+`AnalysisEvaluator` fetches market data through `route_to_vendor("get_stock_data", ...)`, calculates the underlying return from the session before `analysis_date` to the close of each mature 1-, 3-, or 5-session horizon, checks direction and simulated execution behavior, and uses `Agent` plus `non_thinking_model` to generate a Chinese evaluation and lesson. The CLI currently passes `memory_manager=None`, so lessons are returned/logged but not written to shared memory. Unless `--dry-run` is used, completed keys are recorded in `<results_dir>/oss_evaluated.json`; optional evaluation email uses the same email environment variables as analysis delivery.
 
 ### Tracing
 

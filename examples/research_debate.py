@@ -14,7 +14,7 @@ async def main():
     """Example usage of the research debate system."""
 
     context = AgentContext()
-    context.company_of_interest = "AAPL"
+    context.ticker = "AAPL"
     context.market_report = "Technical indicators show a bullish trend with strong support at $180."
     context.sentiment_report = "Social media sentiment is positive with increasing mentions of the company."
     context.news_report = "Recent news indicates strong quarterly earnings and product launches."
@@ -31,11 +31,11 @@ async def main():
         max_rounds=3,
     )
 
-    print(f"Starting research debate for {context.company_of_interest}")
+    print(f"Starting research debate for {context.ticker}")
     print("=" * 60)
 
     final_decision = await orchestrator.run_debate(
-        company_name=context.company_of_interest,
+        ticker=context.ticker,
     )
 
     print("=" * 60)

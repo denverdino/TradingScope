@@ -12,7 +12,7 @@ from tradingscope.agents.utils.context import AgentContext
 
 async def main():
     context = AgentContext()
-    context.company_of_interest = "BABA"
+    context.ticker = "BABA"
 
     agent = create_equity_analyst_agent(context=context)
     result = await run_equity_analysis(agent)

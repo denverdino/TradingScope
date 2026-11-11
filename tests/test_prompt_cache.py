@@ -25,9 +25,9 @@ def test_research_agents_share_identical_cache_prefix(monkeypatch) -> None:
     from tradingscope.agents.researchers import bear_researcher, bull_researcher
 
     context = SimpleNamespace(
-        company_of_interest="BABA",
-        trade_date="2026-08-11",
-        latest_trading_date="2026-08-10",
+        ticker="BABA",
+        analysis_date="2026-08-11",
+        last_completed_session="2026-08-10",
         model=object(),
         non_thinking_model=object(),
         middlewares=[],
@@ -58,16 +58,16 @@ def test_research_agents_share_identical_cache_prefix(monkeypatch) -> None:
     assert "相同的分析师证据包" in prefixes[0]
 
 
-def test_risk_debators_share_identical_cache_prefix(monkeypatch) -> None:
-    from tradingscope.agents.risk_mgmt import aggressive_debator, conservative_debator, neutral_debator
+def test_risk_debaters_share_identical_cache_prefix(monkeypatch) -> None:
+    from tradingscope.agents.risk_mgmt import aggressive_debater, conservative_debater, neutral_debater
 
     context = SimpleNamespace(
-        company_of_interest="BABA",
+        ticker="BABA",
         non_thinking_model=object(),
         middlewares=[],
         generate_risk_evaluation_context_md=lambda: "相同的风险证据包",
     )
-    modules = (aggressive_debator, conservative_debator, neutral_debator)
+    modules = (aggressive_debater, conservative_debater, neutral_debater)
     for module in modules:
         monkeypatch.setattr(
             module,
@@ -76,9 +76,9 @@ def test_risk_debators_share_identical_cache_prefix(monkeypatch) -> None:
         )
 
     prompts = [
-        aggressive_debator.create_aggressive_debator_agent(context)._system_prompt,
-        conservative_debator.create_conservative_debator_agent(context)._system_prompt,
-        neutral_debator.create_neutral_debator_agent(context)._system_prompt,
+        aggressive_debater.create_aggressive_debater_agent(context)._system_prompt,
+        conservative_debater.create_conservative_debater_agent(context)._system_prompt,
+        neutral_debater.create_neutral_debater_agent(context)._system_prompt,
     ]
 
     prefixes = [prompt.split(CACHE_PREFIX_BREAK)[0] for prompt in prompts]

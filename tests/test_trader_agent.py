@@ -30,7 +30,7 @@ class TestTraderAgent:
     def setup_method(self):
         """Set up test fixtures before each test method."""
         self.mock_model = MockModel()
-        self.company_of_interest = "AAPL"
+        self.ticker = "AAPL"
         self.investment_plan = "Test investment plan"
         self.market_research_report = "Market research report"
         self.sentiment_report = "Sentiment report"
@@ -39,7 +39,7 @@ class TestTraderAgent:
 
     def _setup_context(self, context):
         """Populate context with test data."""
-        context.company_of_interest = self.company_of_interest
+        context.ticker = self.ticker
         context.investment_plan = self.investment_plan
         context.market_report = self.market_research_report
         context.sentiment_report = self.sentiment_report
@@ -69,7 +69,7 @@ class TestTraderAgent:
         mock_get_company_name.return_value = "Apple Inc."
 
         context = self._setup_context(mock_context)
-        context.trade_date = "2025-01-01"
+        context.analysis_date = "2025-01-01"
 
         agent = create_trader_agent(
             context=context,

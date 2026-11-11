@@ -124,7 +124,7 @@ def test_market_analyst_prompt_requires_one_batch_indicator_call():
     from tradingscope.agents.utils.context import AgentContext
 
     context = AgentContext()
-    context.company_of_interest = "AAPL"
+    context.ticker = "AAPL"
 
     prompt = create_market_analyst_agent(context=context)._system_prompt
 

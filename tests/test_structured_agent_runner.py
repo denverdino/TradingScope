@@ -155,7 +155,7 @@ async def test_runner_fails_after_three_invalid_outputs() -> None:
     expected = _all_outputs()[0]
     formatter_model = SimpleNamespace(
         generate_structured_output=AsyncMock(
-            return_value=SimpleNamespace(content={"schema_version": "2.0"}),
+            return_value=SimpleNamespace(content={"schema_version": "3.0"}),
         ),
     )
     runner = StructuredAgentRunner(formatter_model=formatter_model, max_validation_attempts=3)
@@ -186,9 +186,9 @@ async def test_runner_retries_generated_output_policy_failure() -> None:
     invalid["position_advice"] = "light"
     invalid["time_stop_days"] = 3
     invalid["price_plan"] = {
-        "entry_price": 100.0,
-        "entry_price_low": None,
-        "entry_price_high": None,
+        "execution_price": 100.0,
+        "execution_price_low": None,
+        "execution_price_high": None,
         "target_price": None,
         "stop_loss": 105.0,
         "currency": "USD",
@@ -198,8 +198,8 @@ async def test_runner_retries_generated_output_policy_failure() -> None:
         **invalid,
         "price_plan": {
             **invalid["price_plan"],
-            "entry_price_low": 99.0,
-            "entry_price_high": 101.0,
+            "execution_price_low": 99.0,
+            "execution_price_high": 101.0,
             "target_price": 90.0,
         },
     }

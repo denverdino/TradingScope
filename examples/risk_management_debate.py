@@ -4,21 +4,21 @@
 import asyncio
 
 from tradingscope.agents.managers.portfolio_manager import create_portfolio_manager_agent
-from tradingscope.agents.risk_mgmt.aggressive_debator import create_aggressive_debator_agent
-from tradingscope.agents.risk_mgmt.conservative_debator import create_conservative_debator_agent
-from tradingscope.agents.risk_mgmt.debate_orchestrator import create_debate_orchestrator
-from tradingscope.agents.risk_mgmt.neutral_debator import create_neutral_debator_agent
+from tradingscope.agents.risk_mgmt.aggressive_debater import create_aggressive_debater_agent
+from tradingscope.agents.risk_mgmt.conservative_debater import create_conservative_debater_agent
+from tradingscope.agents.risk_mgmt.debate_orchestrator import create_risk_debate_orchestrator
+from tradingscope.agents.risk_mgmt.neutral_debater import create_neutral_debater_agent
 from tradingscope.agents.utils.context import AgentContext
 
 
 async def main():
     """Example usage of the risk management debate system."""
 
-    company_name = "TSLA"
+    ticker = "TSLA"
     trader_plan = "计划买入TSLA股票200股，目标价位250美元，止损价位200美元"
 
     context = AgentContext()
-    context.company_of_interest = company_name
+    context.ticker = ticker
     context.market_report = """特斯拉(TSLA)股价近期表现强劲，电动汽车市场需求持续增长。
 技术分析显示股价处于上升通道中，相对强弱指数(RSI)处于健康水平。
 宏观经济环境有利于新能源汽车发展，政策支持力度不断加大。"""
@@ -40,12 +40,12 @@ async def main():
 - 市场份额在电动车领域领先"""
     context.trader_investment_plan = trader_plan
 
-    aggressive_agent = create_aggressive_debator_agent(context=context)
-    conservative_agent = create_conservative_debator_agent(context=context)
-    neutral_agent = create_neutral_debator_agent(context=context)
+    aggressive_agent = create_aggressive_debater_agent(context=context)
+    conservative_agent = create_conservative_debater_agent(context=context)
+    neutral_agent = create_neutral_debater_agent(context=context)
     portfolio_manager = create_portfolio_manager_agent(context=context)
 
-    orchestrator = create_debate_orchestrator(
+    orchestrator = create_risk_debate_orchestrator(
         aggressive_agent=aggressive_agent,
         conservative_agent=conservative_agent,
         neutral_agent=neutral_agent,
@@ -53,12 +53,12 @@ async def main():
         max_rounds=3,
     )
 
-    print(f"Starting risk management debate for {company_name}")
+    print(f"Starting risk management debate for {ticker}")
     print(f"Trader plan: {trader_plan}")
     print("=" * 60)
 
     final_decision = await orchestrator.run_debate(
-        company_name=company_name,
+        ticker=ticker,
     )
 
     print("=" * 60)

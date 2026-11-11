@@ -10,7 +10,7 @@ def test_trader_agent_creation(mock_model, mock_context, sample_company_data):
         from tradingscope.agents.trader.trader import create_trader_agent
 
         context = mock_context
-        context.company_of_interest = sample_company_data["company_of_interest"]
+        context.ticker = sample_company_data["ticker"]
         context.investment_plan = sample_company_data["investment_plan"]
         context.market_report = sample_company_data["market_research_report"]
         context.sentiment_report = sample_company_data["sentiment_report"]
@@ -46,7 +46,7 @@ def test_trader_agent_with_china_stock(mock_get_market_info, mock_get_company_na
         from tradingscope.agents.trader.trader import create_trader_agent
 
         context = mock_context
-        context.company_of_interest = "600000"  # China stock code
+        context.ticker = "600000"  # China stock code
         context.investment_plan = sample_company_data["investment_plan"]
         context.market_report = sample_company_data["market_research_report"]
         context.sentiment_report = sample_company_data["sentiment_report"]

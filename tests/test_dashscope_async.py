@@ -95,7 +95,7 @@ class TestEvaluatorGenerateLesson:
 
         defaults = {
             "ticker": "AAPL",
-            "trade_date": "2025-01-01",
+            "analysis_date": "2025-01-01",
             "direction": "bullish",
             "action": "buy",
             "confidence": 0.8,
@@ -115,10 +115,10 @@ class TestEvaluatorGenerateLesson:
                 assessment=TradeAssessment(
                     horizon_days=3,
                     status=AssessmentStatus.CORRECT,
-                    entry_triggered=True,
-                    entry_price=150.0,
+                    filled=True,
+                    fill_price=150.0,
                     exit_reason="target",
-                    benchmark_return=0.033,
+                    underlying_return=0.033,
                     strategy_return=0.067,
                     atr_threshold=0.025,
                     limitations=("测试限制",),
@@ -134,7 +134,7 @@ class TestEvaluatorGenerateLesson:
         middlewares = [object()]
         response = MagicMock()
         response.get_text_content.return_value = lesson_text
-        record = self._make_record(entry_price=150.0, target_price=160.0, stop_loss=140.0)
+        record = self._make_record(execution_price=150.0, target_price=160.0, stop_loss=140.0)
         with patch("tradingscope.agents.evaluation.evaluator.Agent") as mock_agent:
             mock_agent.return_value.reply = AsyncMock(return_value=response)
             with tempfile.TemporaryDirectory() as tmpdir:
@@ -167,6 +167,11 @@ class TestEvaluatorGenerateLesson:
         assert message.name == "evaluator"
         prompt = message.get_text_content()
         assert "AAPL" in prompt
+        assert "分析日期: 2025-01-01" in prompt
+        assert "执行价: 150.0" in prompt
+        assert "标的收益率: +3.30%" in prompt
+        assert "入场价:" not in prompt
+        assert "基准收益率:" not in prompt
         assert "3个交易日" in prompt
         assert "correct" in prompt
         assert "是" in prompt
@@ -210,10 +215,10 @@ class TestEvaluatorGenerateLesson:
         assessment = TradeAssessment(
             horizon_days=1,
             status=AssessmentStatus(status),
-            entry_triggered=False,
-            entry_price=None,
+            filled=False,
+            fill_price=None,
             exit_reason="not_filled" if status == "not_filled" else None,
-            benchmark_return=0.01,
+            underlying_return=0.01,
             strategy_return=None,
             atr_threshold=0.02,
             limitations=(),
@@ -254,10 +259,10 @@ class TestEvaluatorGenerateLesson:
                         assessment=TradeAssessment(
                             horizon_days=3,
                             status=AssessmentStatus.CORRECT,
-                            entry_triggered=False,
-                            entry_price=None,
+                            filled=False,
+                            fill_price=None,
                             exit_reason=None,
-                            benchmark_return=0.033,
+                            underlying_return=0.033,
                             strategy_return=None,
                             atr_threshold=0.025,
                             limitations=("Hold intent produces no new execution simulation.",),

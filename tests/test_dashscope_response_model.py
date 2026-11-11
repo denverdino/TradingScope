@@ -34,11 +34,11 @@ class AAPLStructuredResult(BaseModel):
 def _valid_fundamentals_json() -> str:
     return json.dumps(
         {
-            "schema_version": "2.0",
+            "schema_version": "3.0",
             "agent_name": "FundamentalsAnalyst",
             "ticker": "AAPL",
-            "trade_date": "2026-08-12",
-            "latest_trading_date": "2026-08-12",
+            "analysis_date": "2026-08-12",
+            "last_completed_session": "2026-08-12",
             "decision": {
                 "direction": "neutral",
                 "action": "hold",
@@ -62,9 +62,9 @@ def _valid_fundamentals_json() -> str:
             "key_catalysts": [],
             "key_risks": ["数据不足"],
             "price_plan": {
-                "entry_price": None,
-                "entry_price_low": None,
-                "entry_price_high": None,
+                "execution_price": None,
+                "execution_price_low": None,
+                "execution_price_high": None,
                 "target_price": None,
                 "stop_loss": None,
                 "currency": "USD",

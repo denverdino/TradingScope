@@ -23,10 +23,10 @@ class EvaluationResult:
     lesson: str  # 经验教训
     horizon_days: int = 1
     status: str = "inconclusive"
-    entry_triggered: bool = False
-    benchmark_return: Optional[float] = None
+    filled: bool = False
+    underlying_return: Optional[float] = None
     strategy_return: Optional[float] = None
-    trade_date: str = ""
+    analysis_date: str = ""
     strategy_return_basis: Optional[str] = None
     residual_exit_reason: Optional[str] = None
     residual_exit_date: Optional[str] = None
@@ -36,19 +36,16 @@ class EvaluationResult:
 
 @dataclass
 class AnalysisRecord:
-    """Record of key decision basis from a workflow run.
-
-    Stored as local JSON files. Not subject to the 512-char Memory API limit.
-    """
+    """Decision basis from a completed analysis, independent of evaluation status."""
 
     ticker: str
-    trade_date: str  # YYYY-MM-DD
+    analysis_date: str  # YYYY-MM-DD
     direction: str  # bullish/bearish/neutral
     action: str  # buy/sell/hold
     confidence: float  # 0-1
-    entry_price: Optional[float] = None
-    entry_price_low: Optional[float] = None
-    entry_price_high: Optional[float] = None
+    execution_price: Optional[float] = None
+    execution_price_low: Optional[float] = None
+    execution_price_high: Optional[float] = None
     target_price: Optional[float] = None
     stop_loss: Optional[float] = None
     trade_intent: Optional[str] = None
@@ -57,7 +54,6 @@ class AnalysisRecord:
     intent_inferred: bool = False
     reasoning: str = ""  # core reasoning (~100 chars)
     final_decision_summary: str = ""  # LLM-summarized key decision factors
-    status: str = "pending"  # pending/evaluated
     created_at: str = ""
 
     def __post_init__(self) -> None:
@@ -68,13 +64,13 @@ class AnalysisRecord:
         """Serialize to dictionary for JSON storage."""
         return {
             "ticker": self.ticker,
-            "trade_date": self.trade_date,
+            "analysis_date": self.analysis_date,
             "direction": self.direction,
             "action": self.action,
             "confidence": self.confidence,
-            "entry_price": self.entry_price,
-            "entry_price_low": self.entry_price_low,
-            "entry_price_high": self.entry_price_high,
+            "execution_price": self.execution_price,
+            "execution_price_low": self.execution_price_low,
+            "execution_price_high": self.execution_price_high,
             "target_price": self.target_price,
             "stop_loss": self.stop_loss,
             "trade_intent": self.trade_intent,
@@ -83,7 +79,6 @@ class AnalysisRecord:
             "intent_inferred": self.intent_inferred,
             "reasoning": self.reasoning,
             "final_decision_summary": self.final_decision_summary,
-            "status": self.status,
             "created_at": self.created_at,
         }
 
@@ -92,13 +87,13 @@ class AnalysisRecord:
         """Deserialize from dictionary."""
         return cls(
             ticker=data["ticker"],
-            trade_date=data["trade_date"],
+            analysis_date=data["analysis_date"],
             direction=data["direction"],
             action=data["action"],
             confidence=data["confidence"],
-            entry_price=data.get("entry_price"),
-            entry_price_low=data.get("entry_price_low"),
-            entry_price_high=data.get("entry_price_high"),
+            execution_price=data.get("execution_price"),
+            execution_price_low=data.get("execution_price_low"),
+            execution_price_high=data.get("execution_price_high"),
             target_price=data.get("target_price"),
             stop_loss=data.get("stop_loss"),
             trade_intent=data.get("trade_intent"),
@@ -107,6 +102,5 @@ class AnalysisRecord:
             intent_inferred=data.get("intent_inferred", False),
             reasoning=data.get("reasoning", ""),
             final_decision_summary=data.get("final_decision_summary", ""),
-            status=data.get("status", "pending"),
             created_at=data.get("created_at", ""),
         )

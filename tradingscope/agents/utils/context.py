@@ -30,8 +30,8 @@ from tradingscope.default_config import DEFAULT_CONFIG
 logger = logging.getLogger(__name__)
 
 
-def get_latest_us_trading_date() -> str:
-    """Return the most recent completed US trading date."""
+def get_last_completed_us_session() -> str:
+    """Return the most recent completed US trading session date."""
     try:
         spy = yf.Ticker("SPY")
         hist = spy.history(period="5d")
@@ -40,12 +40,12 @@ def get_latest_us_trading_date() -> str:
             if hasattr(latest_date, "tz") and latest_date.tz is not None:
                 latest_date = latest_date.tz_localize(None)
             result = latest_date.strftime("%Y-%m-%d")
-            logger.info("Latest US trading date from Yahoo Finance: %s", result)
+            logger.info("Last completed US session from Yahoo Finance: %s", result)
             return result
     except YFRateLimitError:
-        logger.warning("Yahoo Finance rate limited when fetching latest trading date")
+        logger.warning("Yahoo Finance rate limited when fetching last completed session")
     except Exception as exc:
-        logger.warning("Failed to get latest trading date from Yahoo Finance: %s", exc)
+        logger.warning("Failed to get last completed session from Yahoo Finance: %s", exc)
 
     now = datetime.now()
     if now.weekday() == 5:
@@ -53,29 +53,29 @@ def get_latest_us_trading_date() -> str:
     elif now.weekday() == 6:
         now -= timedelta(days=2)
     result = now.strftime("%Y-%m-%d")
-    logger.info("Using fallback trading date (weekday-based): %s", result)
+    logger.info("Using fallback last completed session (weekday-based): %s", result)
     return result
 
 
 class AgentContext:
-    """Shared workflow state whose analysis values are validated models."""
+    """Shared workflow state whose stage outputs are validated models."""
 
-    company_of_interest: Annotated[str, "Company being analyzed"] = ""
-    trade_date: Annotated[str, "Current analysis date"] = ""
-    latest_trading_date: Annotated[str, "Latest US trading date"] = ""
+    ticker: Annotated[str, "Ticker being analyzed"] = ""
+    analysis_date: Annotated[str, "Analysis date"] = ""
+    last_completed_session: Annotated[str, "Last completed US trading session"] = ""
 
     def __init__(self) -> None:
         self.cache_usage = CacheUsageCollector()
         self.middlewares = [CacheUsageMiddleware(self.cache_usage), *create_tracing_middlewares()]
-        self.trade_date = datetime.now().strftime("%Y-%m-%d")
-        self.latest_trading_date = get_latest_us_trading_date()
-        self.market_analysis: MarketAnalystOutput | None = None
-        self.fundamentals_analysis: FundamentalsAnalystOutput | None = None
-        self.news_analysis: NewsAnalystOutput | None = None
-        self.social_analysis: SocialMediaAnalystOutput | None = None
-        self.research_decision: ResearchManagerOutput | None = None
-        self.trader_decision: TraderOutput | None = None
-        self.portfolio_decision: PortfolioManagerOutput | None = None
+        self.analysis_date = datetime.now().strftime("%Y-%m-%d")
+        self.last_completed_session = get_last_completed_us_session()
+        self.market: MarketAnalystOutput | None = None
+        self.fundamentals: FundamentalsAnalystOutput | None = None
+        self.news: NewsAnalystOutput | None = None
+        self.social_media: SocialMediaAnalystOutput | None = None
+        self.research_manager: ResearchManagerOutput | None = None
+        self.trader: TraderOutput | None = None
+        self.portfolio_manager: PortfolioManagerOutput | None = None
 
         credential = OpenAICredential(
             api_key=os.environ.get("DASHSCOPE_API_KEY"),
@@ -111,16 +111,16 @@ class AgentContext:
     def generate_analyst_reports_md(self) -> str:
         """Render available typed analyst outputs for downstream text agents."""
         outputs = (
-            self.market_analysis,
-            self.social_analysis,
-            self.news_analysis,
-            self.fundamentals_analysis,
+            self.market,
+            self.social_media,
+            self.news,
+            self.fundamentals,
         )
         return "\n\n---\n\n".join(render_markdown(output) for output in outputs if output is not None)
 
     def generate_trader_context_md(self) -> str:
-        """Render the validated research decision and analyst evidence."""
-        research = render_markdown(self.research_decision) if self.research_decision is not None else ""
+        """Render the validated research manager output and analyst evidence."""
+        research = render_markdown(self.research_manager) if self.research_manager is not None else ""
         return f"""## 研究经理投资建议
 
 {research}
@@ -130,11 +130,11 @@ class AgentContext:
 {self.generate_analyst_reports_md()}"""
 
     def generate_risk_evaluation_context_md(self) -> str:
-        """Render the validated trader decision and its upstream context."""
-        trader = render_markdown(self.trader_decision) if self.trader_decision is not None else ""
+        """Render the validated trader output and its upstream context."""
+        trader_md = render_markdown(self.trader) if self.trader is not None else ""
         return f"""## 交易员操作计划
 
-{trader}
+{trader_md}
 
 ---
 

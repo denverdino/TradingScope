@@ -28,9 +28,9 @@ def create_market_analyst_agent(
     创建用于技术面分析的 Agent
     """
     # Extract values from context
-    ticker = context.company_of_interest
-    trade_date = context.trade_date
-    latest_trading_date = context.latest_trading_date
+    ticker = context.ticker
+    analysis_date = context.analysis_date
+    last_completed_session = context.last_completed_session
 
     # 计算市场信息与公司名（与原代码一致）
     market_info = StockUtils.get_market_info(ticker)
@@ -52,8 +52,6 @@ def create_market_analyst_agent(
 
     # Get tool names from the toolkit
     tool_names = ", ".join(t.name for t in toolkit.tool_groups[0].tools)
-
-    current_date = trade_date
 
     # Build system prompt for short-term trading analysis
     currency_name = market_info["currency_name"]
@@ -271,8 +269,8 @@ def create_market_analyst_agent(
 
 - 公司名称：{company_name}
 - 股票代码：{ticker}
-- 当前日期：{current_date}
-- 最新美股交易日期：{latest_trading_date}
+- 分析日期：{analysis_date}
+- 最近完成交易日：{last_completed_session}
 - 所属市场：{market_name}
 - 计价货币：{currency_name}（{currency_symbol}）
 - 前收盘价：xxx

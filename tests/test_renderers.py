@@ -1,20 +1,20 @@
-"""Tests for deterministic Markdown rendering from schema-v2 outputs."""
+"""Tests for deterministic Markdown rendering from schema-v3 outputs."""
 
 from __future__ import annotations
 
 import pytest
 
-from tests.test_output_models import LATEST_TRADING_DATE, TRADE_DATE, _all_outputs
+from tests.test_output_models import ANALYSIS_DATE, LAST_COMPLETED_SESSION, _all_outputs
 from tradingscope.agents import output as models
 
 
 def _analysis_result() -> models.AnalysisResult:
     market, fundamentals, news, social, research, trader, portfolio = _all_outputs()
     return models.AnalysisResult(
-        schema_version="2.0",
+        schema_version="3.0",
         ticker="AAPL",
-        trade_date=TRADE_DATE,
-        latest_trading_date=LATEST_TRADING_DATE,
+        analysis_date=ANALYSIS_DATE,
+        last_completed_session=LAST_COMPLETED_SESSION,
         analysts=models.AnalystOutputs(
             market=market,
             fundamentals=fundamentals,
@@ -47,6 +47,8 @@ def test_each_output_renders_markdown(index: int, expected_heading: str) -> None
 
     assert expected_heading in markdown
     assert output.ticker in markdown
+    assert f"**分析日期**：{output.analysis_date.isoformat()}" in markdown
+    assert f"**最近完成交易日**：{output.last_completed_session.isoformat()}" in markdown
     assert output.decision.summary in markdown
     assert "```json" not in markdown
 
@@ -100,9 +102,9 @@ def test_renderer_shows_entry_range_and_short_risk_reward() -> None:
         "reasoning": ["短期趋势向下"],
     }
     data["price_plan"] = {
-        "entry_price": 101.0,
-        "entry_price_low": 100.0,
-        "entry_price_high": 102.0,
+        "execution_price": 101.0,
+        "execution_price_low": 100.0,
+        "execution_price_high": 102.0,
         "target_price": 90.0,
         "stop_loss": 106.0,
         "currency": "USD",
@@ -123,9 +125,9 @@ def test_execution_output_renders_trade_intent_price_semantics() -> None:
     trader_data["trade_intent"] = "open_short"
     trader_data["price_plan"].update(
         {
-            "entry_price": 101.0,
-            "entry_price_low": 100.0,
-            "entry_price_high": 102.0,
+            "execution_price": 101.0,
+            "execution_price_low": 100.0,
+            "execution_price_high": 102.0,
             "target_price": 90.0,
             "stop_loss": 106.0,
         },
@@ -134,9 +136,9 @@ def test_execution_output_renders_trade_intent_price_semantics() -> None:
     portfolio_data["trade_intent"] = "close_long"
     portfolio_data["price_plan"].update(
         {
-            "entry_price": 101.0,
-            "entry_price_low": 100.0,
-            "entry_price_high": 102.0,
+            "execution_price": 101.0,
+            "execution_price_low": 100.0,
+            "execution_price_high": 102.0,
         },
     )
 
@@ -163,9 +165,9 @@ def test_reduce_long_uses_long_price_semantics_and_renders_time_stops() -> None:
     }
     trader_data["price_plan"].update(
         {
-            "entry_price": 100.0,
-            "entry_price_low": 99.0,
-            "entry_price_high": 101.0,
+            "execution_price": 100.0,
+            "execution_price_low": 99.0,
+            "execution_price_high": 101.0,
             "target_price": 110.0,
             "stop_loss": 95.0,
         }
@@ -188,9 +190,9 @@ def test_positioned_hold_omits_inapplicable_empty_price_fields() -> None:
     portfolio_data.update({"trade_intent": "hold", "position_advice": "light", "time_stop_days": 5})
     portfolio_data["price_plan"].update(
         {
-            "entry_price": None,
-            "entry_price_low": None,
-            "entry_price_high": None,
+            "execution_price": None,
+            "execution_price_low": None,
+            "execution_price_high": None,
             "target_price": 129.2,
             "stop_loss": 120.3,
         },

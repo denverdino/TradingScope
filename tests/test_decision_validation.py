@@ -55,9 +55,9 @@ def _with_decision(
             "bullish",
             "buy",
             {
-                "entry_price": 100.0,
-                "entry_price_low": 99.0,
-                "entry_price_high": 101.0,
+                "execution_price": 100.0,
+                "execution_price_low": 99.0,
+                "execution_price_high": 101.0,
                 "target_price": 110.0,
                 "stop_loss": 100.0,
             },
@@ -66,9 +66,9 @@ def _with_decision(
             "bearish",
             "sell",
             {
-                "entry_price": 100.0,
-                "entry_price_low": 99.0,
-                "entry_price_high": 101.0,
+                "execution_price": 100.0,
+                "execution_price_low": 99.0,
+                "execution_price_high": 101.0,
                 "target_price": 90.0,
                 "stop_loss": 100.0,
             },
@@ -110,7 +110,7 @@ def test_generated_sell_plan_requires_entry_target_and_stop() -> None:
         action="sell",
         confidence=0.6,
         price_plan={
-            "entry_price": 100.0,
+            "execution_price": 100.0,
             "target_price": None,
             "stop_loss": 105.0,
         },
@@ -132,13 +132,13 @@ def test_generated_directional_plan_requires_entry_range() -> None:
         action="sell",
         confidence=0.6,
         price_plan={
-            "entry_price": 100.0,
+            "execution_price": 100.0,
             "target_price": 90.0,
             "stop_loss": 105.0,
         },
     )
 
-    with pytest.raises(GeneratedOutputPolicyError, match="price_plan.entry_price_low"):
+    with pytest.raises(GeneratedOutputPolicyError, match="price_plan.execution_price_low"):
         validate_generated_output(trader)
 
 
@@ -148,9 +148,9 @@ def test_generated_directional_plan_requires_entry_range() -> None:
         (
             "buy",
             {
-                "entry_price": 100.0,
-                "entry_price_low": 99.0,
-                "entry_price_high": 101.0,
+                "execution_price": 100.0,
+                "execution_price_low": 99.0,
+                "execution_price_high": 101.0,
                 "target_price": 110.0,
                 "stop_loss": 95.0,
             },
@@ -158,9 +158,9 @@ def test_generated_directional_plan_requires_entry_range() -> None:
         (
             "sell",
             {
-                "entry_price": 100.0,
-                "entry_price_low": 99.0,
-                "entry_price_high": 101.0,
+                "execution_price": 100.0,
+                "execution_price_low": 99.0,
+                "execution_price_high": 101.0,
                 "target_price": 90.0,
                 "stop_loss": 105.0,
             },
@@ -194,7 +194,7 @@ def test_research_manager_is_not_validated_as_an_execution_order() -> None:
         action="buy",
         confidence=0.6,
         price_plan={
-            "entry_price": 100.0,
+            "execution_price": 100.0,
             "target_price": 110.0,
             "stop_loss": 95.0,
         },
@@ -215,7 +215,7 @@ def test_generated_positioned_hold_requires_target_and_stop() -> None:
         action="hold",
         confidence=0.6,
         price_plan={
-            "entry_price": None,
+            "execution_price": None,
             "target_price": 110.0,
             "stop_loss": None,
         },
@@ -248,9 +248,9 @@ def test_generated_output_rejects_action_intent_conflicts(action: str, intent: s
         confidence=0.6,
         price_plan=(
             {
-                "entry_price": 100.0,
-                "entry_price_low": 99.0,
-                "entry_price_high": 101.0,
+                "execution_price": 100.0,
+                "execution_price_low": 99.0,
+                "execution_price_high": 101.0,
                 "target_price": 110.0 if action == "buy" else 90.0,
                 "stop_loss": 95.0 if action == "buy" else 105.0,
             }
@@ -292,7 +292,7 @@ def test_high_confidence_direction_change_is_not_rejected_by_numeric_threshold()
         action="buy",
         confidence=0.8,
         price_plan={
-            "entry_price": 100.0,
+            "execution_price": 100.0,
             "target_price": 110.0,
             "stop_loss": 95.0,
         },
@@ -303,9 +303,9 @@ def test_high_confidence_direction_change_is_not_rejected_by_numeric_threshold()
         action="sell",
         confidence=0.99,
         price_plan={
-            "entry_price": 100.0,
-            "entry_price_low": 99.0,
-            "entry_price_high": 101.0,
+            "execution_price": 100.0,
+            "execution_price_low": 99.0,
+            "execution_price_high": 101.0,
             "target_price": 90.0,
             "stop_loss": 105.0,
         },
@@ -326,9 +326,9 @@ def test_large_portfolio_entry_shift_is_not_rejected_by_numeric_threshold() -> N
         action="sell",
         confidence=0.6,
         price_plan={
-            "entry_price": 100.0,
-            "entry_price_low": 99.0,
-            "entry_price_high": 101.0,
+            "execution_price": 100.0,
+            "execution_price_low": 99.0,
+            "execution_price_high": 101.0,
             "target_price": 90.0,
             "stop_loss": 110.0,
         },
@@ -340,9 +340,9 @@ def test_large_portfolio_entry_shift_is_not_rejected_by_numeric_threshold() -> N
         action="sell",
         confidence=0.7,
         price_plan={
-            "entry_price": 106.0,
-            "entry_price_low": 105.0,
-            "entry_price_high": 107.0,
+            "execution_price": 106.0,
+            "execution_price_low": 105.0,
+            "execution_price_high": 107.0,
             "target_price": 90.0,
             "stop_loss": 116.0,
         },
@@ -367,9 +367,9 @@ def test_open_intent_requires_time_stop(intent: str) -> None:
         action=action,
         confidence=0.8,
         price_plan={
-            "entry_price": 100.0,
-            "entry_price_low": 99.0,
-            "entry_price_high": 101.0,
+            "execution_price": 100.0,
+            "execution_price_low": 99.0,
+            "execution_price_high": 101.0,
             "target_price": target,
             "stop_loss": stop,
         },
@@ -397,9 +397,9 @@ def test_open_intent_requires_a_residual_position(output_index: int, intent: str
         action=action,
         confidence=0.8,
         price_plan={
-            "entry_price": 100.0,
-            "entry_price_low": 99.0,
-            "entry_price_high": 101.0,
+            "execution_price": 100.0,
+            "execution_price_low": 99.0,
+            "execution_price_high": 101.0,
             "target_price": target,
             "stop_loss": stop,
         },
@@ -423,9 +423,9 @@ def test_generated_open_long_rejects_incomplete_plan_at_runtime() -> None:
         action="buy",
         confidence=0.8,
         price_plan={
-            "entry_price": 100.0,
-            "entry_price_low": 99.0,
-            "entry_price_high": 101.0,
+            "execution_price": 100.0,
+            "execution_price_low": 99.0,
+            "execution_price_high": 101.0,
             "target_price": None,
             "stop_loss": 95.0,
         },
@@ -446,9 +446,9 @@ def test_cover_short_accepts_an_execution_range_without_exit_prices() -> None:
         action="buy",
         confidence=0.8,
         price_plan={
-            "entry_price": 100.0,
-            "entry_price_low": 99.0,
-            "entry_price_high": 101.0,
+            "execution_price": 100.0,
+            "execution_price_low": 99.0,
+            "execution_price_high": 101.0,
             "target_price": None,
             "stop_loss": None,
         },
@@ -480,9 +480,9 @@ def test_closing_intent_rejects_time_stop_without_a_residual_position(
         action=action,
         confidence=0.8,
         price_plan={
-            "entry_price": 100.0,
-            "entry_price_low": 99.0,
-            "entry_price_high": 101.0,
+            "execution_price": 100.0,
+            "execution_price_low": 99.0,
+            "execution_price_high": 101.0,
             "target_price": None,
             "stop_loss": None,
         },
@@ -503,9 +503,9 @@ def test_closing_intent_rejects_time_stop_without_a_residual_position(
             "sell",
             "bearish",
             {
-                "entry_price": 100.0,
-                "entry_price_low": 99.0,
-                "entry_price_high": 101.0,
+                "execution_price": 100.0,
+                "execution_price_low": 99.0,
+                "execution_price_high": 101.0,
             },
         ),
         ("hold", "hold", "neutral", None),
@@ -546,9 +546,9 @@ def test_reduce_long_uses_long_position_price_semantics() -> None:
         action="sell",
         confidence=0.8,
         price_plan={
-            "entry_price": 100.0,
-            "entry_price_low": 99.0,
-            "entry_price_high": 101.0,
+            "execution_price": 100.0,
+            "execution_price_low": 99.0,
+            "execution_price_high": 101.0,
             "target_price": 110.0,
             "stop_loss": 95.0,
         },
@@ -576,9 +576,9 @@ def test_closing_intent_requires_no_residual_position_or_fabricated_exit_prices(
         action=action,
         confidence=0.8,
         price_plan={
-            "entry_price": 100.0,
-            "entry_price_low": 99.0,
-            "entry_price_high": 101.0,
+            "execution_price": 100.0,
+            "execution_price_low": 99.0,
+            "execution_price_high": 101.0,
             "target_price": 110.0,
             "stop_loss": 95.0,
         },
@@ -641,9 +641,9 @@ def test_valid_generated_plan_passes_policy_validation() -> None:
         action="sell",
         confidence=0.6,
         price_plan={
-            "entry_price": 100.0,
-            "entry_price_low": 99.0,
-            "entry_price_high": 101.0,
+            "execution_price": 100.0,
+            "execution_price_low": 99.0,
+            "execution_price_high": 101.0,
             "target_price": 90.0,
             "stop_loss": 106.0,
         },

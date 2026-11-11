@@ -33,7 +33,7 @@ def test_agent_context_creates_cache_and_tracing_middlewares(monkeypatch) -> Non
         "create_tracing_middlewares",
         lambda: sentinel_middlewares,
     )
-    monkeypatch.setattr(context_module, "get_latest_us_trading_date", lambda: "2026-07-21")
+    monkeypatch.setattr(context_module, "get_last_completed_us_session", lambda: "2026-07-21")
     monkeypatch.setattr(context_module, "OpenAICredential", lambda **_kwargs: object())
     response_model = MagicMock()
     response_model.Parameters = context_module.DashScopeResponseModel.Parameters
@@ -51,9 +51,9 @@ def test_tool_using_factory_receives_context_middlewares(monkeypatch) -> None:
 
     captured = {}
     context = SimpleNamespace(
-        company_of_interest="AAPL",
-        trade_date="2026-07-21",
-        latest_trading_date="2026-07-20",
+        ticker="AAPL",
+        analysis_date="2026-07-21",
+        last_completed_session="2026-07-20",
         model=object(),
         middlewares=[object()],
     )
@@ -80,9 +80,9 @@ def test_plain_factory_receives_context_middlewares(monkeypatch) -> None:
 
     captured = {}
     context = SimpleNamespace(
-        company_of_interest="AAPL",
-        trade_date="2026-07-21",
-        latest_trading_date="2026-07-20",
+        ticker="AAPL",
+        analysis_date="2026-07-21",
+        last_completed_session="2026-07-20",
         model=object(),
         middlewares=[object()],
         generate_risk_evaluation_context_md=lambda: "risk context",

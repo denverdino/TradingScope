@@ -17,7 +17,7 @@ from .models import AnalysisRecord
 class MarketBar:
     """One daily OHLC snapshot, including a possible current-session bar."""
 
-    trade_date: date
+    session_date: date
     open: float
     high: float
     low: float
@@ -35,7 +35,7 @@ class AssessmentStatus(StrEnum):
 
 @dataclass(frozen=True)
 class TradeAssessment:
-    """Observed outcome over an evaluation-session horizon from trade_date.
+    """Observed outcome over an evaluation-session horizon from the analysis date.
 
     For reduce_long, status and strategy_return describe only the sold portion's
     relative performance. Residual events carry no full-position return; a
@@ -44,10 +44,10 @@ class TradeAssessment:
 
     horizon_days: int
     status: AssessmentStatus
-    entry_triggered: bool
-    entry_price: float | None
+    filled: bool
+    fill_price: float | None
     exit_reason: str | None
-    benchmark_return: float
+    underlying_return: float
     strategy_return: float | None
     atr_threshold: float
     limitations: tuple[str, ...]
@@ -73,7 +73,7 @@ def parse_market_bars(csv_text: str) -> list[MarketBar]:
     seen_dates: set[date] = set()
     for row in reader:
         try:
-            trade_date = date.fromisoformat(row[date_field].strip())
+            session_date = date.fromisoformat(row[date_field].strip())
             raw_prices = {name: row[field] for name, field in required.items() if field is not None}
             if all(value is not None and not value.strip() for value in raw_prices.values()):
                 continue
@@ -82,12 +82,12 @@ def parse_market_bars(csv_text: str) -> list[MarketBar]:
             raise ValueError("invalid market bar") from exc
         if any(not math.isfinite(value) or value <= 0 for value in prices.values()):
             raise ValueError("market bar price must be finite and positive")
-        if trade_date in seen_dates:
-            raise ValueError(f"duplicate market date: {trade_date.isoformat()}")
-        seen_dates.add(trade_date)
-        bars.append(MarketBar(trade_date=trade_date, **prices))
+        if session_date in seen_dates:
+            raise ValueError(f"duplicate market date: {session_date.isoformat()}")
+        seen_dates.add(session_date)
+        bars.append(MarketBar(session_date=session_date, **prices))
 
-    return sorted(bars, key=lambda bar: bar.trade_date)
+    return sorted(bars, key=lambda bar: bar.session_date)
 
 
 def assess_trade(
@@ -99,10 +99,10 @@ def assess_trade(
     if type(horizon_days) is not int or horizon_days not in (1, 3, 5):
         raise ValueError(f"Invalid evaluation horizon {horizon_days}; allowed horizons are 1, 3, 5.")
 
-    analysis_date = date.fromisoformat(record.trade_date)
-    ordered_bars = sorted(bars, key=lambda bar: bar.trade_date)
-    history = [bar for bar in ordered_bars if bar.trade_date < analysis_date]
-    evaluation_bars = [bar for bar in ordered_bars if bar.trade_date >= analysis_date]
+    analysis_date = date.fromisoformat(record.analysis_date)
+    ordered_bars = sorted(bars, key=lambda bar: bar.session_date)
+    history = [bar for bar in ordered_bars if bar.session_date < analysis_date]
+    evaluation_bars = [bar for bar in ordered_bars if bar.session_date >= analysis_date]
     if len(history) < 15 or len(evaluation_bars) < horizon_days:
         return None
 
@@ -110,14 +110,14 @@ def assess_trade(
     atr = _average_true_range(history[-15:])
     atr_threshold = atr / reference_bar.close * math.sqrt(horizon_days)
     horizon_bar = evaluation_bars[horizon_days - 1]
-    benchmark_return = (horizon_bar.close - reference_bar.close) / reference_bar.close
-    status = _direction_status(record.direction, benchmark_return, atr_threshold)
+    underlying_return = (horizon_bar.close - reference_bar.close) / reference_bar.close
+    status = _direction_status(record.direction, underlying_return, atr_threshold)
 
     if record.trade_intent is None or record.intent_inferred:
         return _direction_only_assessment(
             horizon_days,
             status,
-            benchmark_return,
+            underlying_return,
             atr_threshold,
             "No explicit historical trade intent; direction-only assessment.",
         )
@@ -125,7 +125,7 @@ def assess_trade(
         return _direction_only_assessment(
             horizon_days,
             status,
-            benchmark_return,
+            underlying_return,
             atr_threshold,
             "Hold intent produces no new execution simulation.",
         )
@@ -152,17 +152,17 @@ def assess_trade(
         return TradeAssessment(
             horizon_days=horizon_days,
             status=AssessmentStatus.NOT_FILLED,
-            entry_triggered=False,
-            entry_price=None,
+            filled=False,
+            fill_price=None,
             exit_reason="not_filled",
-            benchmark_return=benchmark_return,
+            underlying_return=underlying_return,
             strategy_return=None,
             atr_threshold=atr_threshold,
             limitations=limitations,
             strategy_return_basis=return_basis,
         )
 
-    fill_index, execution_price = fill
+    fill_index, fill_price = fill
     residual_exit_reason = None
     residual_exit_date = None
     residual_exit_price = None
@@ -171,10 +171,10 @@ def assess_trade(
             record,
             future_window,
             fill_index,
-            execution_price,
+            fill_price,
         )
     elif record.trade_intent in {"reduce_long", "close_long"}:
-        strategy_return = (execution_price - horizon_bar.close) / execution_price
+        strategy_return = (fill_price - horizon_bar.close) / fill_price
         exit_reason = "execution"
         if record.trade_intent == "reduce_long":
             if record.position_advice == "none":
@@ -185,7 +185,7 @@ def assess_trade(
                 limitations += ("Reduction filled after the time-stop deadline; pre-reduction position exits are not simulated.",)
             else:
                 residual_bar, residual_exit_price, residual_exit_reason = _simulate_position_exit(record, future_window, fill_index, is_long=True)
-                residual_exit_date = residual_bar.trade_date.isoformat()
+                residual_exit_date = residual_bar.session_date.isoformat()
                 limitations += (
                     "Residual exits assume the position remains after reduction. Daily OHLC cannot determine same-session event order; "
                     "stop_loss precedes target and time_stop. A horizon result is a valuation, not an exit.",
@@ -193,13 +193,13 @@ def assess_trade(
                 if residual_exit_reason == "horizon":
                     limitations += ("Residual time-stop deadline is beyond the evaluation horizon; no time-stop exit is simulated yet.",)
     elif record.trade_intent == "cover_short":
-        strategy_return = (horizon_bar.close - execution_price) / execution_price
+        strategy_return = (horizon_bar.close - fill_price) / fill_price
         exit_reason = "execution"
     else:
         return _direction_only_assessment(
             horizon_days,
             status,
-            benchmark_return,
+            underlying_return,
             atr_threshold,
             f"Unsupported trade intent {record.trade_intent!r}; direction-only assessment.",
         )
@@ -207,10 +207,10 @@ def assess_trade(
     return TradeAssessment(
         horizon_days=horizon_days,
         status=_strategy_status(strategy_return, atr_threshold),
-        entry_triggered=True,
-        entry_price=execution_price,
+        filled=True,
+        fill_price=fill_price,
         exit_reason=exit_reason,
-        benchmark_return=benchmark_return,
+        underlying_return=underlying_return,
         strategy_return=strategy_return,
         atr_threshold=atr_threshold,
         limitations=limitations,
@@ -224,17 +224,17 @@ def assess_trade(
 def _direction_only_assessment(
     horizon_days: int,
     status: AssessmentStatus,
-    benchmark_return: float,
+    underlying_return: float,
     atr_threshold: float,
     limitation: str,
 ) -> TradeAssessment:
     return TradeAssessment(
         horizon_days=horizon_days,
         status=status,
-        entry_triggered=False,
-        entry_price=None,
+        filled=False,
+        fill_price=None,
         exit_reason=None,
-        benchmark_return=benchmark_return,
+        underlying_return=underlying_return,
         strategy_return=None,
         atr_threshold=atr_threshold,
         limitations=(limitation,),
@@ -245,16 +245,16 @@ def _first_fill(
     record: AnalysisRecord,
     future_bars: Sequence[MarketBar],
 ) -> tuple[int, float] | None:
-    if record.entry_price is None:
+    if record.execution_price is None:
         return None
-    range_low = record.entry_price_low if record.entry_price_low is not None else record.entry_price
-    range_high = record.entry_price_high if record.entry_price_high is not None else record.entry_price
+    range_low = record.execution_price_low if record.execution_price_low is not None else record.execution_price
+    range_high = record.execution_price_high if record.execution_price_high is not None else record.execution_price
     for index, bar in enumerate(future_bars):
         intersection_low = max(range_low, bar.low)
         intersection_high = min(range_high, bar.high)
         if intersection_low <= intersection_high:
-            execution_price = min(max(record.entry_price, intersection_low), intersection_high)
-            return index, execution_price
+            fill_price = min(max(record.execution_price, intersection_low), intersection_high)
+            return index, fill_price
     return None
 
 
@@ -262,11 +262,11 @@ def _simulate_open_trade(
     record: AnalysisRecord,
     future_bars: Sequence[MarketBar],
     fill_index: int,
-    execution_price: float,
+    fill_price: float,
 ) -> tuple[float, str]:
     is_long = record.trade_intent == "open_long"
     _bar, exit_price, exit_reason = _simulate_position_exit(record, future_bars, fill_index, is_long=is_long)
-    return _directional_return(is_long, execution_price, exit_price), exit_reason
+    return _directional_return(is_long, fill_price, exit_price), exit_reason
 
 
 def _simulate_position_exit(
@@ -291,10 +291,10 @@ def _simulate_position_exit(
     return future_bars[-1], future_bars[-1].close, "horizon"
 
 
-def _directional_return(is_long: bool, entry_price: float, exit_price: float) -> float:
+def _directional_return(is_long: bool, fill_price: float, exit_price: float) -> float:
     if is_long:
-        return (exit_price - entry_price) / entry_price
-    return (entry_price - exit_price) / entry_price
+        return (exit_price - fill_price) / fill_price
+    return (fill_price - exit_price) / fill_price
 
 
 def _strategy_status(strategy_return: float, threshold: float) -> AssessmentStatus:
@@ -319,19 +319,19 @@ def _average_true_range(history: Sequence[MarketBar]) -> float:
     return sum(true_ranges) / len(true_ranges)
 
 
-def _direction_status(direction: str, actual_return: float, threshold: float) -> AssessmentStatus:
+def _direction_status(direction: str, underlying_return: float, threshold: float) -> AssessmentStatus:
     if direction == "bullish":
-        if actual_return > threshold:
+        if underlying_return > threshold:
             return AssessmentStatus.CORRECT
-        if actual_return < -threshold:
+        if underlying_return < -threshold:
             return AssessmentStatus.INCORRECT
         return AssessmentStatus.INCONCLUSIVE
     if direction == "bearish":
-        if actual_return < -threshold:
+        if underlying_return < -threshold:
             return AssessmentStatus.CORRECT
-        if actual_return > threshold:
+        if underlying_return > threshold:
             return AssessmentStatus.INCORRECT
         return AssessmentStatus.INCONCLUSIVE
-    if -threshold <= actual_return <= threshold:
+    if -threshold <= underlying_return <= threshold:
         return AssessmentStatus.CORRECT
     return AssessmentStatus.INCORRECT

@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from tests.test_output_models import _all_outputs
 from tradingscope.agents.researchers.debate_orchestrator import ResearchDebateOrchestrator
-from tradingscope.agents.risk_mgmt.debate_orchestrator import RiskDebateOrchestrator, create_debate_orchestrator
+from tradingscope.agents.risk_mgmt.debate_orchestrator import RiskDebateOrchestrator, create_risk_debate_orchestrator
 
 
 class MockAgent:
@@ -41,9 +41,9 @@ class TestRiskDebateOrchestrator:
         self.structured_runner = SimpleNamespace(run=AsyncMock())
         self.max_rounds = 2
 
-    def test_create_debate_orchestrator_success(self):
+    def test_create_risk_debate_orchestrator_success(self):
         """Test that debate orchestrator can be created successfully."""
-        orchestrator = create_debate_orchestrator(
+        orchestrator = create_risk_debate_orchestrator(
             aggressive_agent=self.mock_aggressive_agent,
             conservative_agent=self.mock_conservative_agent,
             neutral_agent=self.mock_neutral_agent,

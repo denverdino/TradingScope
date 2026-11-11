@@ -112,17 +112,17 @@ class ResearchDebateOrchestrator:
 
     async def run_debate(
         self,
-        company_name: str,
+        ticker: str,
     ):
         """Run the complete multi-agent debate and return the final decision.
 
         Args:
-            company_name: Name of the company being analyzed
+            ticker: Stock ticker being analyzed
 
         Returns:
             Final decision Msg from the research manager
         """
-        logger.info(f"🚀 Starting research debate for {company_name}")
+        logger.info(f"🚀 Starting research debate for {ticker}")
 
         for round_num in range(1, self.max_rounds + 1):
             logger.info(f"🔄 Starting research debate round {round_num}")

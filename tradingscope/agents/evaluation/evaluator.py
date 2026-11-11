@@ -53,13 +53,13 @@ _LESSON_PROMPT = """你是一位客观的投资分析评测专家。请解释已
 
 ## 分析记录
 - 股票: {ticker}
-- 分析日期: {trade_date}
+- 分析日期: {analysis_date}
 - 预测方向: {direction}
 - 操作建议: {action}
 - 交易意图: {trade_intent}
 - 仓位建议: {position_advice}
 - 置信度: {confidence:.0%}
-- 入场价: {entry_price}
+- 执行价: {execution_price}
 - 目标价: {target_price}
 - 止损价: {stop_loss}
 - 核心理由: {reasoning}
@@ -70,9 +70,9 @@ _LESSON_PROMPT = """你是一位客观的投资分析评测专家。请解释已
 ## 客观评估结果
 - 评估周期: {horizon_days}个交易日
 - 客观状态: {status}
-- 是否模拟成交: {entry_triggered}
-- 模拟成交价: {actual_entry_price}
-- 基准收益率: {benchmark_return}
+- 是否模拟成交: {filled}
+- 模拟成交价: {fill_price}
+- 标的收益率: {underlying_return}
 - 策略收益率: {strategy_return}
 - 收益口径: {strategy_return_basis}
 - 剩余仓位模拟事件（horizon仅表示期末估值）: {residual_exit}
@@ -82,20 +82,20 @@ _LESSON_PROMPT = """你是一位客观的投资分析评测专家。请解释已
 
 ## 输出要求
 请用中文输出，严格控制在450字符以内。格式如下：
-[{ticker}|{trade_date}|{horizon_days}日]
+[{ticker}|{analysis_date}|{horizon_days}日]
 评估结果: (解释客观评估状态及交易计划的执行情况，1-2句)
 经验教训: (核心经验教训，2-3句)
 
 不得改变上述客观状态。不得把原始分析未提及的信息包装成预测依据。
 必须区分方向判断与交易计划可执行性。状态为not_filled时只评价执行计划，不得评价为方向错误。
-correct只表示满足程序判定标准；若策略收益率为“-”，不得据此声称策略盈利、跑赢基准或整体计划有效。
+correct只表示满足程序判定标准；若策略收益率为“-”，不得据此声称策略盈利、跑赢标的或整体计划有效。
 状态为inconclusive时，不得给出确定性的成功或失败结论，也不得使用“有效”“成功”“正确”“验证”等确定性表述；不得把方向判断、执行质量、风控组件或整体策略描述为已验证、有效、成功或正确。
-当是否成交为否且基准收益率为正时，不得使用“规避上涨”或“规避风险”，也不得声称未成交计划避免、降低、防范或保护了任何风险；不得据此得出风险已被规避的结论；应说明未产生新交易收益，并可解释未成交原因、机会成本及适用限制。
+当是否成交为否且标的收益率为正时，不得使用“规避上涨”或“规避风险”，也不得声称未成交计划避免、降低、防范或保护了任何风险；不得据此得出风险已被规避的结论；应说明未产生新交易收益，并可解释未成交原因、机会成本及适用限制。
 trade_intent为hold时，hold不会模拟目标价、止损价或时间止损。仓位建议为none时只说明未执行新交易；仓位建议非none时还必须说明现有仓位及其风控执行未被本次评测模拟。
 评估限制不为“无”时，只评价已经模拟的部分，不得把部分结果扩展为完整交易计划或组合收益的结论。
 reduce_long的策略收益率仅衡量减仓部分卖出后的相对避险收益或机会成本，客观状态只评价该指标；不得将其称为完整持仓收益。
 剩余仓位退出日期和价格是OHLC模拟事件，不是实际成交；缺少数量、减仓比例和持仓成本时不得计算或推断完整持仓收益。
-基准收益率仅按其实际用途解释，不得仅因策略跑赢或落后基准而改变客观状态。
+标的收益率仅按其实际用途解释，不得仅因策略跑赢或落后标的而改变客观状态。
 经验教训只能来自原始分析和上述客观评估数据，不得编造新的市场事实、因果机制或已执行动作。
 不要使用Markdown格式，直接输出纯文本。"""
 
@@ -155,7 +155,7 @@ class AnalysisEvaluator:
 
         Args:
             tickers: List of stock symbols to evaluate (optional)
-            date: Filter by trade date (optional)
+            date: Filter by analysis date (optional)
 
         Returns:
             List of EvaluationResult with ticker, evaluation and lesson fields
@@ -174,7 +174,7 @@ class AnalysisEvaluator:
                 logger.warning(
                     "[Evaluator] Error evaluating %s/%s: %s",
                     record.ticker,
-                    record.trade_date,
+                    record.analysis_date,
                     e,
                 )
 
@@ -193,9 +193,9 @@ class AnalysisEvaluator:
         if not self._ensure_data_imports():
             return []
 
-        trade_date = datetime.strptime(record.trade_date, "%Y-%m-%d")
-        start_date = (trade_date - timedelta(days=35)).strftime("%Y-%m-%d")
-        end_date = (trade_date + timedelta(days=14)).strftime("%Y-%m-%d")
+        analysis_datetime = datetime.strptime(record.analysis_date, "%Y-%m-%d")
+        start_date = (analysis_datetime - timedelta(days=35)).strftime("%Y-%m-%d")
+        end_date = (analysis_datetime + timedelta(days=14)).strftime("%Y-%m-%d")
 
         stock_data = self._get_stock_data(record.ticker, start_date, end_date)
         if not stock_data or "Error" in str(stock_data):
@@ -208,13 +208,13 @@ class AnalysisEvaluator:
             logger.warning("[Evaluator] Invalid stock data for %s: %s", record.ticker, exc)
             return []
 
-        analysis_date = trade_date.date()
-        history_count = sum(bar.trade_date < analysis_date for bar in bars)
-        evaluation_session_count = sum(bar.trade_date >= analysis_date for bar in bars)
+        analysis_date = analysis_datetime.date()
+        history_count = sum(bar.session_date < analysis_date for bar in bars)
+        evaluation_session_count = sum(bar.session_date >= analysis_date for bar in bars)
 
         results: List[EvaluationResult] = []
         for horizon_days in (1, 3, 5):
-            if self._record_store.is_evaluated(record.ticker, record.trade_date, horizon_days):
+            if self._record_store.is_evaluated(record.ticker, record.analysis_date, horizon_days):
                 continue
             try:
                 assessment = assess_trade(record, bars, horizon_days)
@@ -223,7 +223,7 @@ class AnalysisEvaluator:
                         "[Evaluator] Skipping %s/%s/%s: insufficient market data "
                         "(history=%s, required_history=15, evaluation_sessions=%s, required_sessions=%s)",
                         record.ticker,
-                        record.trade_date,
+                        record.analysis_date,
                         horizon_days,
                         history_count,
                         evaluation_session_count,
@@ -244,14 +244,14 @@ class AnalysisEvaluator:
                         logger.info(
                             "[Evaluator] Stored lesson for %s/%s/%s (type=%s, weight=%.2f)",
                             record.ticker,
-                            record.trade_date,
+                            record.analysis_date,
                             horizon_days,
                             lesson_type,
                             weight,
                         )
 
                 if not self._dry_run:
-                    self._record_store.mark_evaluated(record.ticker, record.trade_date, horizon_days)
+                    self._record_store.mark_evaluated(record.ticker, record.analysis_date, horizon_days)
 
                 if lesson_content:
                     evaluation, lesson = _parse_evaluation_and_lesson(lesson_content)
@@ -263,11 +263,11 @@ class AnalysisEvaluator:
                         ticker=record.ticker,
                         evaluation=evaluation,
                         lesson=lesson,
-                        trade_date=record.trade_date,
+                        analysis_date=record.analysis_date,
                         horizon_days=horizon_days,
                         status=assessment.status.value,
-                        entry_triggered=assessment.entry_triggered,
-                        benchmark_return=assessment.benchmark_return,
+                        filled=assessment.filled,
+                        underlying_return=assessment.underlying_return,
                         strategy_return=assessment.strategy_return,
                         strategy_return_basis=assessment.strategy_return_basis,
                         residual_exit_reason=assessment.residual_exit_reason,
@@ -280,7 +280,7 @@ class AnalysisEvaluator:
                 logger.warning(
                     "[Evaluator] Error evaluating %s/%s/%s: %s",
                     record.ticker,
-                    record.trade_date,
+                    record.analysis_date,
                     horizon_days,
                     exc,
                 )
@@ -296,22 +296,22 @@ class AnalysisEvaluator:
 
         prompt = _LESSON_PROMPT.format(
             ticker=record.ticker,
-            trade_date=record.trade_date,
+            analysis_date=record.analysis_date,
             direction=record.direction,
             action=record.action,
             trade_intent=record.trade_intent or "-",
             position_advice=record.position_advice or "-",
             confidence=record.confidence,
-            entry_price=record.entry_price or "-",
+            execution_price=record.execution_price or "-",
             target_price=record.target_price or "-",
             stop_loss=record.stop_loss or "-",
             reasoning=record.reasoning or "-",
             report_excerpt=record.final_decision_summary or "-",
             horizon_days=assessment.horizon_days,
             status=assessment.status.value,
-            entry_triggered="是" if assessment.entry_triggered else "否",
-            actual_entry_price=_format_price(assessment.entry_price),
-            benchmark_return=f"{assessment.benchmark_return:+.2%}",
+            filled="是" if assessment.filled else "否",
+            fill_price=_format_price(assessment.fill_price),
+            underlying_return=f"{assessment.underlying_return:+.2%}",
             strategy_return=_format_percent(assessment.strategy_return),
             strategy_return_basis=assessment.strategy_return_basis or "-",
             residual_exit=_format_residual_exit(assessment),
@@ -358,12 +358,12 @@ def _format_percent(value: float | None) -> str:
 
 def _format_objective_evaluation(assessment: TradeAssessment) -> str:
     """Format the computed market outcome when LLM enrichment is unavailable."""
-    entry_triggered = "是" if assessment.entry_triggered else "否"
+    filled = "是" if assessment.filled else "否"
     return_label = "减仓部分相对表现" if assessment.strategy_return_basis == "exit_relative_performance" else "策略收益率"
     fill_label = "是否模拟成交" if assessment.strategy_return_basis == "exit_relative_performance" else "是否成交"
     evaluation = (
-        f"客观状态: {assessment.status.value}；{fill_label}: {entry_triggered}；"
-        f"基准收益率: {assessment.benchmark_return:+.2%}；"
+        f"客观状态: {assessment.status.value}；{fill_label}: {filled}；"
+        f"标的收益率: {assessment.underlying_return:+.2%}；"
         f"{return_label}: {_format_percent(assessment.strategy_return)}"
     )
     if assessment.strategy_return_basis == "exit_relative_performance":

@@ -13,7 +13,7 @@ def _progressive_results() -> list:
             ticker="AAPL",
             evaluation="one-day evaluation",
             lesson="one-day lesson",
-            trade_date="2025-01-20",
+            analysis_date="2025-01-20",
             horizon_days=1,
             status="correct",
         ),
@@ -21,7 +21,7 @@ def _progressive_results() -> list:
             ticker="AAPL",
             evaluation="three-day evaluation",
             lesson="three-day lesson",
-            trade_date="2025-01-20",
+            analysis_date="2025-01-20",
             horizon_days=3,
             status="inconclusive",
         ),
@@ -29,7 +29,7 @@ def _progressive_results() -> list:
             ticker="AAPL",
             evaluation="next-day evaluation",
             lesson="next-day lesson",
-            trade_date="2025-01-21",
+            analysis_date="2025-01-21",
             horizon_days=1,
             status="inconclusive",
         ),
@@ -121,7 +121,7 @@ def test_run_reports_when_no_mature_results_are_available() -> None:
     logger.info.assert_any_call("No mature evaluation results available")
 
 
-def test_run_labels_progressive_results_with_trade_date_horizon_and_status() -> None:
+def test_run_labels_progressive_results_with_analysis_date_horizon_and_status() -> None:
     from tradingscope import evaluate as evaluate_module
 
     context = SimpleNamespace(non_thinking_model=object(), middlewares=[])
@@ -154,7 +154,7 @@ def test_run_labels_progressive_results_with_trade_date_horizon_and_status() -> 
     assert "[AAPL|2025-01-21|1日|inconclusive]" in rendered_logs
 
 
-def test_evaluation_email_groups_progressive_results_by_trade_date() -> None:
+def test_evaluation_email_groups_progressive_results_by_analysis_date() -> None:
     from tradingscope import evaluate as evaluate_module
 
     send_html_email = Mock()

@@ -27,15 +27,15 @@ class RiskDebateOrchestrator:
         """Initialize the debate orchestrator.
 
         Args:
-            aggressive_agent: Aggressive debator agent
-            conservative_agent: Conservative debator agent
-            neutral_agent: Neutral debator agent
+            aggressive_agent: Aggressive debater agent
+            conservative_agent: Conservative debater agent
+            neutral_agent: Neutral debater agent
             portfolio_manager: Portfolio manager agent
             max_rounds: Maximum number of debate rounds
         """
         self.max_rounds = max_rounds
 
-        # Create the debator agents
+        # Create the debater agents
         self.aggressive_agent = aggressive_agent
         self.conservative_agent = conservative_agent
         self.neutral_agent = neutral_agent
@@ -45,7 +45,7 @@ class RiskDebateOrchestrator:
         self.structured_runner = structured_runner
         self.reference_outputs = tuple(reference_outputs)
 
-        logger.info("✅ Risk Debate Orchestrator initialized with 3 debators and 1 portfolio manager")
+        logger.info("✅ Risk Debate Orchestrator initialized with 3 debaters and 1 portfolio manager")
 
     def _get_round_prompts(self, round_num: int) -> tuple[UserMsg, UserMsg, UserMsg]:
         """根据辩论轮次返回不同阶段的提示词。
@@ -143,36 +143,36 @@ class RiskDebateOrchestrator:
 
     async def run_debate(
         self,
-        company_name: str,
+        ticker: str,
     ):
         """Run the complete multi-agent debate and return the final decision.
 
         Args:
-            company_name: Name of the company being analyzed
+            ticker: Stock ticker being analyzed
 
         Returns:
             Final decision Msg from the portfolio manager
         """
-        logger.info(f"🚀 Starting risk management debate for {company_name}")
+        logger.info(f"🚀 Starting risk management debate for {ticker}")
 
         for round_num in range(1, self.max_rounds + 1):
             logger.info(f"🔄 Starting risk management debate round {round_num}")
 
             aggressive_prompt, conservative_prompt, neutral_prompt = self._get_round_prompts(round_num)
 
-            # Aggressive debator speaks
+            # Aggressive debater speaks
             agg_response = await call_agent_with_retry(self.aggressive_agent, aggressive_prompt)
             await self.conservative_agent.observe(agg_response)
             await self.neutral_agent.observe(agg_response)
             await self.portfolio_manager.observe(agg_response)
 
-            # Conservative debator speaks
+            # Conservative debater speaks
             con_response = await call_agent_with_retry(self.conservative_agent, conservative_prompt)
             await self.aggressive_agent.observe(con_response)
             await self.neutral_agent.observe(con_response)
             await self.portfolio_manager.observe(con_response)
 
-            # Neutral debator speaks
+            # Neutral debater speaks
             neu_response = await call_agent_with_retry(self.neutral_agent, neutral_prompt)
             await self.aggressive_agent.observe(neu_response)
             await self.conservative_agent.observe(neu_response)
@@ -214,7 +214,7 @@ class RiskDebateOrchestrator:
         return final_decision
 
 
-def create_debate_orchestrator(
+def create_risk_debate_orchestrator(
     aggressive_agent,
     conservative_agent,
     neutral_agent,
@@ -226,9 +226,9 @@ def create_debate_orchestrator(
     """Create a risk management debate orchestrator.
 
     Args:
-        aggressive_agent: Aggressive debator agent
-        conservative_agent: Conservative debator agent
-        neutral_agent: Neutral debator agent
+        aggressive_agent: Aggressive debater agent
+        conservative_agent: Conservative debater agent
+        neutral_agent: Neutral debater agent
         portfolio_manager: Portfolio manager agent
         max_rounds: Maximum number of debate rounds
 

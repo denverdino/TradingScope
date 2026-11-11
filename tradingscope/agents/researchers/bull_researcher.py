@@ -26,25 +26,22 @@ def create_bull_researcher_agent(
     Returns:
         Agent: 配置好的看涨研究员代理
     """
-    company_of_interest = context.company_of_interest
-    trade_date = context.trade_date
-    latest_trading_date = context.latest_trading_date
-    company_name = company_of_interest
+    ticker = context.ticker
+    analysis_date = context.analysis_date
+    last_completed_session = context.last_completed_session
 
     # 获取市场信息
-    market_info = StockUtils.get_market_info(company_name)
+    market_info = StockUtils.get_market_info(ticker)
     currency = market_info["currency_name"]
     currency_symbol = market_info["currency_symbol"]
 
-    current_date = trade_date
-
     # 构建系统提示词
-    role_instructions = f"""你是一位看涨分析师，负责为股票 {company_name} 的投资建立强有力的论证。
+    role_instructions = f"""你是一位看涨分析师，负责为股票 {ticker} 的投资建立强有力的论证。
 
 ⚠️ 重要提醒：
 当前分析的是 {market_info["market_name"]}，所有价格和估值请使用 {currency}（{currency_symbol}）作为单位。
-当前日期是 {current_date}
-最新美股交易日期是 {latest_trading_date}
+分析日期是 {analysis_date}
+最近完成交易日是 {last_completed_session}
 
 
 你的任务是在辩论中担任正方角色，构建基于证据的强有力案例，强调增长潜力、竞争优势和积极的市场指标。你需要：

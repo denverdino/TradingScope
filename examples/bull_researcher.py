@@ -10,7 +10,7 @@ from tradingscope.agents.utils.context import AgentContext
 
 async def main():
     context = AgentContext()
-    context.company_of_interest = "AAPL"
+    context.ticker = "AAPL"
     context.market_report = "Market report content here"
     context.sentiment_report = "Sentiment report content here"
     context.news_report = "News report content here"

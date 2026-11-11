@@ -1,4 +1,4 @@
-"""Aggressive Risk Debator Agent for TradingScope using AgentScope ReAct framework."""
+"""Aggressive Risk Debater Agent for TradingScope using AgentScope ReAct framework."""
 
 from __future__ import annotations
 
@@ -15,21 +15,21 @@ from tradingscope.agents.utils.decision_policy import MARKET_REGIME_DECISION_POL
 from tradingscope.agents.utils.prompt_cache import build_cacheable_system_prompt
 
 
-def create_aggressive_debator_agent(
+def create_aggressive_debater_agent(
     context: AgentContext,
-    name: str = "AggressiveRiskDebator",
+    name: str = "AggressiveRiskDebater",
 ) -> Agent:
-    """Create an AgentScope ReAct agent for the aggressive risk debator.
+    """Create an AgentScope ReAct agent for the aggressive risk debater.
 
     Args:
         model: The language model to use for the agent
         context: AgentContext containing all necessary context information
-        name: The name of the agent (default: "AggressiveRiskDebator")
+        name: The name of the agent (default: "AggressiveRiskDebater")
 
     Returns:
         A configured ReActAgent instance
     """
-    company_of_interest = context.company_of_interest
+    ticker = context.ticker
 
     role_instructions = f"""{SHORT_HORIZON_DECISION_POLICY}
 
@@ -41,7 +41,7 @@ def create_aggressive_debator_agent(
 请不要虚构，只需提出您的观点。
 积极参与，解决提出的任何具体担忧，反驳他们逻辑中的弱点，并断言承担风险的好处以超越市场常规。专注于辩论和说服，而不仅仅是呈现数据。挑战每个反驳点，强调为什么高风险方法是最优的。请用中文以对话方式输出，就像您在说话一样，不使用任何特殊格式。
 
-公司名称：{company_of_interest}"""
+股票代码：{ticker}"""
     prompt = build_cacheable_system_prompt(
         shared_context=context.generate_risk_evaluation_context_md(),
         role_instructions=role_instructions,

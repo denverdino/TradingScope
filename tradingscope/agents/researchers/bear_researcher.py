@@ -24,24 +24,21 @@ def create_bear_researcher_agent(
     Returns:
         Agent: 配置好的看跌研究员代理
     """
-    company_of_interest = context.company_of_interest
-    trade_date = context.trade_date
-    latest_trading_date = context.latest_trading_date
+    ticker = context.ticker
+    analysis_date = context.analysis_date
+    last_completed_session = context.last_completed_session
 
-    company_name = company_of_interest
-    market_info = StockUtils.get_market_info(company_name)
+    market_info = StockUtils.get_market_info(ticker)
     currency = market_info["currency_name"]
     currency_symbol = market_info["currency_symbol"]
 
-    current_date = trade_date
-
     # 构建系统提示词
-    role_instructions = f"""你是一位看跌分析师，负责论证不投资股票 {company_name} 的理由。
+    role_instructions = f"""你是一位看跌分析师，负责论证不投资股票 {ticker} 的理由。
 
 ⚠️ 重要提醒：
 当前分析的是 {market_info["market_name"]}，所有价格和估值请使用 {currency}（{currency_symbol}）作为单位。
-当前日期是 {current_date}
-最新美股交易日期是 {latest_trading_date}
+分析日期是 {analysis_date}
+最近完成交易日是 {last_completed_session}
 
 你的目标是在辩论中担任反方角色，提出合理的论证，强调风险、挑战和负面指标。你需要：
 

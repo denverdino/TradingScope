@@ -70,11 +70,11 @@ def _get_client():
     return _client
 
 
-def _upload_report(trade_date: str, ticker: str, agent_name: str, content: str) -> bool:
+def _upload_report(analysis_date: str, ticker: str, agent_name: str, content: str) -> bool:
     """Upload a single report to OSS (blocking).
 
     Args:
-        trade_date: Trading date, e.g. "2026-02-16"
+        analysis_date: Analysis date, e.g. "2026-02-16"
         ticker: Stock ticker, e.g. "MSFT"
         agent_name: Agent name, e.g. "market_analyst"
         content: Markdown report content
@@ -88,7 +88,7 @@ def _upload_report(trade_date: str, ticker: str, agent_name: str, content: str) 
     if client is None:
         return False
 
-    key = f"tradingscope/{trade_date}/{ticker}/{agent_name}.md"
+    key = f"tradingscope/{analysis_date}/{ticker}/{agent_name}.md"
     try:
         client.put_object(
             oss.PutObjectRequest(
@@ -105,16 +105,16 @@ def _upload_report(trade_date: str, ticker: str, agent_name: str, content: str) 
         return False
 
 
-async def upload_report(trade_date: str, ticker: str, agent_name: str, content: str) -> bool:
+async def upload_report(analysis_date: str, ticker: str, agent_name: str, content: str) -> bool:
     """Upload a single report to OSS (async wrapper)."""
-    return await _run_blocking_oss_operation(_upload_report, trade_date, ticker, agent_name, content)
+    return await _run_blocking_oss_operation(_upload_report, analysis_date, ticker, agent_name, content)
 
 
-async def upload_reports(trade_date: str, ticker: str, reports: Dict[str, str]) -> Dict[str, bool]:
+async def upload_reports(analysis_date: str, ticker: str, reports: Dict[str, str]) -> Dict[str, bool]:
     """Upload multiple agent reports to OSS concurrently.
 
     Args:
-        trade_date: Trading date, e.g. "2026-02-16"
+        analysis_date: Analysis date, e.g. "2026-02-16"
         ticker: Stock ticker, e.g. "MSFT"
         reports: Mapping of agent_name -> report content
 
@@ -127,7 +127,7 @@ async def upload_reports(trade_date: str, ticker: str, reports: Dict[str, str]) 
     if _get_client() is None:
         return dict.fromkeys(reports, False)
 
-    tasks = {name: upload_report(trade_date, ticker, name, content) for name, content in reports.items() if content}
+    tasks = {name: upload_report(analysis_date, ticker, name, content) for name, content in reports.items() if content}
     results = {}
     for name, task in tasks.items():
         results[name] = await task

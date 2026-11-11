@@ -24,9 +24,9 @@ def create_news_analyst_agent(
     创建用于新闻分析的新闻分析师 Agent
     """
     # Extract values from context
-    ticker = context.company_of_interest
-    trade_date = context.trade_date
-    latest_trading_date = context.latest_trading_date
+    ticker = context.ticker
+    analysis_date = context.analysis_date
+    last_completed_session = context.last_completed_session
 
     # 获取市场信息
     market_info = StockUtils.get_market_info(ticker)
@@ -42,8 +42,6 @@ def create_news_analyst_agent(
             FunctionTool(get_global_news),
         ]
     )
-
-    current_date = trade_date
 
     # 获取工具名称
     tool_names = ", ".join(t.name for t in toolkit.tool_groups[0].tools)
@@ -77,8 +75,8 @@ def create_news_analyst_agent(
 - 股票代码：{ticker}
 - 所属市场：{market_info["market_name"]}
 - 计价货币：{market_info["currency_name"]}（{market_info["currency_symbol"]}）
-- 当前日期：{current_date}
-- 最新美股交易日期：{latest_trading_date}
+- 分析日期：{analysis_date}
+- 最近完成交易日：{last_completed_session}
 
 
 **主要职责包括：**

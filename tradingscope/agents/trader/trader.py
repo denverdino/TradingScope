@@ -29,24 +29,21 @@ def create_trader_agent(
     返回:
         配置好的Agent实例
     """
-    company_of_interest = context.company_of_interest
-    trade_date = context.trade_date
-    latest_trading_date = context.latest_trading_date
+    ticker = context.ticker
+    analysis_date = context.analysis_date
+    last_completed_session = context.last_completed_session
 
     # 使用统一的股票类型检测
-    market_info = StockUtils.get_market_info(company_of_interest)
-    company_name = get_company_name(company_of_interest, market_info)
+    market_info = StockUtils.get_market_info(ticker)
+    company_name = get_company_name(ticker, market_info)
 
     # 根据股票类型确定货币单位
     currency = market_info["currency_name"]
     currency_symbol = market_info["currency_symbol"]
 
     logger.debug("💰 [DEBUG] ===== 交易员节点开始 =====")
-    logger.debug(f"💰 [DEBUG] 交易员检测股票类型: {company_of_interest} -> {market_info['market_name']}, 货币: {currency}")
+    logger.debug(f"💰 [DEBUG] 交易员检测股票类型: {ticker} -> {market_info['market_name']}, 货币: {currency}")
     logger.debug(f"💰 [DEBUG] 货币符号: {currency_symbol}")
-
-    # 构建系统提示词
-    current_date = trade_date
 
     # 构建完整的系统提示 - 聚焦短期技术面交易
     system_prompt = f"""{COMPLIANCE_PROMPT}
@@ -60,9 +57,9 @@ def create_trader_agent(
 你是一位专业的**短期交易员**，负责根据研究经理投资建议，基于技术面分析制定具体的交易操作计划。你的交易周期是 **1-5 个交易日**，需要按交易意图给出适用的执行字段。
 
 ⚠️ 重要提醒：
-- 当前日期：{current_date}
-- 最新美股交易日期：{latest_trading_date}
-- 股票代码：{company_of_interest}
+- 分析日期：{analysis_date}
+- 最近完成交易日：{last_completed_session}
+- 股票代码：{ticker}
 - 公司名称：{company_name}
 - 货币单位：{currency}（{currency_symbol}）
 

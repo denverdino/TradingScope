@@ -10,7 +10,7 @@ from tradingscope.agents.utils.context import AgentContext
 
 async def main():
     context = AgentContext()
-    context.company_of_interest = "NVDA"
+    context.ticker = "NVDA"
 
     agent = create_market_analyst_agent(context=context)
     response = await call_agent_with_retry(agent, None)

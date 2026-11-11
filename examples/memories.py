@@ -75,19 +75,18 @@ def review_records(ticker: str | None, date: str | None, results_dir: str | None
     for i, rec in enumerate(records):
         if i > 0:
             print(f"\n{'-' * 70}")
-        print(f"\n  [{rec.get('trade_date', '?')}] {rec.get('ticker', '?')}")
+        print(f"\n  [{rec.get('analysis_date', '?')}] {rec.get('ticker', '?')}")
         print(f"  Direction:   {rec.get('direction', '?')}")
         print(f"  Action:      {rec.get('action', '?')}")
         print(f"  Confidence:  {rec.get('confidence', '?')}")
-        if rec.get("entry_price") is not None:
-            print(f"  Entry Price: {rec['entry_price']}")
+        if rec.get("execution_price") is not None:
+            print(f"  Execution Price: {rec['execution_price']}")
         if rec.get("target_price") is not None:
             print(f"  Target:      {rec['target_price']}")
         if rec.get("stop_loss") is not None:
             print(f"  Stop Loss:   {rec['stop_loss']}")
         if rec.get("reasoning"):
             print(f"  Reasoning:   {rec['reasoning']}")
-        print(f"  Status:      {rec.get('status', '?')}")
         print(f"  Created:     {rec.get('created_at', '?')}")
         if rec.get("final_decision_summary"):
             print("\n  --- Decision Summary ---")

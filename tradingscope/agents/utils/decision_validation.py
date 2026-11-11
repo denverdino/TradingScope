@@ -36,7 +36,7 @@ ACTION_INTENTS = {
     Action.HOLD: {TradeIntent.HOLD},
 }
 
-_ENTRY_FIELDS = ("entry_price", "entry_price_low", "entry_price_high")
+_EXECUTION_FIELDS = ("execution_price", "execution_price_low", "execution_price_high")
 
 
 def _require_fields(output: TraderOutput | PortfolioManagerOutput, field_names: tuple[str, ...]) -> list[PolicyError]:
@@ -49,27 +49,27 @@ def _require_fields(output: TraderOutput | PortfolioManagerOutput, field_names: 
 
 def _validate_long_prices(output: TraderOutput | PortfolioManagerOutput) -> list[PolicyError]:
     plan = output.price_plan
-    if any(getattr(plan, field_name) is None for field_name in (*_ENTRY_FIELDS, "target_price", "stop_loss")):
+    if any(getattr(plan, field_name) is None for field_name in (*_EXECUTION_FIELDS, "target_price", "stop_loss")):
         return []
 
     errors: list[PolicyError] = []
-    if plan.stop_loss >= plan.entry_price_low:
-        errors.append(_error(("price_plan", "stop_loss"), "long stop_loss must be below the entry range"))
-    if plan.target_price <= plan.entry_price_high:
-        errors.append(_error(("price_plan", "target_price"), "long target_price must be above the entry range"))
+    if plan.stop_loss >= plan.execution_price_low:
+        errors.append(_error(("price_plan", "stop_loss"), "long stop_loss must be below the execution range"))
+    if plan.target_price <= plan.execution_price_high:
+        errors.append(_error(("price_plan", "target_price"), "long target_price must be above the execution range"))
     return errors
 
 
 def _validate_short_prices(output: TraderOutput | PortfolioManagerOutput) -> list[PolicyError]:
     plan = output.price_plan
-    if any(getattr(plan, field_name) is None for field_name in (*_ENTRY_FIELDS, "target_price", "stop_loss")):
+    if any(getattr(plan, field_name) is None for field_name in (*_EXECUTION_FIELDS, "target_price", "stop_loss")):
         return []
 
     errors: list[PolicyError] = []
-    if plan.target_price >= plan.entry_price_low:
-        errors.append(_error(("price_plan", "target_price"), "short target_price must be below the entry range"))
-    if plan.stop_loss <= plan.entry_price_high:
-        errors.append(_error(("price_plan", "stop_loss"), "short stop_loss must be above the entry range"))
+    if plan.target_price >= plan.execution_price_low:
+        errors.append(_error(("price_plan", "target_price"), "short target_price must be below the execution range"))
+    if plan.stop_loss <= plan.execution_price_high:
+        errors.append(_error(("price_plan", "stop_loss"), "short stop_loss must be above the execution range"))
     return errors
 
 
@@ -94,7 +94,7 @@ def _validate_execution_plan(output: TraderOutput | PortfolioManagerOutput) -> l
             )
 
     if intent in (TradeIntent.OPEN_LONG, TradeIntent.OPEN_SHORT):
-        errors.extend(_require_fields(output, (*_ENTRY_FIELDS, "target_price", "stop_loss")))
+        errors.extend(_require_fields(output, (*_EXECUTION_FIELDS, "target_price", "stop_loss")))
         if output.position_advice is PositionAdvice.NONE:
             errors.append(_error(("position_advice",), f"{intent.value} requires a residual position"))
         if output.time_stop_days is None:
@@ -102,7 +102,7 @@ def _validate_execution_plan(output: TraderOutput | PortfolioManagerOutput) -> l
         price_validator = _validate_long_prices if intent is TradeIntent.OPEN_LONG else _validate_short_prices
         errors.extend(price_validator(output))
     elif intent is TradeIntent.REDUCE_LONG:
-        errors.extend(_require_fields(output, _ENTRY_FIELDS))
+        errors.extend(_require_fields(output, _EXECUTION_FIELDS))
         if output.position_advice is not PositionAdvice.NONE:
             errors.extend(_require_fields(output, ("target_price", "stop_loss")))
             if output.time_stop_days is None:
@@ -111,7 +111,7 @@ def _validate_execution_plan(output: TraderOutput | PortfolioManagerOutput) -> l
         elif output.time_stop_days is not None:
             errors.append(_error(("time_stop_days",), "reduce_long without a residual position must omit time_stop_days"))
     elif intent in (TradeIntent.CLOSE_LONG, TradeIntent.COVER_SHORT):
-        errors.extend(_require_fields(output, _ENTRY_FIELDS))
+        errors.extend(_require_fields(output, _EXECUTION_FIELDS))
         if output.position_advice is not PositionAdvice.NONE:
             errors.append(_error(("position_advice",), f"{intent.value} requires no residual position"))
         if output.time_stop_days is not None:

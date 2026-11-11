@@ -25,7 +25,7 @@ class MockModel:
 
 def _setup_context(context):
     """Populate context with test data."""
-    context.company_of_interest = "AAPL"
+    context.ticker = "AAPL"
     context.market_report = "Market data"
     context.sentiment_report = "Sentiment data"
     context.news_report = "News data"

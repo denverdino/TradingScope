@@ -1,4 +1,4 @@
-"""Tests for the typed schema-v2 workflow."""
+"""Tests for the typed schema-v3 workflow."""
 
 from __future__ import annotations
 
@@ -28,11 +28,12 @@ def _workflow_patches(runner: SimpleNamespace, research_orchestrator, risk_orche
     context = SimpleNamespace(
         non_thinking_model=object(),
         cache_usage=cache_usage,
-        company_of_interest="",
-        trade_date="2026-07-14",
-        latest_trading_date="2026-07-13",
+        ticker="",
+        analysis_date="2026-07-14",
+        last_completed_session="2026-07-13",
     )
     stack = ExitStack()
+    stack.enter_context(patch.object(persistence, "_get_client", return_value=None))
     stack.enter_context(patch.object(workflow, "AgentContext", return_value=context))
     stack.enter_context(patch.object(workflow, "StructuredAgentRunner", return_value=runner, create=True))
     for name in (
@@ -44,9 +45,9 @@ def _workflow_patches(runner: SimpleNamespace, research_orchestrator, risk_orche
         "create_bull_researcher_agent",
         "create_research_manager_agent",
         "create_trader_agent",
-        "create_aggressive_debator_agent",
-        "create_conservative_debator_agent",
-        "create_neutral_debator_agent",
+        "create_aggressive_debater_agent",
+        "create_conservative_debater_agent",
+        "create_neutral_debater_agent",
         "create_portfolio_manager_agent",
     ):
         stack.enter_context(patch.object(workflow, name, return_value=SimpleNamespace(name=name)))
@@ -60,7 +61,7 @@ def _workflow_patches(runner: SimpleNamespace, research_orchestrator, risk_orche
     risk_factory = stack.enter_context(
         patch.object(
             workflow,
-            "create_debate_orchestrator",
+            "create_risk_debate_orchestrator",
             return_value=risk_orchestrator,
         ),
     )
@@ -96,10 +97,10 @@ async def test_analyze_returns_fully_typed_result(tmp_path) -> None:
     assert result.research_manager is research
     assert result.trader is trader
     assert result.portfolio_manager is portfolio
-    assert result.schema_version == "2.0"
+    assert result.schema_version == "3.0"
     assert not manifest_path.exists()
     persisted_names = [call.args[0] for call in persist_node.await_args_list]
-    assert all(call.kwargs == {"ticker": "AAPL", "trade_date": "2026-07-14"} for call in persist_node.await_args_list)
+    assert all(call.kwargs == {"ticker": "AAPL", "analysis_date": "2026-07-14"} for call in persist_node.await_args_list)
     assert set(persisted_names[:4]) == {
         "market_analyst",
         "fundamentals_analyst",

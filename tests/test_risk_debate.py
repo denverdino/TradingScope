@@ -17,7 +17,7 @@ def test_debate_orchestrator_creation(mock_model):
 
     # Test creating the orchestrator
     try:
-        from tradingscope.agents.risk_mgmt.debate_orchestrator import create_debate_orchestrator
+        from tradingscope.agents.risk_mgmt.debate_orchestrator import create_risk_debate_orchestrator
 
         # Create mock agents
         class MockAgent:
@@ -30,7 +30,7 @@ def test_debate_orchestrator_creation(mock_model):
         mock_portfolio_manager = MockAgent("PortfolioManager")
 
         # Test creating the orchestrator
-        orchestrator = create_debate_orchestrator(
+        orchestrator = create_risk_debate_orchestrator(
             aggressive_agent=mock_aggressive,
             conservative_agent=mock_conservative,
             neutral_agent=mock_neutral,

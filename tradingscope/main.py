@@ -30,7 +30,7 @@ def _main() -> None:
     ticker = args.ticker
 
     result = asyncio.run(analyze(ticker))
-    trade_date = result.trade_date.isoformat()
+    analysis_date = result.analysis_date.isoformat()
     final_report = render_full_report(result)
 
     logger.info("******************************* Final Report *******************************")
@@ -41,7 +41,7 @@ def _main() -> None:
 
     # Determine local data directory under results_dir
     results_dir = DEFAULT_CONFIG["results_dir"]
-    ticker_data_dir = os.path.join(results_dir, "data", trade_date, ticker)
+    ticker_data_dir = os.path.join(results_dir, "data", analysis_date, ticker)
     os.makedirs(ticker_data_dir, exist_ok=True)
 
     if output_mode in ("markdown", "both"):
@@ -53,7 +53,7 @@ def _main() -> None:
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Stock Analysis Report: {ticker} ({trade_date})</title>
+    <title>Stock Analysis Report: {ticker} ({analysis_date})</title>
     <style>
         body {{
             font-family: Arial, sans-serif;
@@ -89,7 +89,7 @@ def _main() -> None:
 """
 
         # Save HTML output to local data directory
-        html_filename = os.path.join(ticker_data_dir, f"{ticker}_report_{trade_date}.html")
+        html_filename = os.path.join(ticker_data_dir, f"{ticker}_report_{analysis_date}.html")
         with open(html_filename, "w", encoding="utf-8") as f:
             f.write(html_with_style)
         logger.info("HTML report saved to: %s", html_filename)
@@ -102,7 +102,7 @@ def _main() -> None:
             if not sender_email or not sender_password:
                 logger.error("EMAIL_FROM and EMAIL_PASSWORD environment variables must be set to send email.")
             else:
-                subject = f"Stock Analysis Report: {ticker} ({trade_date})"
+                subject = f"Stock Analysis Report: {ticker} ({analysis_date})"
                 recipient_list = [email.strip() for email in args.email_to.split(",")]
                 send_html_email(subject, html_with_style, recipient_list, sender_email, sender_password)
 
@@ -123,7 +123,7 @@ def _main() -> None:
             logger.info("Structured output saved to: %s", agent_json_filename)
 
         # Save combined structured result
-        json_filename = os.path.join(ticker_data_dir, f"{ticker}_report_{trade_date}.json")
+        json_filename = os.path.join(ticker_data_dir, f"{ticker}_report_{analysis_date}.json")
         json_content = result.model_dump_json(indent=2)
         with open(json_filename, "w", encoding="utf-8") as f:
             f.write(json_content)

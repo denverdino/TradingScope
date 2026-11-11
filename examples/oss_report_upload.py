@@ -17,9 +17,9 @@ from tradingscope.utils.oss_report_uploader import (
     upload_reports,
 )
 
-TRADE_DATE = "2026-01-01"
+ANALYSIS_DATE = "2026-01-01"
 TICKER = "_TEST_"
-PREFIX = f"tradingscope/{TRADE_DATE}/{TICKER}/"
+PREFIX = f"tradingscope/{ANALYSIS_DATE}/{TICKER}/"
 
 
 def _read_object(client: oss.Client, bucket: str, key: str) -> str:
@@ -64,7 +64,7 @@ async def main():
         print("=== Test 1: Single upload (sync) ===")
         content_v1 = "# Test Report V1\n\nThis is the first version."
         key = f"{PREFIX}test_agent.md"
-        ok = _upload_report(TRADE_DATE, TICKER, "test_agent", content_v1)
+        ok = _upload_report(ANALYSIS_DATE, TICKER, "test_agent", content_v1)
         assert ok, "Upload should succeed"
         uploaded_keys.append(key)
 
@@ -75,7 +75,7 @@ async def main():
         # Test 2: Overwrite existing file
         print("\n=== Test 2: Overwrite existing file ===")
         content_v2 = "# Test Report V2\n\nThis is the updated version."
-        ok = _upload_report(TRADE_DATE, TICKER, "test_agent", content_v2)
+        ok = _upload_report(ANALYSIS_DATE, TICKER, "test_agent", content_v2)
         assert ok, "Overwrite should succeed"
 
         actual = _read_object(client, bucket, key)
@@ -85,7 +85,7 @@ async def main():
         # Test 3: Async single upload
         print("\n=== Test 3: Async single upload ===")
         async_content = "# Async Report\n\nUploaded via async wrapper."
-        ok = await upload_report(TRADE_DATE, TICKER, "async_agent", async_content)
+        ok = await upload_report(ANALYSIS_DATE, TICKER, "async_agent", async_content)
         assert ok, "Async upload should succeed"
         async_key = f"{PREFIX}async_agent.md"
         uploaded_keys.append(async_key)
@@ -101,7 +101,7 @@ async def main():
             "news_analyst": "# News Analyst\n\nNews analysis.",
             "fundamentals_analyst": "# Fundamentals\n\nFundamental analysis.",
         }
-        results = await upload_reports(TRADE_DATE, TICKER, reports)
+        results = await upload_reports(ANALYSIS_DATE, TICKER, reports)
         assert all(results.values()), f"Some uploads failed: {results}"
 
         for name, content in reports.items():
@@ -113,7 +113,7 @@ async def main():
 
         # Test 5: Empty reports
         print("\n=== Test 5: Empty reports ===")
-        results = await upload_reports(TRADE_DATE, TICKER, {})
+        results = await upload_reports(ANALYSIS_DATE, TICKER, {})
         assert results == {}
         print("  PASS: empty reports returns empty dict")
 

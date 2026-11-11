@@ -7,30 +7,29 @@ def test_agent_creation(mock_model, mock_context):
         # Import AgentScope components
         from agentscope.message import Msg
 
-        from tradingscope.agents.managers.portfolio_manager import create_portfolio_manager_agent
-
         # Import our agents
-        from tradingscope.agents.risk_mgmt.aggressive_debator import create_aggressive_debator_agent
-        from tradingscope.agents.risk_mgmt.conservative_debator import create_conservative_debator_agent
-        from tradingscope.agents.risk_mgmt.neutral_debator import create_neutral_debator_agent
+        from tradingscope.agents.managers.portfolio_manager import create_portfolio_manager_agent
+        from tradingscope.agents.risk_mgmt.aggressive_debater import create_aggressive_debater_agent
+        from tradingscope.agents.risk_mgmt.conservative_debater import create_conservative_debater_agent
+        from tradingscope.agents.risk_mgmt.neutral_debater import create_neutral_debater_agent
 
         context = mock_context
-        context.company_of_interest = "AAPL"
+        context.ticker = "AAPL"
         context.market_report = "Market data"
         context.sentiment_report = "Sentiment data"
         context.news_report = "News data"
         context.fundamentals_report = "Fundamentals data"
         context.trader_investment_plan = "Trader plan"
 
-        # Test creating each debator agent
-        create_aggressive_debator_agent(context, "TestAggressive")
-        print("✅ Aggressive debator agent created successfully")
+        # Test creating each debater agent
+        create_aggressive_debater_agent(context, "TestAggressive")
+        print("✅ Aggressive debater agent created successfully")
 
-        create_conservative_debator_agent(context, "TestConservative")
-        print("✅ Conservative debator agent created successfully")
+        create_conservative_debater_agent(context, "TestConservative")
+        print("✅ Conservative debater agent created successfully")
 
-        create_neutral_debator_agent(context, "TestNeutral")
-        print("✅ Neutral debator agent created successfully")
+        create_neutral_debater_agent(context, "TestNeutral")
+        print("✅ Neutral debater agent created successfully")
 
         # Test creating portfolio manager agent
         portfolio_manager = create_portfolio_manager_agent(context, "TestPortfolioManager")

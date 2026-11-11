@@ -1,4 +1,4 @@
-"""Deterministic Markdown rendering for schema-v2 agent outputs."""
+"""Deterministic Markdown rendering for schema-v3 agent outputs."""
 
 from __future__ import annotations
 
@@ -40,8 +40,8 @@ def _render_header(title: str, output: AgentOutputBase) -> str:
     return (
         f"## {title}\n\n"
         f"- **股票代码**：{output.ticker}\n"
-        f"- **交易日期**：{output.trade_date.isoformat()}\n"
-        f"- **最新交易日期**：{output.latest_trading_date.isoformat()}"
+        f"- **分析日期**：{output.analysis_date.isoformat()}\n"
+        f"- **最近完成交易日**：{output.last_completed_session.isoformat()}"
     )
 
 
@@ -73,14 +73,14 @@ def _render_price_plan(price_plan: PricePlan, direction: Direction, trade_intent
         else "入场"
     )
     price_lines: list[str] = []
-    if price_plan.entry_price_low is not None and price_plan.entry_price_high is not None:
-        entry_text = f"{price(price_plan.entry_price_low)}–{price_plan.entry_price_high:.2f}"
-        entry_label = f"{price_label}区间" if trade_intent else "入场价"
-        price_lines.append(f"- **{entry_label}**：{entry_text}")
-        if price_plan.entry_price is not None:
-            price_lines.append(f"- **代表{price_label}价**：{price(price_plan.entry_price)}")
-    elif price_plan.entry_price is not None:
-        price_lines.append(f"- **{price_label}价**：{price(price_plan.entry_price)}")
+    if price_plan.execution_price_low is not None and price_plan.execution_price_high is not None:
+        range_text = f"{price(price_plan.execution_price_low)}–{price_plan.execution_price_high:.2f}"
+        range_label = f"{price_label}区间" if trade_intent else "入场价"
+        price_lines.append(f"- **{range_label}**：{range_text}")
+        if price_plan.execution_price is not None:
+            price_lines.append(f"- **代表{price_label}价**：{price(price_plan.execution_price)}")
+    elif price_plan.execution_price is not None:
+        price_lines.append(f"- **{price_label}价**：{price(price_plan.execution_price)}")
     if price_plan.target_price is not None:
         price_lines.append(f"- **目标价**：{price(price_plan.target_price)}")
     if price_plan.stop_loss is not None:
@@ -220,5 +220,5 @@ def render_full_report(result: AnalysisResult) -> str:
         result.analysts.news,
         result.analysts.social_media,
     ]
-    title = f"# 股票分析报告：{result.ticker}（{result.trade_date.isoformat()}）"
+    title = f"# 股票分析报告：{result.ticker}（{result.analysis_date.isoformat()}）"
     return f"{title}\n\n" + "\n\n---\n\n".join(render_markdown(output) for output in outputs)

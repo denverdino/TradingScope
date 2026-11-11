@@ -36,6 +36,7 @@ def mock_context():
     from tradingscope.agents.utils.context import AgentContext
 
     with (
+        patch("tradingscope.agents.utils.context.get_last_completed_us_session", return_value="2025-01-01"),
         patch("tradingscope.agents.utils.context.OpenAICredential"),
         patch(
             "tradingscope.agents.utils.context.DashScopeResponseModel",
@@ -68,12 +69,12 @@ def mock_agent():
 def sample_company_data():
     """Fixture that provides sample company data for testing."""
     return {
-        "company_of_interest": "AAPL",
+        "ticker": "AAPL",
         "company_name": "Apple Inc.",
         "investment_plan": "Test investment plan",
         "market_research_report": "Market research report",
         "sentiment_report": "Sentiment report",
         "news_report": "News report",
         "fundamentals_report": "Fundamentals report",
-        "trade_date": "2025-01-01",
+        "analysis_date": "2025-01-01",
     }

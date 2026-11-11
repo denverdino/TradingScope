@@ -20,9 +20,9 @@ def _capture_agent(monkeypatch, module):
 
 def _manager_context() -> SimpleNamespace:
     return SimpleNamespace(
-        company_of_interest="AAPL",
-        trade_date="2026-07-24",
-        latest_trading_date="2026-07-24",
+        ticker="AAPL",
+        analysis_date="2026-07-24",
+        last_completed_session="2026-07-24",
         model=object(),
         non_thinking_model=object(),
         middlewares=[],
@@ -38,9 +38,9 @@ def _manager_context() -> SimpleNamespace:
         ("tradingscope.agents.managers.research_manager", "create_research_manager_agent"),
         ("tradingscope.agents.trader.trader", "create_trader_agent"),
         ("tradingscope.agents.managers.portfolio_manager", "create_portfolio_manager_agent"),
-        ("tradingscope.agents.risk_mgmt.aggressive_debator", "create_aggressive_debator_agent"),
-        ("tradingscope.agents.risk_mgmt.conservative_debator", "create_conservative_debator_agent"),
-        ("tradingscope.agents.risk_mgmt.neutral_debator", "create_neutral_debator_agent"),
+        ("tradingscope.agents.risk_mgmt.aggressive_debater", "create_aggressive_debater_agent"),
+        ("tradingscope.agents.risk_mgmt.conservative_debater", "create_conservative_debater_agent"),
+        ("tradingscope.agents.risk_mgmt.neutral_debater", "create_neutral_debater_agent"),
     ],
 )
 def test_downstream_agents_share_short_horizon_calibration_policy(
@@ -92,9 +92,9 @@ def test_market_prompt_requires_symmetric_regime_interpretation(monkeypatch) -> 
     )
     monkeypatch.setattr(market_analyst, "get_company_name", lambda _ticker, _info: "Apple")
     context = SimpleNamespace(
-        company_of_interest="AAPL",
-        trade_date="2026-07-24",
-        latest_trading_date="2026-07-24",
+        ticker="AAPL",
+        analysis_date="2026-07-24",
+        last_completed_session="2026-07-24",
         model=object(),
         middlewares=[],
     )

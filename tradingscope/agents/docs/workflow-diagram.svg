@@ -88,13 +88,13 @@
   <text x="600" y="745" class="agent-label">Risk Debate Orchestrator</text>
   
   <rect x="250" y="790" width="180" height="50" class="risk"/>
-  <text x="340" y="815" class="agent-label">Aggressive Debator</text>
+  <text x="340" y="815" class="agent-label">Aggressive Debater</text>
   
   <rect x="510" y="790" width="180" height="50" class="risk"/>
-  <text x="600" y="815" class="agent-label">Conservative Debator</text>
+  <text x="600" y="815" class="agent-label">Conservative Debater</text>
   
   <rect x="770" y="790" width="180" height="50" class="risk"/>
-  <text x="860" y="815" class="agent-label">Neutral Debator</text>
+  <text x="860" y="815" class="agent-label">Neutral Debater</text>
   
   <!-- Connectors within Risk Assessment -->
   <line x1="600" y1="770" x2="340" y2="790" class="connector"/>

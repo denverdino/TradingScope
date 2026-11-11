@@ -14,7 +14,7 @@ import logging
 from datetime import date as date_type
 from typing import Any, Dict, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict
 
 logger = logging.getLogger(__name__)
 
@@ -22,14 +22,33 @@ _OSS_KEY_PREFIX = "tradingscope"
 
 
 class CompletionManifest(BaseModel):
-    """Strict marker proving that every schema-v2 artifact was written."""
+    """Strict marker proving that every schema-v3 artifact was written."""
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["2.0"]
+    schema_version: Literal["3.0"]
     status: Literal["complete"]
     ticker: str
-    trade_date: date_type
+    analysis_date: date_type
+
+
+# Remove migration once no v2 data remains in the fourteen-day evaluation window.
+def _upgrade_v2(data: Any) -> Any:
+    """Recursively copy schema-v2 data using schema-v3 field names and versions."""
+    if isinstance(data, dict):
+        renamed_keys = {
+            "trade_date": "analysis_date",
+            "latest_trading_date": "last_completed_session",
+            "entry_price": "execution_price",
+            "entry_price_low": "execution_price_low",
+            "entry_price_high": "execution_price_high",
+        }
+        if data.keys() & renamed_keys.values():
+            raise ValueError("schema-v2 data must use historical field names")
+        return {renamed_keys.get(key, key): "3.0" if key == "schema_version" and value == "2.0" else _upgrade_v2(value) for key, value in data.items()}
+    if isinstance(data, list):
+        return [_upgrade_v2(item) for item in data]
+    return data
 
 
 def _get_client_and_bucket():
@@ -45,7 +64,7 @@ def fetch_structured_output(date: str, ticker: str, agent: str = "portfolio_mana
     """Fetch a single structured output's content from OSS via SDK.
 
     Args:
-        date: Trade date (YYYY-MM-DD)
+        date: Analysis date (YYYY-MM-DD)
         ticker: Stock ticker (e.g. "AAPL")
         agent: Agent name (default: "portfolio_manager")
 
@@ -86,36 +105,43 @@ async def async_fetch_structured_output(date: str, ticker: str, agent: str = "po
     return await loop.run_in_executor(None, fetch_structured_output, date, ticker, agent)
 
 
-def fetch_completed_v2_output(
+def fetch_completed_output(
     date: str,
     ticker: str,
     agent: str = "portfolio_manager",
 ) -> Optional[Dict[str, Any]]:
-    """Fetch a schema-v2 artifact only when its completion manifest is valid."""
+    """Fetch completed schema-v3 data, upgrading historical v2 artifacts."""
     manifest_data = fetch_structured_output(date, ticker, "manifest")
     try:
+        if isinstance(manifest_data, dict) and manifest_data.get("schema_version") == "2.0":
+            manifest_data = _upgrade_v2(manifest_data)
         manifest = CompletionManifest.model_validate(manifest_data)
-    except ValidationError:
+    except ValueError:
         return None
-    if manifest.ticker != ticker or manifest.trade_date.isoformat() != date:
+    if manifest.ticker != ticker or manifest.analysis_date.isoformat() != date:
         return None
 
     output = fetch_structured_output(date, ticker, agent)
-    if not isinstance(output, dict) or output.get("schema_version") != "2.0":
+    if isinstance(output, dict) and output.get("schema_version") == "2.0":
+        try:
+            output = _upgrade_v2(output)
+        except ValueError:
+            return None
+    if not isinstance(output, dict) or output.get("schema_version") != "3.0":
         return None
     return output
 
 
-async def async_fetch_completed_v2_output(
+async def async_fetch_completed_output(
     date: str,
     ticker: str,
     agent: str = "portfolio_manager",
 ) -> Optional[Dict[str, Any]]:
-    """Async wrapper for manifest-gated schema-v2 reads."""
+    """Async wrapper for manifest-gated schema-v3 reads with v2 migration."""
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
         None,
-        fetch_completed_v2_output,
+        fetch_completed_output,
         date,
         ticker,
         agent,

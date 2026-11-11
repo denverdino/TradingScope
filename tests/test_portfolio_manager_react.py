@@ -8,7 +8,7 @@ def test_react_agent_creation(mock_model, mock_context):
     from tradingscope.agents.managers.portfolio_manager import create_portfolio_manager_agent
 
     context = mock_context
-    context.company_of_interest = "AAPL"
+    context.ticker = "AAPL"
     context.market_report = "Market data"
     context.sentiment_report = "Sentiment data"
     context.news_report = "News data"

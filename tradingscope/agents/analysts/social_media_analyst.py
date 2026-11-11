@@ -31,9 +31,9 @@ def create_social_media_analyst_agent(
         ReActAgent: 配置好的社交媒体情绪分析师 Agent
     """
     # Extract values from context
-    ticker = context.company_of_interest
-    trade_date = context.trade_date
-    latest_trading_date = context.latest_trading_date
+    ticker = context.ticker
+    analysis_date = context.analysis_date
+    last_completed_session = context.last_completed_session
 
     # 市场 & 公司信息
     market_info = StockUtils.get_market_info(ticker)
@@ -47,8 +47,6 @@ def create_social_media_analyst_agent(
             FunctionTool(get_news),
         ]
     )
-
-    current_date = trade_date
 
     tool_names = ", ".join(t.name for t in toolkit.tool_groups[0].tools)
 
@@ -106,8 +104,8 @@ def create_social_media_analyst_agent(
 - 公司名称：{company_name}
 - 股票代码：{ticker}
 - 所属市场：{market_info["market_name"]}
-- 当前日期：{current_date}。
-- 最新美股交易日期：{latest_trading_date}。
+- 分析日期：{analysis_date}。
+- 最近完成交易日：{last_completed_session}。
 - 当前价格/收盘价格：：xxx
 - 盘前/盘后价格：xxx
 
