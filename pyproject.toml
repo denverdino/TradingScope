@@ -22,7 +22,7 @@ classifiers = [
 ]
 requires-python = ">=3.11"
 dependencies = [
-    "agentscope>=2.0.6,<2.1",
+    "agentscope>=2.0.11,<2.1",
     "dashscope>=1.20.0",
     "yfinance>=0.2.66",
     "pandas>=2.3.3",
@@ -57,6 +57,10 @@ dev = [
     "seaborn>=0.11.0",
     "pytest-asyncio>=1.2.0",
 ]
+
+[[tool.uv.index]]
+url = "http://mirrors.aliyun.com/pypi/simple/"
+default = true
 
 [project.urls]
 Homepage = "https://github.com/denverdino/tradingscope"

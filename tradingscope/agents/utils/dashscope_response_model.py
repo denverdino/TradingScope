@@ -63,20 +63,27 @@ class DashScopeResponseModel(OpenAIResponseModel):
     ) -> AsyncGenerator[ChatResponse, None]:
         """Raise DashScope stream failures instead of returning empty text."""
 
-        async def checked_events() -> AsyncGenerator[Any, None]:
-            async for event in response:
-                if event.type == "response.failed":
-                    error = getattr(event.response, "error", None)
-                    code = getattr(error, "code", None) or "unknown"
-                    message = getattr(error, "message", None) or "unknown error"
-                    raise RuntimeError(
-                        f"DashScope response failed ({code}): {message}",
-                    )
-                yield event
+        class _CheckedStream:
+            async def __aenter__(self) -> AsyncGenerator[Any, None]:
+                async def checked_events() -> AsyncGenerator[Any, None]:
+                    async for event in response:
+                        if event.type == "response.failed":
+                            error = getattr(event.response, "error", None)
+                            code = getattr(error, "code", None) or "unknown"
+                            message = getattr(error, "message", None) or "unknown error"
+                            raise RuntimeError(
+                                f"DashScope response failed ({code}): {message}",
+                            )
+                        yield event
+
+                return checked_events()
+
+            async def __aexit__(self, *exc_info: Any) -> None:
+                del exc_info
 
         async for chunk in super()._parse_stream_response(
             start_datetime,
-            checked_events(),
+            _CheckedStream(),
         ):
             yield chunk
 
