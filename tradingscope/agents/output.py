@@ -61,9 +61,21 @@ class Decision(StrictModel):
 
 
 class PricePlan(StrictModel):
-    execution_price: float | None = Field(default=None, gt=0)
-    execution_price_low: float | None = Field(default=None, gt=0)
-    execution_price_high: float | None = Field(default=None, gt=0)
+    execution_price: float | None = Field(
+        default=None,
+        gt=0,
+        description="代表执行价。给出执行区间时必须满足 execution_price_low <= execution_price <= execution_price_high；不得把当前价填作代表价，除非它位于区间内。",
+    )
+    execution_price_low: float | None = Field(
+        default=None,
+        gt=0,
+        description="执行区间下沿。与 execution_price_high 必须同时给出或同时留空；素材只有单一价位时两者都留空。",
+    )
+    execution_price_high: float | None = Field(
+        default=None,
+        gt=0,
+        description="执行区间上沿，必须不低于 execution_price_low。与 execution_price_low 必须同时给出或同时留空。",
+    )
     target_price: float | None = Field(default=None, gt=0)
     stop_loss: float | None = Field(default=None, gt=0)
     currency: str = Field(min_length=1)

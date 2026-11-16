@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from agentscope.exception import ToolJSONDecodeError
+from agentscope.exception import StructuredOutputError, ToolJSONDecodeError
 from agentscope.model import ChatUsage
 
 from tests.test_output_models import _all_outputs
@@ -143,6 +143,30 @@ async def test_runner_retries_when_tool_arguments_are_invalid_json() -> None:
     assert result == expected
     assert runner._run_analysis.await_count == 1
     assert formatter_model.generate_structured_output.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_runner_retries_wrapped_structured_output_error_without_validation_cause() -> None:
+    from tradingscope.agents.utils.structured_output import StructuredAgentRunner
+
+    expected = _all_outputs()[0]
+    formatter_model = SimpleNamespace(
+        generate_structured_output=AsyncMock(
+            side_effect=[
+                StructuredOutputError("Failed to generate structured output for model."),
+                SimpleNamespace(content=expected.model_dump(mode="json")),
+            ],
+        ),
+    )
+    runner = StructuredAgentRunner(formatter_model=formatter_model)
+    runner._run_analysis = AsyncMock(return_value=SimpleNamespace(get_text_content=lambda: "分析素材"))
+
+    result = await runner.run(SimpleNamespace(name="MarketAnalyst"), type(expected))
+
+    assert result == expected
+    assert formatter_model.generate_structured_output.await_count == 2
+    retry_prompt = formatter_model.generate_structured_output.await_args_list[1].kwargs["messages"][0].get_text_content()
+    assert "上次未生成符合 schema 的结构化对象" in retry_prompt
 
 
 @pytest.mark.asyncio

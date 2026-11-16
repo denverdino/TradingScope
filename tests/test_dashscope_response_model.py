@@ -245,6 +245,10 @@ def test_model_inlines_pydantic_refs_for_dashscope_tools() -> None:
     assert "$defs" not in schema
     assert schema["properties"]["decision"]["type"] == "object"
     assert schema["properties"]["price_plan"]["type"] == "object"
+    price_plan_fields = schema["properties"]["price_plan"]["properties"]
+    assert "execution_price_low <= execution_price <= execution_price_high" in price_plan_fields["execution_price"]["description"]
+    assert "同时给出或同时留空" in price_plan_fields["execution_price_low"]["description"]
+    assert "同时给出或同时留空" in price_plan_fields["execution_price_high"]["description"]
     assert schema["properties"]["evidence"]["items"]["type"] == "object"
 
 
@@ -316,6 +320,67 @@ def test_model_preserves_pydantic_normalization_with_inlined_schema() -> None:
 
     result = MarketAnalystOutput.model_validate(response.content)
     assert result.weekly_bollinger is not None
+
+
+PRICE_RANGE_ERROR = "price_plan: Value error, execution_price must be within the execution price range"
+
+
+def _market_tool_call(execution_price: float) -> ChatResponse:
+    market = _all_outputs()[0].model_dump(mode="json")
+    market["price_plan"].update(
+        execution_price=execution_price,
+        execution_price_low=290.0,
+        execution_price_high=300.0,
+    )
+    return ChatResponse(
+        content=[
+            ToolCallBlock(
+                id="call-price-plan",
+                name="generate_structured_output",
+                input=json.dumps(market, ensure_ascii=False),
+            ),
+        ],
+        is_last=True,
+    )
+
+
+def _runner_with_real_structured_api():
+    from tradingscope.agents.utils.structured_output import StructuredAgentRunner
+
+    model = _model(thinking_enable=True)
+    formatter_model = SimpleNamespace(
+        generate_structured_output=AsyncMock(wraps=model.generate_structured_output),
+    )
+    runner = StructuredAgentRunner(formatter_model=formatter_model, max_validation_attempts=3)
+    runner._run_analysis = AsyncMock(return_value=SimpleNamespace(get_text_content=lambda: "分析素材"))
+    return runner, formatter_model
+
+
+def test_runner_feeds_back_invalid_execution_range_from_real_structured_api() -> None:
+    runner, formatter_model = _runner_with_real_structured_api()
+
+    async def fake_call_api(_model_name, messages, **_kwargs):
+        prompt = messages[-1].get_text_content()
+        return _market_tool_call(295.0 if PRICE_RANGE_ERROR in prompt else 310.0)
+
+    with patch.object(OpenAIResponseModel, "_call_api", new_callable=AsyncMock, side_effect=fake_call_api):
+        result = asyncio.run(runner.run(SimpleNamespace(name="MarketAnalyst"), MarketAnalystOutput))
+
+    assert result.price_plan.execution_price == 295.0
+    assert formatter_model.generate_structured_output.await_count == 2
+    assert runner._run_analysis.await_count == 1
+
+
+def test_runner_reports_exhausted_execution_range_errors_from_real_structured_api() -> None:
+    from tradingscope.agents.utils.structured_output import StructuredOutputValidationError
+
+    runner, formatter_model = _runner_with_real_structured_api()
+
+    with patch.object(OpenAIResponseModel, "_call_api", new_callable=AsyncMock, return_value=_market_tool_call(310.0)):
+        with pytest.raises(StructuredOutputValidationError, match="execution_price must be within the execution price range"):
+            asyncio.run(runner.run(SimpleNamespace(name="MarketAnalyst"), MarketAnalystOutput))
+
+    assert formatter_model.generate_structured_output.await_count == 3
 
 
 def test_structured_output_does_not_offer_code_interpreter() -> None:

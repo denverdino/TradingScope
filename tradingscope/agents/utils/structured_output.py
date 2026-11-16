@@ -6,7 +6,7 @@ import logging
 from collections.abc import Sequence
 from typing import Generic, TypeVar
 
-from agentscope.exception import ToolJSONDecodeError
+from agentscope.exception import StructuredOutputError, ToolJSONDecodeError
 from agentscope.message import Msg, UserMsg
 from pydantic import ValidationError
 
@@ -68,10 +68,19 @@ class StructuredAgentRunner(Generic[OutputT]):
         for attempt in range(1, self._max_validation_attempts + 1):
             content = f"将以下分析素材整理为指定结构。不得添加素材中不存在的事实。\n\n分析素材：\n{draft_text}\n{validation_feedback}"
             try:
-                response = await self._formatter_model.generate_structured_output(
-                    messages=[UserMsg(name="structured_output", content=content)],
-                    structured_model=output_model,
-                )
+                try:
+                    response = await self._formatter_model.generate_structured_output(
+                        messages=[UserMsg(name="structured_output", content=content)],
+                        structured_model=output_model,
+                    )
+                except StructuredOutputError as exc:
+                    cause = exc.__cause__
+                    while cause is not None and not isinstance(cause, ValidationError):
+                        cause = cause.__cause__
+                    if cause is not None:
+                        # The cause already chains back to exc; `from exc` would create a cycle.
+                        raise cause from None
+                    raise RuntimeError(str(exc)) from exc
                 if self._usage_collector is not None:
                     self._usage_collector.record(response)
                 output = output_model.model_validate(response.content)
