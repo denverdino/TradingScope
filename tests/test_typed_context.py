@@ -49,6 +49,11 @@ def test_context_renders_typed_downstream_inputs() -> None:
     assert context.trader.decision.summary in risk_context
 
 
+def test_default_model_config() -> None:
+    assert DEFAULT_CONFIG["deep_think_llm"] == "qwen4-max"
+    assert DEFAULT_CONFIG["quick_think_llm"] == "qwen3.8-flash"
+
+
 def test_context_uses_two_responses_models() -> None:
     with (
         patch("tradingscope.agents.utils.context.get_last_completed_us_session", return_value="2026-08-10"),
