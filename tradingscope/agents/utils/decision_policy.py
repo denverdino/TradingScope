@@ -27,7 +27,7 @@ EXECUTION_PLAN_DECISION_POLICY = """
 - Trader 和 Portfolio Manager 必须明确输出 `trade_intent`，且只能是 `open_long`、`reduce_long`、`close_long`、`open_short`、`cover_short`、`hold` 之一。动作映射为：buy=`open_long|cover_short`，sell=`reduce_long|close_long|open_short`，hold=`hold`。
 - `open_long`：给出代表入场价和完整入场区间、目标、止损、`time_stop_days`；止损低于区间下沿，目标高于区间上沿，`position_advice` 必须是 `light/medium/heavy`。
 - `open_short`：给出代表入场价和完整入场区间、目标、止损、`time_stop_days`；目标低于区间下沿，止损高于区间上沿，`position_advice` 必须是 `light/medium/heavy`。
-- `reduce_long`：给出减仓代表价和完整执行区间；若减仓后仍有仓位（`position_advice != none`），还要给出高于区间的剩余仓位目标、低于区间的防守止损和 `time_stop_days`；无剩余仓位时 `time_stop_days` 留空。
+- `reduce_long`：减仓不等于看跌，`action` 必须为 `sell`，`direction` 可为 `bullish/neutral/bearish`，由短期价格证据决定；不得为了通过校验改为 `hold` 或伪造看跌判断。给出减仓代表价和完整执行区间；若减仓后仍有仓位（`position_advice != none`），还要给出高于区间的剩余仓位目标、低于区间的防守止损和 `time_stop_days`；无剩余仓位时 `time_stop_days` 留空。
 - `close_long` 与 `cover_short`：给出代表成交价和完整执行区间，`position_advice` 必须为 `none`；退出后没有剩余仓位，不得虚构目标价或止损价，无剩余仓位时 `time_stop_days` 留空。
 - `hold`：无仓位观望时无需填写执行价格或 `time_stop_days`；持有现有仓位时必须给出目标、止损和 `time_stop_days`，但不得把条件单伪装成当前开仓意图。
 - 入场/执行区间必须覆盖现实可成交位置并支持分批执行。所有调整都要说明证据来源、反证和失效条件；不得通过不现实价格凑盈亏比。

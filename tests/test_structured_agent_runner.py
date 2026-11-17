@@ -40,25 +40,28 @@ async def test_runner_records_structured_output_usage() -> None:
 
     expected = _all_outputs()[0]
     collector = CacheUsageCollector()
-    formatter_model = SimpleNamespace(
-        generate_structured_output=AsyncMock(
-            return_value=SimpleNamespace(
-                content=expected.model_dump(mode="json"),
-                usage=ChatUsage(
-                    input_tokens=1_000,
-                    output_tokens=100,
-                    cache_input_tokens=800,
-                    time=0.2,
-                ),
-            ),
-        ),
+    response = SimpleNamespace(
+        content=expected.model_dump(mode="json"),
+        usage=ChatUsage(input_tokens=1_000, output_tokens=100, cache_input_tokens=800, time=0.2),
     )
+
+    async def generate_structured_output(*, on_response, **_kwargs):
+        on_response(response)
+        return response
+
+    formatter_model = SimpleNamespace(generate_structured_output=AsyncMock(side_effect=generate_structured_output))
     runner = StructuredAgentRunner(formatter_model=formatter_model, usage_collector=collector)
     runner._run_analysis = AsyncMock(return_value=SimpleNamespace(get_text_content=lambda: "分析素材"))
 
     await runner.run(SimpleNamespace(name="MarketAnalyst"), type(expected))
 
     assert collector.snapshot()["cache_input_tokens"] == 800
+    assert collector.by_agent["MarketAnalyst/structured_output"] == {
+        "calls": 1,
+        "input_tokens": 1_000,
+        "output_tokens": 100,
+        "cache_input_tokens": 800,
+    }
 
 
 @pytest.mark.asyncio
@@ -227,20 +230,32 @@ async def test_runner_retries_generated_output_policy_failure() -> None:
             "target_price": 90.0,
         },
     }
-    formatter_model = SimpleNamespace(
-        generate_structured_output=AsyncMock(
-            side_effect=[
-                SimpleNamespace(content=invalid),
-                SimpleNamespace(content=valid),
-            ],
-        ),
+    collector = CacheUsageCollector()
+    responses = iter(
+        [
+            SimpleNamespace(content=output, usage=ChatUsage(input_tokens=1_000, output_tokens=100, cache_input_tokens=800, time=0.2))
+            for output in (invalid, valid)
+        ]
     )
-    runner = StructuredAgentRunner(formatter_model=formatter_model)
+
+    async def generate_structured_output(*, on_response, **_kwargs):
+        response = next(responses)
+        on_response(response)
+        return response
+
+    formatter_model = SimpleNamespace(generate_structured_output=AsyncMock(side_effect=generate_structured_output))
+    runner = StructuredAgentRunner(formatter_model=formatter_model, usage_collector=collector)
     runner._run_analysis = AsyncMock(return_value=SimpleNamespace(get_text_content=lambda: "分析素材"))
 
     result = await runner.run(SimpleNamespace(name="Trader"), type(expected))
 
     assert result.price_plan.target_price == 90.0
     assert formatter_model.generate_structured_output.await_count == 2
+    assert collector.by_agent["Trader/structured_output"] == {
+        "calls": 2,
+        "input_tokens": 2_000,
+        "output_tokens": 200,
+        "cache_input_tokens": 1_600,
+    }
     retry_prompt = formatter_model.generate_structured_output.await_args_list[1].kwargs["messages"][0].get_text_content()
     assert "price_plan.target_price" in retry_prompt

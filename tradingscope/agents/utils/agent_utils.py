@@ -18,6 +18,32 @@ from agentscope.permission import PermissionMode
 
 COMPLIANCE_PROMPT = "你必须严格遵守内容安全与合规要求，不得生成任何涉黄、涉暴、涉政、违法、仇恨、歧视等内容。"
 
+ANALYST_DRAFT_OUTPUT_REQUIREMENTS = """分析素材必须覆盖：
+- 唯一方向判断（看涨/看跌/中性）、唯一操作建议（买入/持有/卖出）、置信度（0-1）及核心理由，方向与操作不得矛盾。
+- 每条关键证据的来源、原始链接（如有）、数据日期，区分事实与推断；保留最强反证。
+- 有依据的价格及计价货币、适用条件和失效条件；价格无依据时留空（null），不得为补齐结构而编造。
+- 数据缺失与适用限制，以及它们对结论可信度的影响。
+只输出中文分析素材，不要输出 JSON、JSON 代码块或固定 Markdown 报告模板；下一阶段根据严格 schema 生成正式结果。"""
+
+DEBATE_OUTPUT_RULES = (
+    "发言要求：最多2个关键论点，每个论点注明来源与数据时点；不得重抄共享报告，只引用支撑论点所需的关键数据；"
+    "只回应已收到的发言，不预设他人尚未提出的观点；他人证据成立时可以承认并修正己方判断。"
+)
+DEBATE_FOLLOW_UP_RULES = "本轮仅补充新增证据、观点修订和核心分歧，不重复已陈述的内容。"
+DEBATE_FINAL_ROUND_RULES = (
+    "这是最后一轮发言：请收敛为己方仍然成立的最强论据、他人提出的最强反证、剩余核心分歧，以及撤回或调整立场的条件；不要求己方获胜，结论应服从证据。"
+)
+
+
+def build_debate_round_prompt(round_num: int, max_rounds: int, *, opening: str, rebuttal: str) -> str:
+    parts = [opening if round_num == 1 else rebuttal, DEBATE_OUTPUT_RULES]
+    if round_num > 1:
+        parts.append(DEBATE_FOLLOW_UP_RULES)
+    if round_num == max_rounds:
+        parts.append(DEBATE_FINAL_ROUND_RULES)
+    return "\n".join(parts)
+
+
 # Mapping of ticker symbols to company names
 TICKER_TO_COMPANY = {
     # Tech Giants

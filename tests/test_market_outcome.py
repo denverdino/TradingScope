@@ -526,18 +526,21 @@ def test_open_trade_time_stop_uses_configured_future_session_close() -> None:
 
 
 @pytest.mark.parametrize("trade_intent", ["reduce_long", "close_long"])
+@pytest.mark.parametrize("direction", ["bullish", "neutral", "bearish"])
 @pytest.mark.parametrize(
     ("horizon_close", "expected_status"),
     [(90.0, AssessmentStatus.CORRECT), (110.0, AssessmentStatus.INCORRECT)],
 )
 def test_long_exit_measures_avoided_loss_or_opportunity_cost(
     trade_intent: str,
+    direction: str,
     horizon_close: float,
     expected_status: AssessmentStatus,
 ) -> None:
     assessment = assess_trade(
         _record(
             trade_intent=trade_intent,
+            direction=direction,
             execution_price=101.0,
             execution_price_low=100.0,
             execution_price_high=102.0,

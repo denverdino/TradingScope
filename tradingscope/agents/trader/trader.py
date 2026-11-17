@@ -4,13 +4,14 @@ from __future__ import annotations
 from agentscope import logger
 from agentscope.agent import Agent
 
-from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT, get_company_name
+from tradingscope.agents.utils.agent_utils import get_company_name
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.decision_policy import (
     EXECUTION_PLAN_DECISION_POLICY,
     MARKET_REGIME_DECISION_POLICY,
     SHORT_HORIZON_DECISION_POLICY,
 )
+from tradingscope.agents.utils.prompt_cache import build_cacheable_system_prompt
 from tradingscope.agents.utils.stock_utils import StockUtils
 
 
@@ -46,9 +47,7 @@ def create_trader_agent(
     logger.debug(f"💰 [DEBUG] 货币符号: {currency_symbol}")
 
     # 构建完整的系统提示 - 聚焦短期技术面交易
-    system_prompt = f"""{COMPLIANCE_PROMPT}
-
-{SHORT_HORIZON_DECISION_POLICY}
+    role_instructions = f"""{SHORT_HORIZON_DECISION_POLICY}
 
 {MARKET_REGIME_DECISION_POLICY}
 
@@ -79,7 +78,8 @@ def create_trader_agent(
 **3) 与研究情景的一致性校验（强制！）**
 - 默认沿用研究经理的主情景，但不得把上游结论当作新的独立证据。
 - 若事件驱动信息实质改变盈利预期、流动性、监管或供需结构，可以在没有右侧技术确认时改变方向；必须注明可核验来源、解释事件如何改变状态、列出最强反证，并设置明确失效条件。
-- 若没有新的状态变化证据，则用 `hold` 表达等待；不要为了显得果断而虚构突破或反转信号。
+- 改变研究经理方向须有新增或被遗漏证据并说明来源、反证与失效条件；不要为了显得果断而虚构突破或反转信号。
+- 没有新事件不等于必须等待：原有证据仍有效且具备可执行优势时，可以落实已有研究情景；证据不足或缺乏可执行优势时选择 `hold`。
 
 **3a) 交易意图字段（强制！）**
 - 必须在分析素材中单列 `trade_intent`，从 `open_long`、`reduce_long`、`close_long`、`open_short`、`cover_short`、`hold` 中选择且只能选择一个。
@@ -140,11 +140,11 @@ def create_trader_agent(
 
 请输出简洁但完整的分析素材，覆盖事实依据、关键指标、风险、结论与可执行价格计划。
 素材中必须显式写出 `trade_intent`；新开仓或执行后仍有仓位时必须显式写出 `time_stop_days`。
-不要输出 JSON、JSON 代码块或固定 Markdown 报告模板；系统将在下一阶段根据严格 schema 生成正式结果。
-
-# 可用资源：
-
-{context.generate_trader_context_md()}"""
+不要输出 JSON、JSON 代码块或固定 Markdown 报告模板；系统将在下一阶段根据严格 schema 生成正式结果。"""
+    system_prompt = build_cacheable_system_prompt(
+        shared_context=context.generate_trader_context_md(),
+        role_instructions=role_instructions,
+    )
 
     agent = Agent(
         name=name,

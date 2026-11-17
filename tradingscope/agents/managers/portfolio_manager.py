@@ -8,13 +8,13 @@ from agentscope import logger
 from agentscope.agent import Agent
 
 # Local imports
-from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.decision_policy import (
     EXECUTION_PLAN_DECISION_POLICY,
     MARKET_REGIME_DECISION_POLICY,
     SHORT_HORIZON_DECISION_POLICY,
 )
+from tradingscope.agents.utils.prompt_cache import build_cacheable_system_prompt
 
 
 def create_portfolio_manager_agent(
@@ -34,9 +34,7 @@ def create_portfolio_manager_agent(
     analysis_date = context.analysis_date
     last_completed_session = context.last_completed_session
 
-    system_message = f"""{COMPLIANCE_PROMPT}
-
-{SHORT_HORIZON_DECISION_POLICY}
+    role_instructions = f"""{SHORT_HORIZON_DECISION_POLICY}
 
 {MARKET_REGIME_DECISION_POLICY}
 
@@ -58,28 +56,13 @@ def create_portfolio_manager_agent(
 
 专注于可操作的见解和持续改进。建立在过去经验教训的基础上，批判性地评估所有观点，确保每个决策都能带来更好的结果。请用中文撰写所有分析内容和建议。
 
-**重要：您的回复必须以如下格式开头：**
+分析素材应覆盖以下内容，无需遵循固定展示格式：
+- 股票代码：{ticker}；分析日期：{analysis_date}；最近完成交易日：{last_completed_session}。
+- 唯一方向与操作建议、置信度（0-1）、风险评分（0-1）及核心理由。
+- 三位辩手的关键观点与采纳/拒绝理由，关联证据来源、最强反证和失效条件。
+- 数据缺失与适用限制。
 
-- **股票代码**：{ticker}
-- **分析日期**：{analysis_date}
-- **最近完成交易日**：{last_completed_session}
-- **交易决策**：【买入/卖出/持有】
-
-
-然后按以下格式提供详细分析：
-
-### 最终决策
-- 交易决策：买入/卖出/持有
-- 置信度：0.x（0-1之间）
-- 风险评分：0.x（0为低风险，1为高风险）
-
-### 辩论观点总结
-- **激进派观点**：关键论点摘要
-- **保守派观点**：关键论点摘要
-- **中性派观点**：关键论点摘要
-- **采纳理由**：解释最终决策的依据
-
-### 优化后的交易计划
+可执行价格计划素材：
 - **trade_intent**：open_long / reduce_long / close_long / open_short / cover_short / hold
 - 先说明交易前持仓假设和执行后的 `position_advice`，按 trade_intent 只填写适用字段：
   - open_long/open_short：代表入场价、完整入场区间、目标、止损、time_stop_days，position_advice 必须是 light/medium/heavy
@@ -94,11 +77,11 @@ def create_portfolio_manager_agent(
 - 明确说明交易计划失效的条件
 
 请输出简洁但完整的分析素材，覆盖事实依据、关键指标、风险、结论与可执行价格计划。
-不要输出 JSON、JSON 代码块或固定 Markdown 报告模板；系统将在下一阶段根据严格 schema 生成正式结果。
-
-# 可用资源：
-
-{context.generate_risk_evaluation_context_md()}"""
+不要输出 JSON、JSON 代码块或固定 Markdown 报告模板；系统将在下一阶段根据严格 schema 生成正式结果。"""
+    system_message = build_cacheable_system_prompt(
+        shared_context=context.generate_risk_evaluation_context_md(),
+        role_instructions=role_instructions,
+    )
 
     agent = Agent(
         name=name,

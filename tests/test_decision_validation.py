@@ -232,6 +232,8 @@ def test_generated_positioned_hold_requires_target_and_stop() -> None:
         ("buy", "open_short"),
         ("sell", "open_long"),
         ("hold", "close_long"),
+        ("hold", "reduce_long"),
+        ("buy", "reduce_long"),
     ],
 )
 def test_generated_output_rejects_action_intent_conflicts(action: str, intent: str) -> None:
@@ -537,12 +539,14 @@ def test_flat_reduce_or_hold_rejects_time_stop(
         validate_generated_output(portfolio)
 
 
-def test_reduce_long_uses_long_position_price_semantics() -> None:
+@pytest.mark.parametrize("output_index", [5, 6])
+@pytest.mark.parametrize("direction", ["bullish", "neutral", "bearish"])
+def test_reduce_long_uses_long_position_price_semantics(output_index: int, direction: str) -> None:
     from tradingscope.agents.utils.decision_validation import validate_generated_output
 
     trader = _with_decision(
-        _all_outputs()[5],
-        direction="bearish",
+        _all_outputs()[output_index],
+        direction=direction,
         action="sell",
         confidence=0.8,
         price_plan={

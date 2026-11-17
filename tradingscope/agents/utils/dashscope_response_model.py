@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
 from copy import deepcopy
 from datetime import datetime
 from typing import Any
@@ -93,12 +93,15 @@ class DashScopeResponseModel(OpenAIResponseModel):
         messages: list[Msg],
         tools: list[dict] | None = None,
         tool_choice: ToolChoice | None = None,
+        on_response: Callable[[ChatResponse], None] | None = None,
         **generate_kwargs: Any,
     ) -> ChatResponse | AsyncGenerator[ChatResponse, None]:
         """Translate thinking mode and delegate the request to AgentScope."""
         extra_body = dict(generate_kwargs.pop("extra_body", {}) or {})
         extra_body["enable_thinking"] = self.parameters.thinking_enable
-        return await super()._call_api(
+        if model_name == "qwen4-max":
+            extra_body.setdefault("prompt_cache_options", {"mode": "implicit", "ttl": "1h"})
+        response = await super()._call_api(
             model_name,
             messages,
             tools=tools,
@@ -106,6 +109,19 @@ class DashScopeResponseModel(OpenAIResponseModel):
             extra_body=extra_body,
             **generate_kwargs,
         )
+        if on_response is None:
+            return response
+        if isinstance(response, ChatResponse):
+            on_response(response)
+            return response
+
+        async def record_stream() -> AsyncGenerator[ChatResponse, None]:
+            async for chunk in response:
+                if chunk.usage is not None:
+                    on_response(chunk)
+                yield chunk
+
+        return record_stream()
 
     def _format_tools(
         self,
@@ -126,6 +142,22 @@ class DashScopeResponseModel(OpenAIResponseModel):
             {"type": "code_interpreter"},
         ], formatted_choice
 
+    async def generate_structured_output(
+        self,
+        messages: list[Msg],
+        structured_model: type[BaseModel] | dict,
+        on_response: Callable[[ChatResponse], None] | None = None,
+        **kwargs: Any,
+    ) -> StructuredResponse:
+        # An explicit choice bypasses SDK strategy fallbacks, not transport retries.
+        kwargs["tool_choice"] = ToolChoice(mode="auto" if self.parameters.thinking_enable else "required")
+        return await super().generate_structured_output(
+            messages=messages,
+            structured_model=structured_model,
+            on_response=on_response,
+            **kwargs,
+        )
+
     async def _call_api_with_structured_output(
         self,
         model_name: str,
@@ -135,7 +167,6 @@ class DashScopeResponseModel(OpenAIResponseModel):
         **kwargs: Any,
     ) -> StructuredResponse:
         """Generate structured output with DashScope-compatible tool schema."""
-        del tool_choice
         if isinstance(structured_model, dict):
             dashscope_model: type[BaseModel] | dict = _inline_local_refs(
                 structured_model,
@@ -147,8 +178,6 @@ class DashScopeResponseModel(OpenAIResponseModel):
             model_name=model_name,
             messages=messages,
             structured_model=dashscope_model,
-            tool_choice=ToolChoice(
-                mode="auto" if self.parameters.thinking_enable else "required",
-            ),
+            tool_choice=tool_choice,
             **kwargs,
         )

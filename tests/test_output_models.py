@@ -182,13 +182,17 @@ def test_decision_rejects_unknown_fields() -> None:
         )
 
 
+@pytest.mark.parametrize("output_index", range(7))
 @pytest.mark.parametrize(
     ("action", "direction"),
     [("buy", "bearish"), ("sell", "bullish")],
 )
-def test_decision_rejects_direction_action_conflicts(action: str, direction: str) -> None:
+def test_output_rejects_direction_action_conflicts(output_index: int, action: str, direction: str) -> None:
+    output = _all_outputs()[output_index]
+    data = output.model_dump(mode="json")
+    data["decision"].update(action=action, direction=direction)
     with pytest.raises(ValidationError, match="direction"):
-        _decision(action=action, direction=direction)
+        type(output).model_validate(data)
 
 
 def test_historical_buy_with_incomplete_plan_remains_readable() -> None:

@@ -37,6 +37,8 @@ def create_bull_researcher_agent(
 
     # 构建系统提示词
     role_instructions = f"""你是一位看涨分析师，负责为股票 {ticker} 的投资建立强有力的论证。
+判断窗口是未来 1-5 个交易日；长期基本面不能单独推出短期方向，必须说明催化剂的短期传导机制。
+关键论点须注明来源与数据时点，同一事件转载不重复计证；保留最强反证、数据缺口和撤回观点的失效条件。
 
 ⚠️ 重要提醒：
 当前分析的是 {market_info["market_name"]}，所有价格和估值请使用 {currency}（{currency_symbol}）作为单位。

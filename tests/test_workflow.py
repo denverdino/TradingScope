@@ -127,6 +127,23 @@ async def test_analyze_returns_fully_typed_result(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_debate_rounds_come_from_config() -> None:
+    market, fundamentals, news, social, research, trader, portfolio = _all_outputs()
+    runner = SimpleNamespace(run=AsyncMock(side_effect=[market, fundamentals, news, social, trader]))
+    stack, _, _, research_factory, risk_factory, _ = _workflow_patches(
+        runner,
+        SimpleNamespace(run_debate=AsyncMock(return_value=research)),
+        SimpleNamespace(run_debate=AsyncMock(return_value=portfolio)),
+    )
+    config = {"max_debate_rounds": 3, "max_risk_discuss_rounds": 4}
+    with stack, patch.object(workflow, "DEFAULT_CONFIG", config, create=True):
+        await workflow.analyze("AAPL", "2026-07-14")
+
+    assert research_factory.call_args.kwargs["max_rounds"] == 3
+    assert risk_factory.call_args.kwargs["max_rounds"] == 4
+
+
+@pytest.mark.asyncio
 async def test_analyst_failure_stops_downstream_work() -> None:
     failure = StructuredOutputValidationError("MarketAnalyst", [])
     runner = SimpleNamespace(run=AsyncMock(side_effect=failure))
@@ -146,7 +163,25 @@ async def test_analyst_failure_stops_downstream_work() -> None:
     risk_orchestrator.run_debate.assert_not_awaited()
     persist_node.assert_not_awaited()
     persist_result.assert_not_awaited()
-    cache_usage.log_summary.assert_not_called()
+    cache_usage.log_summary.assert_called_once_with()
+
+
+@pytest.mark.asyncio
+async def test_portfolio_failure_logs_usage_without_persisting_completion() -> None:
+    market, fundamentals, news, social, research, trader, _ = _all_outputs()
+    failure = StructuredOutputValidationError("PortfolioManager", [])
+    runner = SimpleNamespace(run=AsyncMock(side_effect=[market, fundamentals, news, social, trader]))
+    stack, _, persist_result, _, _, cache_usage = _workflow_patches(
+        runner,
+        SimpleNamespace(run_debate=AsyncMock(return_value=research)),
+        SimpleNamespace(run_debate=AsyncMock(side_effect=failure)),
+    )
+
+    with stack, pytest.raises(StructuredOutputValidationError):
+        await workflow.analyze("AAPL", "2026-07-14")
+
+    persist_result.assert_not_awaited()
+    cache_usage.log_summary.assert_called_once_with()
 
 
 @pytest.mark.asyncio

@@ -7,7 +7,7 @@ from agentscope.agent import Agent
 from agentscope.agent._config import ReActConfig
 from agentscope.tool import FunctionTool, Toolkit
 
-from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT, get_company_name
+from tradingscope.agents.utils.agent_utils import ANALYST_DRAFT_OUTPUT_REQUIREMENTS, COMPLIANCE_PROMPT, get_company_name
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.core_stock_tools import get_stock_info
 from tradingscope.agents.utils.news_data_tools import get_news
@@ -20,8 +20,6 @@ def create_social_media_analyst_agent(
 ) -> Agent:
     """
     创建用于社交媒体与投资者情绪分析的 ReActAgent。
-    - 优先使用中国社交媒体情绪工具；如受限/无结果，回退到 Reddit 数据。
-    - 输出中文与固定结构（含情绪评分与价格影响评估）。
 
     Args:
         context: AgentContext实例包含所有必要的上下文信息
@@ -53,11 +51,12 @@ def create_social_media_analyst_agent(
     system_prompt = f"""
 {COMPLIANCE_PROMPT}
 
-您是一位专业的中国市场社交媒体与投资情绪分析师，与其他分析师协作，负责分析投资者对特定股票的讨论与情绪变化，并评估其对股价的潜在影响。
+您是一位专业的{market_info["market_name"]}市场社交媒体与投资情绪分析师，与其他分析师协作，分析工具可支持的情绪信号及其对股价的潜在影响。
+当前工具仅提供股票信息与新闻，不提供独立社交平台采样。只有新闻时必须标注为“新闻情绪代理信号”，不是社交平台采样结果；缺少平台、KOL、散户或机构样本时标注不可用，不得推断其观点、热度、群体差异或影响力。
 请使用提供的工具来获取与分析舆情数据。如果你无法完全回答，没关系；其他分析师会从不同角度继续分析。当你形成明确的情绪面交易建议时，必须且只能给出**唯一一个**方向（**买入/持有/卖出**三选一），禁止同时给出多个建议；可在主建议后补充不同情境下的操作参考。
 
 🚨 CRITICAL REQUIREMENT - 绝对强制要求：
-❌ 禁止：不调用工具就直接回答；基于臆测输出；跳过工具调用；以“无法获取实时数据”为由规避。
+- 禁止不调用工具就直接回答、基于臆测输出或跳过工具调用；数据缺失时须说明限制。
 ✅ 强制步骤：
 1) 第一个动作必须调用 {tool_names} 工具；
 2) 仅在成功获取工具数据后开始分析；所有结论须基于工具返回的真实数据。
@@ -85,12 +84,11 @@ def create_social_media_analyst_agent(
 - 舆情与价格短线联动（相关性与滞后），如果包含盘前/盘后价格数据，请一并分析
 - 数据来源可信度与代表性
 
-**📊 情绪价格影响分析要求（强制）：**
-- 给出**情绪指数评分（1–10 分）**及理由
-- 评估**短期价格影响（1–5 天）**与**预期波动幅度（%）**
-- 标注**情绪驱动的支撑位/阻力位**
-- 基于情绪与话题热度给出**交易时机建议**
-- 不允许回复"无法评估/需要更多数据"
+**情绪价格影响分析要求：**
+- 给出 1–10 分启发式评分及依据，明确这是对可用材料的分析判断，不是实测情绪指数，不能代表整体投资者。
+- 分析未来 1-5 个交易日的定性影响、传导路径与反证。只有可核验的输入、计算依据和明确假设时才给出数字化情景；否则标注无法量化，不得编造百分比或支撑/阻力位。
+- 新闻情绪与价格同期变化不等于已证实因果；没有可比时间序列时不能声称相关性或滞后关系。
+- 交易时机判断须区分事实、推断和条件情景，并说明适用条件与失效条件。
 
 **特别注意：**
 ⚠️ 若数据**超过 2 小时**未更新，需在报告中明确标注时效性限制
@@ -112,12 +110,12 @@ def create_social_media_analyst_agent(
 ### 社交媒体舆情概览（时间窗口、来源、热度概况）
 ### 平台分项分析（主要财经媒体与社交平台，中英文，按数据可用性）
 ### 事件与话题脉络（时间线/因果链）
-### 市场情绪评估（含**情绪指数 1–10 分**与理由）
-### 价格影响预测（1–5 天，幅度区间、支撑/阻力位）
+### 市场情绪评估（1–10 分启发式评分、依据与代表性限制）
+### 价格影响分析（1-5 个交易日；无量化依据时只说明定性影响与限制）
 ### 交易建议（基于情绪面，必须只给出**唯一一个**明确建议：买入/持有/卖出，禁止同时给出多个建议；可在主建议后补充说明不同情境下的操作参考）
 ### 关键要点汇总（时间、来源/平台、情绪、要点、潜在影响）
 ### 数据来源与时效性说明
-不要输出 JSON、JSON 代码块或固定 Markdown 报告模板；系统将在下一阶段根据严格 schema 生成正式结果。
+{ANALYST_DRAFT_OUTPUT_REQUIREMENTS}
 """
 
     # 创建 Agent

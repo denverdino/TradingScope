@@ -5,7 +5,7 @@ from agentscope.agent import Agent
 from agentscope.agent._config import ReActConfig
 from agentscope.tool import FunctionTool, Toolkit
 
-from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT, get_company_name
+from tradingscope.agents.utils.agent_utils import ANALYST_DRAFT_OUTPUT_REQUIREMENTS, COMPLIANCE_PROMPT, get_company_name
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.core_stock_tools import (
     get_market_indices,
@@ -80,7 +80,7 @@ def create_market_analyst_agent(
 - **数值比较必须写出不等式**：如判断"A 高于/低于 B"，须在报告中明确写出"A=$xx > B=$xx"或"A=$xx < B=$xx"，不得仅用文字描述方向。
 - **数值核验规则（强制）**
   - 凡涉及"超卖/超买/缩量/扩量"等方向性判断，必须在括号内写出支撑该判断的不等式，例如：
-    ✓ 超卖（RSI=31.11 > 30，尚未进入超卖区）
+    ✓ 尚未超卖（RSI=31.11 > 30，尚未进入超卖区）
     ✓ 柱状图扩大（|−0.059| > |−0.017|，空头增强）
     ✗ "进入超卖区边缘"（无不等式，结论不可核验）
   - 若不等式方向与结论文字矛盾，以不等式为准并修正文字。
@@ -152,10 +152,10 @@ def create_market_analyst_agent(
 - **盘后/盘前数据权重限制（强制）**：美股盘后/盘前流动性通常明显弱于常规时段，微小变动（<1%）更多是噪音，**不应**赋予过大分析权重。盘后/盘前价格仅作为参考信号，不作为独立支撑交易建议的论据。
 
 **3) 当日价格波动与趋势分析（核心！）**
-- 计算当日波动幅度：日内振幅 = (最高价 - 最低价) / 前收盘价
-- 将当日波动与 ATR 对比：
-  - 当日振幅 > 1.5x ATR：异常波动，可能有重大事件
-  - 当日振幅 < 0.5x ATR：波动萎缩，可能即将突破
+- 分别计算：日内价差 = 最高价 - 最低价；日内振幅 = (最高价 - 最低价) / 前收盘价
+- 使用同为价格单位的日内价差与 ATR 对比，不得将百分比振幅直接与 ATR 比较：
+  - 日内价差 > 1.5x ATR：异常波动，可能有重大事件
+  - 日内价差 < 0.5x ATR：波动萎缩，可能即将突破
 - 分析当日价格位置：
   - 现价接近日内高点：多头占优
   - 现价接近日内低点：空头占优
@@ -298,7 +298,7 @@ def create_market_analyst_agent(
 ### 当日波动与趋势判断（重点）
 
 - **日内振幅**：(高-低)/前收 = x.x%
-- **与ATR对比**：当日振幅 vs ATR（正常/异常/萎缩）
+- **与ATR对比**：日内价差 vs ATR（同为价格单位，正常/异常/萎缩）
 - **价格位置**：现价相对日内高低点的位置
 - **趋势判断**：上涨趋势 / 下跌趋势 / 震荡
 - **判断依据**：跳空方向 + 现价vs开盘 + 成交量
@@ -358,7 +358,7 @@ def create_market_analyst_agent(
 ### 关键要点速览
 - 汇总：指标/信号 → 数值 → 含义 → 交易含义 → 注意事项
 
-不要输出 JSON、JSON 代码块或固定 Markdown 报告模板；系统将在下一阶段根据严格 schema 生成正式结果。
+{ANALYST_DRAFT_OUTPUT_REQUIREMENTS}
 
 ——
 【常见错误（请避免）】

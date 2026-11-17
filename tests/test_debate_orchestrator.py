@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from agentscope.message import AssistantMsg
 
 # Add the project root to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -154,3 +155,84 @@ async def test_research_manager_returns_typed_output():
     assert result is expected
     structured_runner.run.assert_awaited_once()
     assert structured_runner.run.await_args.kwargs["reference_outputs"] == references
+
+
+class RecordingDebater:
+    def __init__(self, name):
+        self.name = name
+        self.prompts = []
+        self.observed = []
+        self.observed_at_reply = []
+
+    async def _reply(self, prompt):
+        self.prompts.append(prompt.get_text_content())
+        self.observed_at_reply.append(tuple(self.observed))
+        yield AssistantMsg(name=self.name, content=f"{self.name}:{len(self.prompts)}")
+
+    async def observe(self, response):
+        self.observed.append(response.get_text_content())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("max_rounds", [1, 2, 3])
+async def test_research_debate_closes_on_last_configured_round_without_extra_calls(max_rounds):
+    bull, bear, manager = [RecordingDebater(name) for name in ("Bull", "Bear", "Manager")]
+    expected = _all_outputs()[4]
+    runner = SimpleNamespace(run=AsyncMock(return_value=expected))
+    orchestrator = ResearchDebateOrchestrator(bull, bear, manager, runner, max_rounds=max_rounds)
+
+    result = await orchestrator.run_debate("AAPL")
+
+    assert result is expected
+    assert manager.observed == [f"{name}:{round_num}" for round_num in range(1, max_rounds + 1) for name in ("Bull", "Bear")]
+    assert bull.observed_at_reply[0] == ()
+    assert bear.observed_at_reply[0] == ("Bull:1",)
+    runner.run.assert_awaited_once()
+    for debater in (bull, bear):
+        assert len(debater.prompts) == max_rounds
+        for index, prompt in enumerate(debater.prompts):
+            assert "最多2个关键论点" in prompt
+            assert "不得重抄共享报告" in prompt
+            assert "只回应已收到的发言" in prompt
+            assert "来源与数据时点" in prompt
+            assert ("最后一轮" in prompt) == (index == max_rounds - 1)
+            if index:
+                assert "仅补充新增证据、观点修订和核心分歧" in prompt
+        assert "最强反证" in debater.prompts[-1]
+        assert "撤回或调整立场的条件" in debater.prompts[-1]
+        assert "不要求己方获胜" in debater.prompts[-1]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("max_rounds", [1, 2, 3])
+async def test_risk_debate_closes_on_last_configured_round_with_bounded_manager_prompt(max_rounds):
+    names = ("Aggressive", "Conservative", "Neutral")
+    aggressive, conservative, neutral = debaters = [RecordingDebater(name) for name in names]
+    manager = RecordingDebater("PortfolioManager")
+    expected = _all_outputs()[6]
+    runner = SimpleNamespace(run=AsyncMock(return_value=expected))
+    orchestrator = RiskDebateOrchestrator(aggressive, conservative, neutral, manager, runner, max_rounds=max_rounds)
+
+    result = await orchestrator.run_debate("AAPL")
+
+    assert result is expected
+    assert manager.observed == [f"{name}:{round_num}" for round_num in range(1, max_rounds + 1) for name in names]
+    assert aggressive.observed_at_reply[0] == ()
+    assert neutral.observed_at_reply[0] == ("Aggressive:1", "Conservative:1")
+    runner.run.assert_awaited_once()
+    for debater in debaters:
+        assert len(debater.prompts) == max_rounds
+        for index, prompt in enumerate(debater.prompts):
+            assert "最多2个关键论点" in prompt
+            assert "不得重抄共享报告" in prompt
+            assert "只回应已收到的发言" in prompt
+            assert "来源与数据时点" in prompt
+            assert ("最后一轮" in prompt) == (index == max_rounds - 1)
+            if index:
+                assert "仅补充新增证据、观点修订和核心分歧" in prompt
+        assert "撤回或调整立场的条件" in debater.prompts[-1]
+        assert "不要求己方获胜" in debater.prompts[-1]
+    manager_prompt = runner.run.await_args.args[2].get_text_content()
+    assert "买入、卖出或持有" in manager_prompt
+    assert "决策指导原则" not in manager_prompt
+    assert "交付成果" not in manager_prompt

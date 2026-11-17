@@ -7,7 +7,7 @@ from pathlib import Path
 import yaml
 
 WORKFLOW_PATH = Path(__file__).parents[1] / ".github" / "workflows" / "trading-analysis.yml"
-TICKERS = ["MSFT", "AAPL", "TSLA", "AMZN", "META", "NVDA", "GOOGL", "BABA", "TSM"]
+TICKERS = ["MSFT", "AMZN", "INTC", "NVDA", "GOOGL", "BABA", "TSM"]
 
 
 def _run_command(job: dict[str, object], step_name: str) -> str:
@@ -29,5 +29,7 @@ def test_workflow_runs_at_most_two_tickers_after_single_evaluation() -> None:
         "max-parallel": 2,
         "matrix": {"ticker": TICKERS},
     }
-    assert "tradingscope.evaluate" in _run_command(evaluate, "Evaluate stock analysis")
+    evaluate_command = _run_command(evaluate, "Evaluate stock analysis")
+    assert "tradingscope.evaluate" in evaluate_command
+    assert f"tickers=({' '.join(TICKERS)})" in evaluate_command
     assert 'tradingscope.main "${{ matrix.ticker }}"' in _run_command(analyze, "Run stock analysis")

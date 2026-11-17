@@ -6,7 +6,7 @@ from agentscope.agent import Agent
 from agentscope.agent._config import ReActConfig
 from agentscope.tool import FunctionTool, Toolkit
 
-from tradingscope.agents.utils.agent_utils import COMPLIANCE_PROMPT, get_company_name
+from tradingscope.agents.utils.agent_utils import ANALYST_DRAFT_OUTPUT_REQUIREMENTS, COMPLIANCE_PROMPT, get_company_name
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.core_stock_tools import get_stock_info
 from tradingscope.agents.utils.news_data_tools import get_global_news, get_news
@@ -56,7 +56,7 @@ def create_news_analyst_agent(
 🚨 CRITICAL REQUIREMENT - 绝对强制要求：
 ❌ 禁止行为：
 - 绝对禁止在没有调用工具的情况下直接回答
-- 绝对禁止基于推测或假设生成任何分析内容
+- 区分已报道事实、分析推断与条件情景；推断须引用事实依据，情景须明确假设，不得将推断或假设写成已发生事实
 - 绝对禁止跳过工具调用步骤
 - 绝对禁止在无法获取股票实时数据时，提供对股票价格的预测
 
@@ -102,21 +102,18 @@ def create_news_analyst_agent(
 - 与历史类似事件的对比
 - **必须保留每条新闻的原始链接**，确保信息可追溯
 
-**📊 价格影响分析要求：**
-- 评估新闻对股价的短期影响（1-3天）
-- 分析可能的价格波动幅度（百分比）
-- 提供基于新闻的价格调整建议
-- 如果可以获取股票信息，识别关键价格支撑位和阻力位
-- 评估新闻对长期投资价值的影响
-- 不允许回复'无法评估价格影响'或'需要更多信息'
+**价格影响分析要求：**
+- 评估新闻对未来 1-5 个交易日的潜在影响，说明传导路径、反证与失效条件；长期价值变化不能直接代替短期催化剂。
+- 数字化价格情景须附来源输入、计算依据与情景假设；支撑/阻力位须有可核验的价格结构依据，不能仅凭一条新闻生成。
+- 证据不足时提供定性方向与风险，明确标注“无法量化”及缺失信息，不得编造百分比、支撑/阻力位或具体目标价。
 
 **特别注意：**
 ⚠️ 请使用中文，基于真实新闻数据进行详细分析。确保在分析中正确使用公司名称"{company_name}"和股票代码"{ticker}"。
 💵 所有价格数据使用{market_info["currency_name"]}（{market_info["currency_symbol"]}）表示
 ⚠️ 如果新闻数据存在滞后（超过2小时），请在分析中明确说明时效性限制
 ✅ 优先分析最新的、高相关性的新闻事件
-📊 提供新闻对股价影响的量化评估和具体价格预期，如果包含盘前/盘后价格数据，请一并分析
-💰 必须包含基于新闻的价格影响分析和调整建议
+- 提供有依据的新闻价格影响分析；若包含盘前/盘后价格数据，注明时段与流动性限制，不强制量化。
+- 交易建议应注明依据、不确定性和适用条件。
 🌍 考虑{market_info["market_name"]}市场特点进行分析
 
 **分析素材应覆盖：**
@@ -142,7 +139,7 @@ def create_news_analyst_agent(
 
 🔗 **重要提示：** 必须在报告中保留所有新闻的原始链接，确保信息可追溯和可验证。
 
-不要输出 JSON、JSON 代码块或固定 Markdown 报告模板；系统将在下一阶段根据严格 schema 生成正式结果。
+{ANALYST_DRAFT_OUTPUT_REQUIREMENTS}
 
 """
 

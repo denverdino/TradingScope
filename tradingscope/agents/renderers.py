@@ -8,6 +8,7 @@ from .output import (
     AgentOutputBase,
     AnalysisResult,
     Direction,
+    Evidence,
     FundamentalsAnalystOutput,
     MarketAnalystOutput,
     NewsAnalystOutput,
@@ -22,6 +23,9 @@ from .output import (
 ACTION_LABELS = {"buy": "买入", "sell": "卖出", "hold": "持有"}
 DIRECTION_LABELS = {"bullish": "看涨", "bearish": "看跌", "neutral": "中性"}
 POSITION_LABELS = {"none": "不持仓", "light": "轻仓", "medium": "中等仓位", "heavy": "重仓"}
+SENTIMENT_LABELS = {"positive": "正面", "negative": "负面", "neutral": "中性"}
+SIGNAL_STRENGTH_LABELS = {"strong": "强", "moderate": "中", "weak": "弱"}
+VALUATION_LABELS = {"overvalued": "高估", "fair": "合理", "undervalued": "低估"}
 TRADE_INTENT_LABELS = {
     "open_long": "开多",
     "reduce_long": "减多",
@@ -207,6 +211,125 @@ def _(output: PortfolioManagerOutput) -> str:
         f"#### 中性观点\n\n{_render_list(output.neutral_viewpoints)}",
         f"#### 采纳理由\n\n{_render_list(output.adopted_reasoning)}",
         f"#### 风险控制\n\n{_render_list(output.risk_control_measures)}",
+    )
+
+
+def _render_evidence(evidence: list[Evidence]) -> str:
+    return _render_list(
+        [
+            f"{item.claim}：{item.supporting_data}（来源：{item.source}；日期：{item.as_of_date.isoformat() if item.as_of_date else '未注明'}）"
+            for item in evidence
+        ]
+    )
+
+
+def _render_pack(
+    title: str,
+    output: MarketAnalystOutput | FundamentalsAnalystOutput | NewsAnalystOutput | SocialMediaAnalystOutput | ResearchManagerOutput | TraderOutput,
+    *sections: str,
+    counter_evidence: list[str],
+    trade_intent: TradeIntent | None = None,
+) -> str:
+    decision = output.decision
+    return _join_sections(
+        f"## {title}证据包（{output.ticker}｜分析日 {output.analysis_date.isoformat()}｜最近完成交易日 {output.last_completed_session.isoformat()}）",
+        f"### 结论\n\n{DIRECTION_LABELS[decision.direction.value]}/{ACTION_LABELS[decision.action.value]}，置信度 {decision.confidence:.2f}：{decision.summary}",
+        f"### 证据与来源\n\n{_render_evidence(output.evidence)}",
+        *sections,
+        f"### 反证与局限\n\n{_render_list([*counter_evidence, *output.limitations])}",
+        _render_price_plan(output.price_plan, decision.direction, trade_intent),
+    )
+
+
+@singledispatch
+def render_evidence_pack(output: AgentOutputBase) -> str:
+    """Render the sourced facts, counter-evidence, and invalidation rules shared with downstream agents."""
+    raise TypeError(f"Unsupported output type: {type(output).__name__}")
+
+
+@render_evidence_pack.register
+def _(output: MarketAnalystOutput) -> str:
+    facts = [f"{item.name}={item.value}（{DIRECTION_LABELS[item.signal]}）" for item in output.technical_indicators]
+    if bollinger := output.weekly_bollinger:
+        facts.append(f"周线布林=上轨 {bollinger.upper_band:.2f} / 中轨 {bollinger.middle_band:.2f} / 下轨 {bollinger.lower_band:.2f}（{bollinger.signal}）")
+    if options := output.options_analysis:
+        facts.append(f"期权=PCR {options.put_call_ratio}，支撑 {options.support_levels}，阻力 {options.resistance_levels}，Max Pain {options.max_pain}")
+    return _render_pack(
+        "技术面",
+        output,
+        f"### 技术指标（信号强度：{SIGNAL_STRENGTH_LABELS[output.signal_strength]}）\n\n{_render_list(facts)}",
+        counter_evidence=[],
+    )
+
+
+@render_evidence_pack.register
+def _(output: FundamentalsAnalystOutput) -> str:
+    metrics = [f"{item.name}（{item.period}）={item.value}" for item in output.financial_performance]
+    return _render_pack(
+        "基本面",
+        output,
+        f"### 财务指标（估值：{VALUATION_LABELS[output.valuation_assessment]}）\n\n{_render_list(metrics)}",
+        f"### 催化剂\n\n{_render_list(output.key_catalysts)}",
+        counter_evidence=output.key_risks,
+    )
+
+
+@render_evidence_pack.register
+def _(output: NewsAnalystOutput) -> str:
+    events = [
+        f"{item.title}（{item.source}，{SENTIMENT_LABELS[item.sentiment]}，{item.event_date.isoformat() if item.event_date else '日期未注明'}）：{item.impact}"
+        for item in output.key_events
+    ]
+    return _render_pack(
+        "新闻",
+        output,
+        f"### 关键事件（整体情绪：{SENTIMENT_LABELS[output.overall_sentiment]}）\n\n{_render_list(events)}",
+        f"### 近期催化剂\n\n{_render_list(output.near_term_catalysts)}",
+        counter_evidence=output.key_risks,
+    )
+
+
+@render_evidence_pack.register
+def _(output: SocialMediaAnalystOutput) -> str:
+    signals = [f"{item.platform}（{SENTIMENT_LABELS[item.sentiment]}）：{item.observation}" for item in output.platform_signals]
+    return _render_pack(
+        "社交媒体",
+        output,
+        f"### 平台信号（整体情绪：{SENTIMENT_LABELS[output.overall_sentiment]}，评分 {output.sentiment_score:.1f}/10）\n\n{_render_list(signals)}",
+        f"### 话题与驱动\n\n{_render_list([*output.key_topics, *output.sentiment_drivers])}",
+        counter_evidence=[f"数据质量：{output.data_quality}"],
+    )
+
+
+@render_evidence_pack.register
+def _(output: ResearchManagerOutput) -> str:
+    scenarios = [
+        f"{item.name}：{item.target_price:.2f}（{item.timeframe_days}天；假设：{'；'.join(item.assumptions) or '无'}）" for item in output.price_scenarios
+    ]
+    return _render_pack(
+        "研究经理",
+        output,
+        f"### 看涨观点\n\n{_render_list(output.bull_viewpoints)}",
+        f"### 采纳理由\n\n{_render_list(output.adopted_reasoning)}",
+        f"### 观察与触发条件\n\n{_render_list(output.strategic_actions)}",
+        f"### 价格情景\n\n{_render_list(scenarios)}",
+        counter_evidence=output.bear_viewpoints,
+    )
+
+
+@render_evidence_pack.register
+def _(output: TraderOutput) -> str:
+    intent = TRADE_INTENT_LABELS[output.trade_intent.value] if output.trade_intent else "未注明"
+    time_stop = f"{output.time_stop_days} 个交易日" if output.time_stop_days is not None else "无"
+    return _render_pack(
+        "交易员",
+        output,
+        f"### 交易计划\n\n- **交易意图**：{intent}\n- **仓位建议**：{POSITION_LABELS[output.position_advice.value]}\n"
+        f"- **风险评分**：{output.risk_score:.2f}\n- **时间止损**：{time_stop}",
+        f"### 入场条件\n\n{_render_list(output.entry_conditions)}",
+        f"### 执行步骤\n\n{_render_list(output.execution_steps)}",
+        counter_evidence=output.risk_factors,
+        trade_intent=output.trade_intent,
     )
 
 

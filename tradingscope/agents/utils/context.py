@@ -9,7 +9,6 @@ from typing import Annotated
 
 import yfinance as yf
 from agentscope.credential import OpenAICredential
-from agentscope.formatter import OpenAIResponseFormatter
 from yfinance.exceptions import YFRateLimitError
 
 from tradingscope.agents.output import (
@@ -21,9 +20,10 @@ from tradingscope.agents.output import (
     SocialMediaAnalystOutput,
     TraderOutput,
 )
-from tradingscope.agents.renderers import render_markdown
+from tradingscope.agents.renderers import render_evidence_pack
 from tradingscope.agents.utils.cache_usage import CacheUsageCollector, CacheUsageMiddleware
 from tradingscope.agents.utils.dashscope_response_model import DashScopeResponseModel
+from tradingscope.agents.utils.prompt_cache import CACHE_PREFIX_BREAK, DashScopeResponseFormatter
 from tradingscope.agents.utils.tracing import create_tracing_middlewares
 from tradingscope.default_config import DEFAULT_CONFIG
 
@@ -81,7 +81,7 @@ class AgentContext:
             api_key=os.environ.get("DASHSCOPE_API_KEY"),
             base_url=DEFAULT_CONFIG["backend_url"],
         )
-        formatter = OpenAIResponseFormatter()
+        formatter = DashScopeResponseFormatter()
         client_kwargs = {
             "default_headers": {
                 "x-dashscope-session-cache": "enable",
@@ -109,33 +109,21 @@ class AgentContext:
         )
 
     def generate_analyst_reports_md(self) -> str:
-        """Render available typed analyst outputs for downstream text agents."""
+        """Render compact analyst evidence packs shared by every downstream stage."""
         outputs = (
             self.market,
             self.social_media,
             self.news,
             self.fundamentals,
         )
-        return "\n\n---\n\n".join(render_markdown(output) for output in outputs if output is not None)
+        return "\n\n---\n\n".join(render_evidence_pack(output) for output in outputs if output is not None)
 
     def generate_trader_context_md(self) -> str:
-        """Render the validated research manager output and analyst evidence."""
-        research = render_markdown(self.research_manager) if self.research_manager is not None else ""
-        return f"""## 研究经理投资建议
-
-{research}
-
----
-
-{self.generate_analyst_reports_md()}"""
+        """Append the research pack so the analyst layer remains a cacheable prefix."""
+        research = render_evidence_pack(self.research_manager) if self.research_manager is not None else ""
+        return f"{self.generate_analyst_reports_md()}{CACHE_PREFIX_BREAK}{research}"
 
     def generate_risk_evaluation_context_md(self) -> str:
-        """Render the validated trader output and its upstream context."""
-        trader_md = render_markdown(self.trader) if self.trader is not None else ""
-        return f"""## 交易员操作计划
-
-{trader_md}
-
----
-
-{self.generate_trader_context_md()}"""
+        """Append the trader pack so analyst and research layers remain cacheable prefixes."""
+        trader = render_evidence_pack(self.trader) if self.trader is not None else ""
+        return f"{self.generate_trader_context_md()}{CACHE_PREFIX_BREAK}{trader}"

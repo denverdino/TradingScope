@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import AsyncGenerator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from time import monotonic
 
 from agentscope import logger
@@ -14,21 +14,30 @@ from agentscope.model import ChatResponse, FinishedReason
 
 @dataclass
 class CacheUsageCollector:
-    """Workflow-level aggregate of model token usage."""
+    """Workflow-level and per-agent aggregate of model token usage."""
 
     calls: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
     cache_input_tokens: int = 0
+    by_agent: dict[str, dict[str, int]] = field(default_factory=dict)
 
-    def record(self, response: ChatResponse) -> None:
+    def record(self, response: ChatResponse, agent_name: str) -> None:
         """Add usage from a completed model response when available."""
-        if response.usage is None:
+        usage = response.usage
+        if usage is None:
             return
         self.calls += 1
-        self.input_tokens += response.usage.input_tokens
-        self.output_tokens += response.usage.output_tokens
-        self.cache_input_tokens += response.usage.cache_input_tokens
+        self.input_tokens += usage.input_tokens
+        self.output_tokens += usage.output_tokens
+        self.cache_input_tokens += usage.cache_input_tokens
+        totals = self.by_agent.get(agent_name)
+        if totals is None:
+            totals = self.by_agent[agent_name] = dict.fromkeys(("calls", "input_tokens", "output_tokens", "cache_input_tokens"), 0)
+        totals["calls"] += 1
+        totals["input_tokens"] += usage.input_tokens
+        totals["output_tokens"] += usage.output_tokens
+        totals["cache_input_tokens"] += usage.cache_input_tokens
 
     def snapshot(self) -> dict[str, int]:
         """Return a serializable aggregate snapshot."""
@@ -50,6 +59,17 @@ class CacheUsageCollector:
             self.cache_input_tokens,
             hit_ratio * 100,
         )
+        for agent_name, totals in sorted(self.by_agent.items(), key=lambda item: item[1]["input_tokens"], reverse=True):
+            agent_hit_ratio = totals["cache_input_tokens"] / totals["input_tokens"] if totals["input_tokens"] else 0.0
+            logger.info(
+                "agent usage [%s]: calls=%d input=%d output=%d cache_read=%d cache_hit_ratio=%.1f%%",
+                agent_name,
+                totals["calls"],
+                totals["input_tokens"],
+                totals["output_tokens"],
+                totals["cache_input_tokens"],
+                agent_hit_ratio * 100,
+            )
 
 
 class CacheUsageMiddleware(MiddlewareBase):
@@ -101,7 +121,7 @@ class CacheUsageMiddleware(MiddlewareBase):
         cache_available = usage is not None and (usage.cache_creation_input_tokens > 0 or usage.cache_input_tokens > 0)
         if callable(confirm) and response.is_last and response.finished_reason == FinishedReason.COMPLETED and cache_available:
             confirm(messages, confirmed_at=request_started_at)
-        self.collector.record(response)
+        self.collector.record(response, agent_name)
         if usage is None:
             return
         hit_ratio = usage.cache_input_tokens / usage.input_tokens if usage.input_tokens else 0.0

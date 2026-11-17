@@ -8,6 +8,7 @@ from datetime import date
 from agentscope import logger
 
 from tradingscope.agents.managers.portfolio_manager import create_portfolio_manager_agent
+from tradingscope.default_config import DEFAULT_CONFIG
 from tradingscope.utils.oss_structured_output_uploader import (
     analysis_persistence_session,
     persist_analysis_result,
@@ -56,7 +57,10 @@ async def analyze(ticker: str, analysis_date: str | None = None) -> AnalysisResu
         context.analysis_date = analysis_date
     workflow_analysis_date = _as_date(context.analysis_date).isoformat()
     async with analysis_persistence_session(workflow_analysis_date, ticker):
-        return await _run_analysis(ticker, context, workflow_analysis_date)
+        try:
+            return await _run_analysis(ticker, context, workflow_analysis_date)
+        finally:
+            context.cache_usage.log_summary()
 
 
 async def _run_analysis(ticker: str, context: AgentContext, workflow_analysis_date: str) -> AnalysisResult:
@@ -123,7 +127,7 @@ async def _run_analysis(ticker: str, context: AgentContext, workflow_analysis_da
         bear_researcher=create_bear_researcher_agent(context=context),
         research_manager=create_research_manager_agent(context=context),
         structured_runner=structured_runner,
-        max_rounds=2,
+        max_rounds=DEFAULT_CONFIG["max_debate_rounds"],
         reference_outputs=(market, fundamentals, news, social_media),
     )
     research_manager = await research_orchestrator.run_debate(ticker=ticker)
@@ -155,7 +159,7 @@ async def _run_analysis(ticker: str, context: AgentContext, workflow_analysis_da
         neutral_agent=create_neutral_debater_agent(context=context),
         portfolio_manager=create_portfolio_manager_agent(context=context),
         structured_runner=structured_runner,
-        max_rounds=2,
+        max_rounds=DEFAULT_CONFIG["max_risk_discuss_rounds"],
         reference_outputs=(trader, research_manager, market, fundamentals, news, social_media),
     )
     portfolio_manager = await risk_orchestrator.run_debate(ticker=ticker)
@@ -182,6 +186,5 @@ async def _run_analysis(ticker: str, context: AgentContext, workflow_analysis_da
         trader=trader,
         portfolio_manager=portfolio_manager,
     )
-    context.cache_usage.log_summary()
     await persist_analysis_result(result)
     return result

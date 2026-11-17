@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from agentscope.formatter import OpenAIResponseFormatter
-
 from tests.test_output_models import _all_outputs
+from tradingscope.agents.renderers import render_evidence_pack
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.dashscope_response_model import DashScopeResponseModel
+from tradingscope.agents.utils.prompt_cache import CACHE_PREFIX_BREAK, DashScopeResponseFormatter
 from tradingscope.default_config import DEFAULT_CONFIG
 
 
@@ -49,6 +49,17 @@ def test_context_renders_typed_downstream_inputs() -> None:
     assert context.trader.decision.summary in risk_context
 
 
+def test_downstream_contexts_extend_a_stable_prefix() -> None:
+    context = _typed_context()
+
+    analysts = context.generate_analyst_reports_md()
+    research = render_evidence_pack(context.research_manager)
+    trader = render_evidence_pack(context.trader)
+
+    assert context.generate_trader_context_md().split(CACHE_PREFIX_BREAK) == [analysts, research]
+    assert context.generate_risk_evaluation_context_md().split(CACHE_PREFIX_BREAK) == [analysts, research, trader]
+
+
 def test_default_model_config() -> None:
     assert DEFAULT_CONFIG["deep_think_llm"] == "qwen4-max"
     assert DEFAULT_CONFIG["quick_think_llm"] == "qwen3.8-flash"
@@ -67,7 +78,7 @@ def test_context_uses_two_responses_models() -> None:
     assert response_model.call_args_list[0].kwargs["model"] == DEFAULT_CONFIG["deep_think_llm"]
     assert response_model.call_args_list[0].kwargs["parameters"].thinking_enable is True
     assert response_model.call_args_list[1].kwargs["parameters"].thinking_enable is False
-    assert all(isinstance(call.kwargs["formatter"], OpenAIResponseFormatter) for call in response_model.call_args_list)
+    assert all(isinstance(call.kwargs["formatter"], DashScopeResponseFormatter) for call in response_model.call_args_list)
     assert response_model.call_args_list[0].kwargs["formatter"] is response_model.call_args_list[1].kwargs["formatter"]
     assert all(call.kwargs["client_kwargs"] == {"default_headers": {"x-dashscope-session-cache": "enable"}} for call in response_model.call_args_list)
     assert all(call.kwargs["stream"] is True for call in response_model.call_args_list)

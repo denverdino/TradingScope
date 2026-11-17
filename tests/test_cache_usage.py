@@ -52,6 +52,14 @@ def test_cache_usage_middleware_records_non_streaming_response() -> None:
         "output_tokens": 200,
         "cache_input_tokens": 1_200,
     }
+    assert collector.by_agent == {
+        "BullResearcher": {
+            "calls": 1,
+            "input_tokens": 1_500,
+            "output_tokens": 200,
+            "cache_input_tokens": 1_200,
+        },
+    }
     log_args = log_info.call_args.args
     assert "cache_read=%d" in log_args[0]
     assert log_args[1:] == ("BullResearcher", "qwen3.8-max", 1_200, 80.0)
@@ -250,6 +258,22 @@ def test_cache_usage_collector_logs_workflow_summary() -> None:
     log_args = log_info.call_args.args
     assert "workflow cache summary" in log_args[0]
     assert log_args[1:] == (2, 4_000, 500, 3_000, 75.0)
+
+
+def test_cache_usage_collector_logs_per_agent_usage_by_input_descending() -> None:
+    collector = CacheUsageCollector()
+    collector.record(SimpleNamespace(usage=ChatUsage(input_tokens=1_000, output_tokens=50, cache_input_tokens=0, time=0.1)), "Trader")
+    collector.record(SimpleNamespace(usage=ChatUsage(input_tokens=3_000, output_tokens=80, cache_input_tokens=1_500, time=0.1)), "BullResearcher")
+    collector.record(SimpleNamespace(usage=ChatUsage(input_tokens=1_000, output_tokens=20, cache_input_tokens=900, time=0.1)), "BullResearcher")
+
+    with patch("agentscope.logger.info") as log_info:
+        collector.log_summary()
+
+    agent_lines = [call.args[1:] for call in log_info.call_args_list[1:]]
+    assert agent_lines == [
+        ("BullResearcher", 2, 4_000, 100, 2_400, 60.0),
+        ("Trader", 1, 1_000, 50, 0, 0.0),
+    ]
 
 
 def test_cache_usage_uses_agentscope_logger() -> None:

@@ -83,7 +83,7 @@ def _validate_execution_plan(output: TraderOutput | PortfolioManagerOutput) -> l
     if intent not in ACTION_INTENTS[action]:
         return [_error(("trade_intent",), f"{action.value} action is inconsistent with {intent.value} trade_intent")]
 
-    if action in (Action.BUY, Action.SELL):
+    if action in (Action.BUY, Action.SELL) and intent is not TradeIntent.REDUCE_LONG:
         expected_direction = Direction.BULLISH if action is Action.BUY else Direction.BEARISH
         if output.decision.direction is not expected_direction:
             errors.append(

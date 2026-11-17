@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
+from functools import partial
 from typing import Generic, TypeVar
 
 from agentscope.exception import StructuredOutputError, ToolJSONDecodeError
@@ -64,6 +65,7 @@ class StructuredAgentRunner(Generic[OutputT]):
         draft_text = draft.get_text_content()
         validation_feedback = ""
         last_errors: list[dict[str, object]] = []
+        on_response = partial(self._usage_collector.record, agent_name=f"{agent.name}/structured_output") if self._usage_collector is not None else None
 
         for attempt in range(1, self._max_validation_attempts + 1):
             content = f"将以下分析素材整理为指定结构。不得添加素材中不存在的事实。\n\n分析素材：\n{draft_text}\n{validation_feedback}"
@@ -72,6 +74,7 @@ class StructuredAgentRunner(Generic[OutputT]):
                     response = await self._formatter_model.generate_structured_output(
                         messages=[UserMsg(name="structured_output", content=content)],
                         structured_model=output_model,
+                        on_response=on_response,
                     )
                 except StructuredOutputError as exc:
                     cause = exc.__cause__
@@ -81,8 +84,6 @@ class StructuredAgentRunner(Generic[OutputT]):
                         # The cause already chains back to exc; `from exc` would create a cycle.
                         raise cause from None
                     raise RuntimeError(str(exc)) from exc
-                if self._usage_collector is not None:
-                    self._usage_collector.record(response)
                 output = output_model.model_validate(response.content)
                 validate_generated_output(output, reference_outputs)
                 return output

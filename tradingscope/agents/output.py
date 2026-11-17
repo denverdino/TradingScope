@@ -51,14 +51,6 @@ class Decision(StrictModel):
     summary: str = Field(min_length=1)
     reasoning: list[str] = Field(min_length=1)
 
-    @model_validator(mode="after")
-    def reject_direction_action_conflicts(self) -> Decision:
-        if self.action is Action.BUY and self.direction is Direction.BEARISH:
-            raise ValueError("buy action cannot use bearish direction")
-        if self.action is Action.SELL and self.direction is Direction.BULLISH:
-            raise ValueError("sell action cannot use bullish direction")
-        return self
-
 
 class PricePlan(StrictModel):
     execution_price: float | None = Field(
@@ -179,6 +171,15 @@ class AgentOutputBase(StrictModel):
     decision: Decision
     evidence: list[Evidence]
     limitations: list[str]
+
+    @model_validator(mode="after")
+    def reject_direction_action_conflicts(self) -> AgentOutputBase:
+        if self.decision.action is Action.BUY and self.decision.direction is Direction.BEARISH:
+            raise ValueError("buy action cannot use bearish direction")
+        is_reduction = isinstance(self, (TraderOutput, PortfolioManagerOutput)) and self.trade_intent is TradeIntent.REDUCE_LONG
+        if self.decision.action is Action.SELL and self.decision.direction is Direction.BULLISH and not is_reduction:
+            raise ValueError("sell action cannot use bullish direction")
+        return self
 
 
 class MarketAnalystOutput(AgentOutputBase):

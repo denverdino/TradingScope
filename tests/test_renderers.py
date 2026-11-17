@@ -53,6 +53,55 @@ def test_each_output_renders_markdown(index: int, expected_heading: str) -> None
     assert "```json" not in markdown
 
 
+@pytest.mark.parametrize("index", range(6))
+def test_evidence_pack_keeps_sources_limitations_and_invalidation(index: int) -> None:
+    from tradingscope.agents.renderers import render_evidence_pack
+
+    output = _all_outputs()[index].model_copy(update={"limitations": ["新闻源缺失"]})
+    pack = render_evidence_pack(output)
+
+    evidence = output.evidence[0]
+    assert output.decision.summary in pack
+    assert output.decision.reasoning[0] not in pack
+    assert evidence.claim in pack
+    assert evidence.supporting_data in pack
+    assert evidence.source in pack
+    assert evidence.as_of_date.isoformat() in pack
+    assert "新闻源缺失" in pack
+    assert output.price_plan.invalidation_conditions[0] in pack
+
+
+@pytest.mark.parametrize(
+    ("index", "counter_evidence"),
+    [(1, "需求波动"), (2, "监管变化"), (3, "样本有限"), (4, "估值不低"), (5, "波动放大")],
+)
+def test_evidence_pack_keeps_counter_evidence(index: int, counter_evidence: str) -> None:
+    from tradingscope.agents.renderers import render_evidence_pack
+
+    assert counter_evidence in render_evidence_pack(_all_outputs()[index])
+
+
+def test_evidence_pack_replaces_narrative_prose_with_compact_facts() -> None:
+    from tradingscope.agents.renderers import render_evidence_pack
+
+    market, fundamentals, news, *_ = _all_outputs()
+    market_pack = render_evidence_pack(market)
+    fundamentals_pack = render_evidence_pack(fundamentals)
+    news_pack = render_evidence_pack(news)
+
+    assert "RSI=55（中性）" in market_pack
+    assert "营收（2026Q2）=100" in fundamentals_pack
+    assert "新品发布（company" in news_pack
+    for pack, prose in (
+        (market_pack, "大盘环境中性"),
+        (market_pack, "动量中性"),
+        (fundamentals_pack, "消费电子公司"),
+        (fundamentals_pack, "同比增长"),
+        (news_pack, "宏观环境稳定"),
+    ):
+        assert prose not in pack
+
+
 def test_full_report_orders_stages() -> None:
     from tradingscope.agents.renderers import render_full_report
 
