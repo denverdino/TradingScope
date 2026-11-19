@@ -12,10 +12,11 @@ DEFAULT_CONFIG = {
     "llm_provider": "dashscope",
     "deep_think_llm": "qwen4-max",
     "quick_think_llm": "qwen3.8-flash",
+    "prompt_cache_ttl": {"qwen4-max": "1h"},
     "backend_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
     # Debate and discussion settings
-    "max_debate_rounds": 1,
-    "max_risk_discuss_rounds": 1,
+    "max_debate_rounds": 2,
+    "max_risk_discuss_rounds": 2,
     "max_recur_limit": 100,
     "data_vendors": {
         "core_stock_apis": "yfinance",  # Options: yfinance, alpha_vantage, local
@@ -26,6 +27,7 @@ DEFAULT_CONFIG = {
     },
     # Tool-level configuration (takes precedence over category-level)
     "tool_vendors": {
+        "get_news": "finnhub",
         # Example: "get_stock_data": "alpha_vantage",  # Override category default
         # Example: "get_news": "dashscope",               # Override category default
     },

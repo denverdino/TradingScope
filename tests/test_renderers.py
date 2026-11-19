@@ -81,6 +81,37 @@ def test_evidence_pack_keeps_counter_evidence(index: int, counter_evidence: str)
     assert counter_evidence in render_evidence_pack(_all_outputs()[index])
 
 
+@pytest.mark.parametrize(
+    ("direction", "expected_counter_evidence"),
+    [
+        ("bullish", "- MACD=-0.4（看跌）：动量转弱\n- 样本有限"),
+        ("bearish", "- MA=100（看涨）：均线上行\n- 样本有限"),
+        ("neutral", "- 样本有限"),
+    ],
+)
+def test_market_evidence_pack_keeps_only_opposing_indicators(direction, expected_counter_evidence) -> None:
+    from tradingscope.agents.renderers import render_evidence_pack
+
+    data = _all_outputs()[0].model_dump(mode="json")
+    data["decision"]["direction"] = direction
+    data["technical_indicators"] = [
+        {"name": "MA", "value": "100", "signal": "bullish", "interpretation": "均线上行"},
+        {"name": "MACD", "value": "-0.4", "signal": "bearish", "interpretation": "动量转弱"},
+        {"name": "RSI", "value": "55", "signal": "neutral", "interpretation": "动量中性"},
+    ]
+    data["limitations"] = ["样本有限"]
+    market = models.MarketAnalystOutput.model_validate(data)
+    before = market.model_dump()
+
+    pack = render_evidence_pack(market)
+
+    counter_section = pack.split("### 反证与局限\n\n", 1)[1].split("\n\n### 价格计划", 1)[0]
+    assert counter_section == expected_counter_evidence
+    assert "MA=100（看涨）" in pack
+    assert "MACD=-0.4（看跌）" in pack
+    assert market.model_dump() == before
+
+
 def test_evidence_pack_replaces_narrative_prose_with_compact_facts() -> None:
     from tradingscope.agents.renderers import render_evidence_pack
 

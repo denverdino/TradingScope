@@ -1,7 +1,10 @@
 import logging
 import os
 import time
+from datetime import date, datetime, timedelta, timezone
+from functools import lru_cache
 from typing import Annotated
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import pandas as pd
 import yfinance as yf
@@ -11,6 +14,88 @@ from yfinance.exceptions import YFRateLimitError
 from .config import DATA_DIR, get_config
 
 logger = logging.getLogger(__name__)
+
+_REFRESHED_PRICE_FILES: set[str] = set()
+_US_MARKET_TZ = ZoneInfo("America/New_York")
+
+
+def market_timezone(metadata: dict | None = None, index_timezone=None, *, us_market: bool = False) -> ZoneInfo:
+    for name in ((metadata or {}).get("exchangeTimezoneName"), index_timezone):
+        if name is not None:
+            try:
+                return ZoneInfo(str(name))
+            except (ValueError, ZoneInfoNotFoundError):
+                logger.warning("Invalid exchange timezone: %s", name)
+    if us_market:
+        return _US_MARKET_TZ
+    raise RuntimeError("Cannot determine exchange timezone for daily prices")
+
+
+def completed_daily_cutoff(metadata: dict | None = None, index_timezone=None, *, us_market: bool = False) -> date:
+    market_tz = market_timezone(metadata, index_timezone, us_market=us_market)
+    now = datetime.now(timezone.utc).astimezone(market_tz)
+    regular_end = (metadata or {}).get("currentTradingPeriod", {}).get("regular", {}).get("end")
+    if regular_end is not None:
+        try:
+            close = datetime.fromtimestamp(regular_end, market_tz)
+            if close.date() == now.date():
+                return now.date() if now >= close else now.date() - timedelta(days=1)
+        except (TypeError, ValueError, OverflowError, OSError):
+            logger.warning("Invalid regular session end: %s", regular_end)
+    if market_tz == _US_MARKET_TZ:
+        logger.warning("Today's market schedule unavailable; using conservative 16:00 New York close (early closes unknown)")
+        close = now.replace(hour=16, minute=0, second=0, microsecond=0)
+        return now.date() if now >= close else now.date() - timedelta(days=1)
+    logger.warning("Cannot confirm today's close for %s; excluding today's daily bar", market_tz)
+    return now.date() - timedelta(days=1)
+
+
+@lru_cache(maxsize=32)
+def _market_metadata(symbol: str, market_date: date) -> dict:
+    try:
+        return dict(yf.Ticker(symbol).history_metadata or {})
+    except Exception:
+        logger.warning("Market schedule unavailable for %s", symbol)
+        return {}
+
+
+def load_yfinance_data(symbol: str, years: int, cache_dir: str) -> pd.DataFrame:
+    metadata = _market_metadata(symbol, datetime.now(timezone.utc).date())
+    data = None
+    if not metadata.get("exchangeTimezoneName"):
+        # A superset download supplies the exchange timezone when metadata is unavailable.
+        end = pd.Timestamp(datetime.now(timezone.utc).date()) + pd.Timedelta(days=2)
+        start = end - pd.DateOffset(years=years)
+        data = yf_retry(
+            lambda: yf.download(
+                symbol, start=start.strftime("%Y-%m-%d"), end=end.strftime("%Y-%m-%d"), multi_level_index=False, progress=False, auto_adjust=True
+            )
+        )
+        if data.empty:
+            raise RuntimeError(f"No price data returned for {symbol}")
+        metadata["exchangeTimezoneName"] = str(market_timezone(metadata, data.index.tz))
+    cutoff = completed_daily_cutoff(metadata)
+    exclusive_end = pd.Timestamp(cutoff) + pd.Timedelta(days=1)
+    start_date = (exclusive_end - pd.DateOffset(years=years)).strftime("%Y-%m-%d")
+    end_date = exclusive_end.strftime("%Y-%m-%d")
+    data_file = os.path.abspath(os.path.join(cache_dir, f"{symbol}-YFin-data-{start_date}-{end_date}.csv"))
+    os.makedirs(cache_dir, exist_ok=True)
+    if data_file in _REFRESHED_PRICE_FILES and os.path.exists(data_file):
+        return pd.read_csv(data_file, on_bad_lines="skip")
+
+    if data is None:
+        data = yf_retry(lambda: yf.download(symbol, start=start_date, end=end_date, multi_level_index=False, progress=False, auto_adjust=True))
+    if data.empty:
+        raise RuntimeError(f"No price data returned for {symbol}")
+    if data.index.tz is not None:
+        data = data.tz_convert(market_timezone(metadata)).tz_localize(None)
+    data = _clean_dataframe(data.reset_index())
+    data = data[(data["Date"].dt.date >= pd.Timestamp(start_date).date()) & (data["Date"].dt.date <= cutoff)]
+    if data.empty:
+        raise RuntimeError(f"No price data returned for {symbol}")
+    data.to_csv(data_file, index=False)
+    _REFRESHED_PRICE_FILES.add(data_file)
+    return data
 
 
 def yf_retry(func, max_retries=3, base_delay=2.0):
@@ -74,38 +159,8 @@ class StockstatsUtils:
             except FileNotFoundError:
                 raise Exception("Stockstats fail: Yahoo Finance data not fetched yet!")
         else:
-            # Get today's date as YYYY-mm-dd to add to cache
-            today_date = pd.Timestamp.today()
             curr_date = pd.to_datetime(curr_date)
-
-            end_date = today_date
-            start_date = today_date - pd.DateOffset(years=15)
-            start_date = start_date.strftime("%Y-%m-%d")
-            end_date = end_date.strftime("%Y-%m-%d")
-
-            # Get config and ensure cache directory exists
-            os.makedirs(config["data_cache_dir"], exist_ok=True)
-
-            data_file = os.path.join(
-                config["data_cache_dir"],
-                f"{symbol}-YFin-data-{start_date}-{end_date}.csv",
-            )
-
-            if os.path.exists(data_file):
-                data = pd.read_csv(data_file, on_bad_lines="skip")
-            else:
-                data = yf_retry(
-                    lambda: yf.download(
-                        symbol,
-                        start=start_date,
-                        end=end_date,
-                        multi_level_index=False,
-                        progress=False,
-                        auto_adjust=True,
-                    )
-                )
-                data = data.reset_index()
-                data.to_csv(data_file, index=False)
+            data = load_yfinance_data(symbol, 15, config["data_cache_dir"])
 
             data = _clean_dataframe(data)
             df = wrap(data)
@@ -119,4 +174,4 @@ class StockstatsUtils:
             indicator_value = matching_rows[indicator].values[0]
             return indicator_value
         else:
-            return "N/A: Not a trading day (weekend or holiday)"
+            return "N/A: No price data available for this date"

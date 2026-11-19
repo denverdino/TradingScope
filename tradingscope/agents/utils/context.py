@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Annotated
 
 import yfinance as yf
@@ -25,6 +25,7 @@ from tradingscope.agents.utils.cache_usage import CacheUsageCollector, CacheUsag
 from tradingscope.agents.utils.dashscope_response_model import DashScopeResponseModel
 from tradingscope.agents.utils.prompt_cache import CACHE_PREFIX_BREAK, DashScopeResponseFormatter
 from tradingscope.agents.utils.tracing import create_tracing_middlewares
+from tradingscope.dataflows.stockstats_utils import completed_daily_cutoff
 from tradingscope.default_config import DEFAULT_CONFIG
 
 logger = logging.getLogger(__name__)
@@ -36,25 +37,23 @@ def get_last_completed_us_session() -> str:
         spy = yf.Ticker("SPY")
         hist = spy.history(period="5d")
         if hist is not None and not hist.empty:
-            latest_date = hist.index[-1]
-            if hasattr(latest_date, "tz") and latest_date.tz is not None:
-                latest_date = latest_date.tz_localize(None)
-            result = latest_date.strftime("%Y-%m-%d")
-            logger.info("Last completed US session from Yahoo Finance: %s", result)
-            return result
+            try:
+                metadata = spy.history_metadata
+            except Exception:
+                logger.warning("SPY schedule unavailable; using conservative New York close")
+                metadata = {}
+            cutoff = completed_daily_cutoff(metadata, hist.index.tz, us_market=True)
+            hist = hist[hist.index.date <= cutoff]
+            if not hist.empty:
+                result = hist.index[-1].strftime("%Y-%m-%d")
+                logger.info("Last completed US session from Yahoo Finance: %s", result)
+                return result
     except YFRateLimitError:
         logger.warning("Yahoo Finance rate limited when fetching last completed session")
     except Exception as exc:
         logger.warning("Failed to get last completed session from Yahoo Finance: %s", exc)
 
-    now = datetime.now()
-    if now.weekday() == 5:
-        now -= timedelta(days=1)
-    elif now.weekday() == 6:
-        now -= timedelta(days=2)
-    result = now.strftime("%Y-%m-%d")
-    logger.info("Using fallback last completed session (weekday-based): %s", result)
-    return result
+    raise RuntimeError("Cannot determine last completed US session from Yahoo Finance history")
 
 
 class AgentContext:

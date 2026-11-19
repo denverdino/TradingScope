@@ -12,6 +12,8 @@ from agentscope.model import ChatResponse, OpenAIResponseModel, StructuredRespon
 from agentscope.tool import ToolChoice
 from pydantic import BaseModel
 
+from tradingscope.default_config import DEFAULT_CONFIG
+
 
 def _inline_local_refs(schema: dict[str, Any]) -> dict[str, Any]:
     """Inline Pydantic ``$defs`` references for DashScope function tools."""
@@ -99,8 +101,9 @@ class DashScopeResponseModel(OpenAIResponseModel):
         """Translate thinking mode and delegate the request to AgentScope."""
         extra_body = dict(generate_kwargs.pop("extra_body", {}) or {})
         extra_body["enable_thinking"] = self.parameters.thinking_enable
-        if model_name == "qwen4-max":
-            extra_body.setdefault("prompt_cache_options", {"mode": "implicit", "ttl": "1h"})
+        cache_ttl = DEFAULT_CONFIG["prompt_cache_ttl"].get(model_name)
+        if cache_ttl is not None:
+            extra_body.setdefault("prompt_cache_options", {"mode": "implicit", "ttl": cache_ttl})
         response = await super()._call_api(
             model_name,
             messages,

@@ -10,11 +10,14 @@ from agentscope.event import (
     ReplyStartEvent,
     TextBlockDeltaEvent,
     ToolCallStartEvent,
+    ToolResultEndEvent,
     ToolResultStartEvent,
     ToolResultTextDeltaEvent,
 )
 from agentscope.message import Msg
 from agentscope.permission import PermissionMode
+
+from .local_audit import get_audit_recorder, redact
 
 COMPLIANCE_PROMPT = "你必须严格遵守内容安全与合规要求，不得生成任何涉黄、涉暴、涉政、违法、仇恨、歧视等内容。"
 
@@ -199,14 +202,20 @@ async def call_agent_with_retry(
         agent.state.permission_context.mode = PermissionMode.BYPASS
 
     agent_name = getattr(agent, "name", "unknown")
+    audit = get_audit_recorder()
 
     last_exc = None
     for attempt in range(max_retries + 1):
         try:
             final_msg: Msg | None = None
             text_buf: list[str] = []
-            tool_result_buf: list[str] = []
+            tool_result_buf: dict[str, list[str]] = {}
             async for event in agent._reply(prompt):
+                if audit is not None:
+                    try:
+                        await audit.observe(agent, event, attempt)
+                    except Exception:
+                        logger.warning("Local audit event could not be recorded")
                 if isinstance(event, Msg):
                     final_msg = event
                 elif isinstance(event, ReplyStartEvent):
@@ -215,24 +224,25 @@ async def call_agent_with_retry(
                     text_buf.append(event.delta)
                 elif isinstance(event, ToolCallStartEvent):
                     if text_buf:
-                        logger.info("[%s] %s", agent_name, "".join(text_buf))
+                        logger.info("[%s] %s", agent_name, redact("".join(text_buf)))
                         text_buf.clear()
                     logger.info("[%s] -> tool: %s", agent_name, event.tool_call_name)
                 elif isinstance(event, ToolResultStartEvent):
-                    tool_result_buf.clear()
+                    tool_result_buf[event.tool_call_id] = []
                 elif isinstance(event, ToolResultTextDeltaEvent):
-                    tool_result_buf.append(event.delta)
+                    tool_result_buf.setdefault(event.tool_call_id, []).append(event.delta)
+                elif isinstance(event, ToolResultEndEvent):
+                    result_text = "".join(tool_result_buf.pop(event.tool_call_id, []))
+                    logger.debug("[%s] tool result [%s]: %s", agent_name, event.tool_call_id, redact(result_text)[:500])
                 elif isinstance(event, ModelCallEndEvent):
                     if text_buf:
-                        logger.info("[%s] %s", agent_name, "".join(text_buf))
+                        logger.info("[%s] %s", agent_name, redact("".join(text_buf)))
                         text_buf.clear()
-                    if tool_result_buf:
-                        result_text = "".join(tool_result_buf)
-                        logger.debug("[%s] tool result: %s", agent_name, result_text[:500])
-                        tool_result_buf.clear()
                     logger.info("[%s] tokens: in=%d out=%d", agent_name, event.input_tokens, event.output_tokens)
             if final_msg is None:
                 raise RuntimeError(f"Agent '{agent_name}' did not produce a final message.")
+            if audit is not None:
+                audit.record("agent_response", agent=agent_name, phase="draft", attempt=attempt, text=final_msg.get_text_content())
             return final_msg
         except _RETRIABLE_EXCEPTIONS as e:
             last_exc = e
@@ -243,7 +253,7 @@ async def call_agent_with_retry(
                     agent_name,
                     attempt + 1,
                     max_retries,
-                    e,
+                    redact(str(e)),
                     delay,
                 )
                 await asyncio.sleep(delay)
@@ -252,9 +262,12 @@ async def call_agent_with_retry(
                     "[Retry] Agent '%s' failed after %d attempts: %s",
                     agent_name,
                     max_retries + 1,
-                    e,
+                    redact(str(e)),
                 )
                 raise last_exc from e
+        finally:
+            if audit is not None:
+                audit.finish(agent, attempt)
 
 
 def get_company_name(ticker: str, market_info: dict = None) -> str:

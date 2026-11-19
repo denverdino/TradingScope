@@ -59,7 +59,8 @@ def create_portfolio_manager_agent(
 分析素材应覆盖以下内容，无需遵循固定展示格式：
 - 股票代码：{ticker}；分析日期：{analysis_date}；最近完成交易日：{last_completed_session}。
 - 唯一方向与操作建议、置信度（0-1）、风险评分（0-1）及核心理由。
-- 三位辩手的关键观点与采纳/拒绝理由，关联证据来源、最强反证和失效条件。
+- 三位辩手的关键观点与采纳/拒绝理由，关联证据来源、原始链接（如有）、数据日期、最强反证和失效条件。
+- 所有价格与金额注明货币；价格无依据时留空（null）并说明限制。
 - 数据缺失与适用限制。
 
 可执行价格计划素材：
@@ -76,7 +77,7 @@ def create_portfolio_manager_agent(
 ### 失效条件
 - 明确说明交易计划失效的条件
 
-请输出简洁但完整的分析素材，覆盖事实依据、关键指标、风险、结论与可执行价格计划。
+请输出简洁但完整的分析素材，覆盖事实依据、关键指标、风险、结论与可执行价格计划；核心理由最多3点，不得重抄共享报告，只引用决策所需的关键数据。
 不要输出 JSON、JSON 代码块或固定 Markdown 报告模板；系统将在下一阶段根据严格 schema 生成正式结果。"""
     system_message = build_cacheable_system_prompt(
         shared_context=context.generate_risk_evaluation_context_md(),

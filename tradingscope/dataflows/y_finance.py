@@ -1,13 +1,15 @@
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+from math import isclose
 from typing import Annotated
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import yfinance as yf
 from dateutil.relativedelta import relativedelta
 
-from .stockstats_utils import StockstatsUtils, _clean_dataframe, yf_retry
+from .stockstats_utils import StockstatsUtils, _clean_dataframe, completed_daily_cutoff, load_yfinance_data, market_timezone, yf_retry
 
 logger = logging.getLogger(__name__)
 
@@ -38,13 +40,31 @@ def get_YFin_data_online(
 ):
 
     datetime.strptime(start_date, "%Y-%m-%d")
-    datetime.strptime(end_date, "%Y-%m-%d")
+    exclusive_end = (datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
 
     # Create ticker object
     ticker = yf.Ticker(symbol.upper())
 
     # Fetch historical data for the specified date range
-    data = yf_retry(lambda: ticker.history(start=start_date, end=end_date))
+    data = yf_retry(lambda: ticker.history(start=start_date, end=exclusive_end))
+    if not data.empty:
+        today = datetime.now(timezone.utc)
+        if data.index.tz is not None:
+            today_date = today.astimezone(data.index.tz).date()
+        else:
+            today_date = today.date() - timedelta(days=1)
+        if max(data.index.date) >= today_date:
+            try:
+                metadata = ticker.history_metadata
+            except Exception:
+                logger.warning("Market schedule unavailable for %s", symbol)
+                metadata = {}
+            market_tz = market_timezone(metadata, data.index.tz)
+            cutoff = completed_daily_cutoff(metadata, data.index.tz)
+            if data.index.tz is not None:
+                data = data.tz_convert(market_tz)
+            data = data[data.index.date <= cutoff]
+        data = data[(data.index.date >= datetime.strptime(start_date, "%Y-%m-%d").date()) & (data.index.date <= datetime.strptime(end_date, "%Y-%m-%d").date())]
 
     # Check if data is empty
     if data.empty:
@@ -173,7 +193,7 @@ def get_stock_stats_indicators_window(
             if date_str in indicator_data:
                 indicator_value = indicator_data[date_str]
             else:
-                indicator_value = "N/A: Not a trading day (weekend or holiday)"
+                indicator_value = "N/A: No price data available for this date"
 
             date_values.append((date_str, indicator_value))
             current_dt = current_dt - relativedelta(days=1)
@@ -233,37 +253,7 @@ def _get_stock_stats_bulk(
         except FileNotFoundError:
             raise Exception("Stockstats fail: Yahoo Finance data not fetched yet!")
     else:
-        # Online data fetching with caching
-        today_date = pd.Timestamp.today()
-        curr_date_dt = pd.to_datetime(curr_date)
-
-        end_date = today_date
-        start_date = today_date - pd.DateOffset(years=15)
-        start_date_str = start_date.strftime("%Y-%m-%d")
-        end_date_str = end_date.strftime("%Y-%m-%d")
-
-        os.makedirs(config["data_cache_dir"], exist_ok=True)
-
-        data_file = os.path.join(
-            config["data_cache_dir"],
-            f"{symbol}-YFin-data-{start_date_str}-{end_date_str}.csv",
-        )
-
-        if os.path.exists(data_file):
-            data = pd.read_csv(data_file, on_bad_lines="skip")
-        else:
-            data = yf_retry(
-                lambda: yf.download(
-                    symbol,
-                    start=start_date_str,
-                    end=end_date_str,
-                    multi_level_index=False,
-                    progress=False,
-                    auto_adjust=True,
-                )
-            )
-            data = data.reset_index()
-            data.to_csv(data_file, index=False)
+        data = load_yfinance_data(symbol, 15, config["data_cache_dir"])
 
     data = _clean_dataframe(data)
     df = wrap(data)
@@ -426,6 +416,15 @@ def get_insider_transactions(ticker: Annotated[str, "ticker symbol of the compan
         return f"Error retrieving insider transactions for {ticker}: {str(e)}"
 
 
+def _format_session_return(close: pd.Series, sessions: int, label: str) -> str:
+    if len(close) <= sessions:
+        return f"- {label}: N/A (need {sessions + 1} completed closes, got {len(close)})\n"
+    value = (close.iloc[-1] / close.iloc[-sessions - 1] - 1) * 100
+    start = close.index[-sessions - 1].strftime("%Y-%m-%d")
+    end = close.index[-1].strftime("%Y-%m-%d")
+    return f"- {label}: {value:+.2f}% ({start} to {end}; {sessions} completed-session intervals)\n"
+
+
 def get_sector_performance(
     ticker: Annotated[str, "ticker symbol of the company"],
     look_back_days: Annotated[int, "how many days to look back"] = 30,
@@ -480,19 +479,10 @@ def get_sector_performance(
         result += f"- Sector: {sector}\n"
         result += f"- Industry: {industry}\n\n"
 
-        # Calculate stock performance
         stock_close = stock_hist["Close"]
-        if len(stock_close) >= 2:
-            stock_return_1d = ((stock_close.iloc[-1] / stock_close.iloc[-2]) - 1) * 100
-            result += f"- Stock 1-Day Return: {stock_return_1d:.2f}%\n"
-
-        if len(stock_close) >= 5:
-            stock_return_5d = ((stock_close.iloc[-1] / stock_close.iloc[-5]) - 1) * 100
-            result += f"- Stock 5-Day Return: {stock_return_5d:.2f}%\n"
-
-        if len(stock_close) >= look_back_days:
-            stock_return_period = ((stock_close.iloc[-1] / stock_close.iloc[-look_back_days]) - 1) * 100
-            result += f"- Stock {look_back_days}-Day Return: {stock_return_period:.2f}%\n"
+        periods = tuple(dict.fromkeys((1, 5, look_back_days)))
+        for sessions in periods:
+            result += _format_session_return(stock_close, sessions, f"Stock {sessions}-Day Return")
 
         # Get sector ETF performance if available
         sector_etf = SECTOR_ETFS.get(sector)
@@ -505,23 +495,19 @@ def get_sector_performance(
                     etf_close = etf_hist["Close"]
                     result += f"\n## Sector ETF Performance ({sector_etf} - {sector})\n"
 
-                    if len(etf_close) >= 2:
-                        etf_return_1d = ((etf_close.iloc[-1] / etf_close.iloc[-2]) - 1) * 100
-                        result += f"- Sector 1-Day Return: {etf_return_1d:.2f}%\n"
-                        if len(stock_close) >= 2:
-                            result += f"- Stock vs Sector (1D): {stock_return_1d - etf_return_1d:+.2f}%\n"
-
-                    if len(etf_close) >= 5:
-                        etf_return_5d = ((etf_close.iloc[-1] / etf_close.iloc[-5]) - 1) * 100
-                        result += f"- Sector 5-Day Return: {etf_return_5d:.2f}%\n"
-                        if len(stock_close) >= 5:
-                            result += f"- Stock vs Sector (5D): {stock_return_5d - etf_return_5d:+.2f}%\n"
-
-                    if len(etf_close) >= look_back_days:
-                        etf_return_period = ((etf_close.iloc[-1] / etf_close.iloc[-look_back_days]) - 1) * 100
-                        result += f"- Sector {look_back_days}-Day Return: {etf_return_period:.2f}%\n"
-                        if len(stock_close) >= look_back_days:
-                            result += f"- Stock vs Sector ({look_back_days}D): {stock_return_period - etf_return_period:+.2f}%\n"
+                    for sessions in periods:
+                        result += _format_session_return(etf_close, sessions, f"Sector {sessions}-Day Return")
+                        if len(stock_close) <= sessions or len(etf_close) <= sessions:
+                            result += f"- Stock vs Sector ({sessions}D): N/A (insufficient completed closes)\n"
+                            continue
+                        if stock_close.index[-sessions - 1 :].date.tolist() != etf_close.index[-sessions - 1 :].date.tolist():
+                            result += f"- Stock vs Sector ({sessions}D): N/A (session windows differ)\n"
+                            continue
+                        stock_return = (stock_close.iloc[-1] / stock_close.iloc[-sessions - 1] - 1) * 100
+                        etf_return = (etf_close.iloc[-1] / etf_close.iloc[-sessions - 1] - 1) * 100
+                        start = stock_close.index[-sessions - 1].strftime("%Y-%m-%d")
+                        end = stock_close.index[-1].strftime("%Y-%m-%d")
+                        result += f"- Stock vs Sector ({sessions}D): {stock_return - etf_return:+.2f}pp ({start} to {end})\n"
             except Exception as e:
                 result += f"\n## Sector ETF ({sector_etf}) data unavailable: {str(e)}\n"
         else:
@@ -688,22 +674,8 @@ def get_market_indices(
                 result += f"## {name} ({symbol})\n"
                 result += f"- Current Level: {current_price:,.2f}\n"
 
-                # Calculate returns for different periods
-                if len(close) >= 2:
-                    return_1d = ((close.iloc[-1] / close.iloc[-2]) - 1) * 100
-                    result += f"- 1-Day Change: {return_1d:+.2f}%\n"
-
-                if len(close) >= 5:
-                    return_5d = ((close.iloc[-1] / close.iloc[-5]) - 1) * 100
-                    result += f"- 5-Day Change: {return_5d:+.2f}%\n"
-
-                if len(close) >= 10:
-                    return_10d = ((close.iloc[-1] / close.iloc[-10]) - 1) * 100
-                    result += f"- 10-Day Change: {return_10d:+.2f}%\n"
-
-                if len(close) >= look_back_days:
-                    return_period = ((close.iloc[-1] / close.iloc[-look_back_days]) - 1) * 100
-                    result += f"- {look_back_days}-Day Change: {return_period:+.2f}%\n"
+                for sessions in dict.fromkeys((1, 5, 10, look_back_days)):
+                    result += _format_session_return(close, sessions, f"{sessions}-Day Change")
 
                 # For VIX, add detailed interpretation and trend analysis
                 if symbol == "^VIX":
@@ -725,10 +697,10 @@ def get_market_indices(
                         vix_5d_avg = close.iloc[-5:].mean()
                         result += f"- VIX 5-Day Range: {vix_5d_low:.2f} - {vix_5d_high:.2f} (Avg: {vix_5d_avg:.2f})\n"
 
-                        # Spike detection: VIX surged more than 20% in 5 days
-                        vix_5d_change = ((close.iloc[-1] / close.iloc[-5]) - 1) * 100
+                    if len(close) >= 6:
+                        vix_5d_change = ((close.iloc[-1] / close.iloc[-6]) - 1) * 100
                         if vix_5d_change > 20:
-                            result += f"- ⚠ VIX Spike Detected: 5-day surge {vix_5d_change:+.2f}%, 市场恐慌情绪急剧上升\n"
+                            result += f"- VIX Spike Detected: 5-day surge {vix_5d_change:+.2f}%, 市场恐慌情绪急剧上升\n"
                         elif vix_5d_change < -20:
                             result += f"- VIX Rapid Decline: 5-day drop {vix_5d_change:+.2f}%, 恐慌情绪快速消退\n"
 
@@ -759,7 +731,7 @@ def get_market_indices(
                         nasdaq_5d_low = close.iloc[-5:].min()
                         result += f"- NASDAQ 5-Day Range: {nasdaq_5d_low:,.2f} - {nasdaq_5d_high:,.2f}\n"
 
-                        # Momentum: consecutive up/down days
+                    if len(close) >= 6:
                         up_days = sum(1 for i in range(-5, 0) if close.iloc[i] > close.iloc[i - 1])
                         result += f"- NASDAQ Recent Momentum: {up_days}/5 trading days positive (近5日上涨天数)\n"
 
@@ -781,11 +753,7 @@ def get_market_indices(
 
 
 def get_options_analysis(ticker: Annotated[str, "ticker symbol of the company"]):
-    """Get options chain analysis for the nearest expiration date.
-
-    Returns Put/Call ratio, support/resistance levels from open interest,
-    and max pain price. Primarily available for US-listed stocks.
-    """
+    """Analyze a future US options snapshot without imputing missing open interest."""
     try:
         ticker_obj = yf.Ticker(ticker.upper())
 
@@ -794,125 +762,163 @@ def get_options_analysis(ticker: Annotated[str, "ticker symbol of the company"])
         if not expirations:
             return f"No options data available for symbol '{ticker}'. Options data is typically only available for US-listed stocks."
 
-        nearest_exp = expirations[0]
+        retrieved_at = datetime.now(timezone.utc).astimezone(ZoneInfo("America/New_York"))
+        market_today = retrieved_at.date()
+        future_expirations = sorted({exp for exp in expirations if datetime.strptime(exp, "%Y-%m-%d").date() > market_today})
+        if not future_expirations:
+            return f"No future options expiration available for symbol '{ticker}' after {market_today} (America/New_York)."
 
-        # Fetch options chain
-        opt = yf_retry(lambda: ticker_obj.option_chain(nearest_exp))
-        calls_df = opt.calls
-        puts_df = opt.puts
+        def numeric_column(frame, column):
+            if frame.empty or column not in frame:
+                return None
+            values = pd.to_numeric(frame[column], errors="coerce")
+            if not values.notna().all() or not values.between(0, float("inf"), inclusive="left").all():
+                return None
+            if column in ("openInterest", "volume") and not (values % 1 == 0).all():
+                return None
+            return values
 
-        if calls_df.empty and puts_df.empty:
-            return f"Options chain is empty for symbol '{ticker}' (expiration: {nearest_exp})."
+        skipped = [f"{exp}: expired or same-day expiry excluded by forward-window policy" for exp in sorted(set(expirations) - set(future_expirations))]
+        selected = None
+        fallback = None
+        for expiration in future_expirations[:3]:
+            opt = yf_retry(lambda exp=expiration: ticker_obj.option_chain(exp))
+            calls, puts = opt.calls, opt.puts
+            if calls.empty and puts.empty:
+                skipped.append(f"{expiration}: empty chain")
+                continue
+            if fallback is None:
+                fallback = (expiration, calls, puts)
+            call_oi = numeric_column(calls, "openInterest")
+            put_oi = numeric_column(puts, "openInterest")
+            if call_oi is not None and put_oi is not None and call_oi.sum() + put_oi.sum() > 0:
+                selected = (expiration, calls, puts)
+                break
+            reason = "combined OI = 0" if call_oi is not None and put_oi is not None else "incomplete OI"
+            skipped.append(f"{expiration}: {reason}")
+
+        selected = selected or fallback
+        if selected is None:
+            return f"Options chains are empty for symbol '{ticker}'.\n" + "\n".join(skipped)
+        nearest_exp, calls_df, puts_df = selected
 
         # Get current stock price for context
         info = yf_retry(lambda: ticker_obj.info)
         current_price = info.get("currentPrice") or info.get("regularMarketPrice") or 0
 
         # Calculate days to expiration
-        exp_date = datetime.strptime(nearest_exp, "%Y-%m-%d")
-        today = datetime.now()
-        days_to_exp = (exp_date - today).days + 1  # +1 because expiration is end of day
+        exp_date = datetime.strptime(nearest_exp, "%Y-%m-%d").date()
+        days_to_exp = (exp_date - market_today).days
 
-        # --- Put/Call Ratio ---
-        total_call_oi = calls_df["openInterest"].fillna(0).sum()
-        total_put_oi = puts_df["openInterest"].fillna(0).sum()
-        total_call_vol = calls_df["volume"].fillna(0).sum()
-        total_put_vol = puts_df["volume"].fillna(0).sum()
+        call_oi = numeric_column(calls_df, "openInterest")
+        put_oi = numeric_column(puts_df, "openInterest")
+        call_volume = numeric_column(calls_df, "volume")
+        put_volume = numeric_column(puts_df, "volume")
+        total_call_oi = call_oi.sum() if call_oi is not None else None
+        total_put_oi = put_oi.sum() if put_oi is not None else None
+        oi_complete = total_call_oi is not None and total_put_oi is not None
+        positive_oi = oi_complete and total_call_oi + total_put_oi > 0
+        pcr_oi = total_put_oi / total_call_oi if oi_complete and total_call_oi > 0 else None
 
-        pcr_oi = total_put_oi / total_call_oi if total_call_oi > 0 else float("inf")
-        pcr_vol = total_put_vol / total_call_vol if total_call_vol > 0 else float("inf")
-
-        # PCR sentiment interpretation
-        if pcr_oi == float("inf"):
-            pcr_oi_str = "N/A (Call OI = 0)"
-            sentiment = "无法判断（Call 未平仓量为零）"
-        elif pcr_oi < 0.7:
-            pcr_oi_str = f"{pcr_oi:.2f}"
-            sentiment = "偏多情绪（看涨占主导，市场乐观）"
-        elif pcr_oi <= 1.0:
-            pcr_oi_str = f"{pcr_oi:.2f}"
-            sentiment = "中性偏多（多空力量相对均衡，略偏看涨）"
-        elif pcr_oi <= 1.5:
-            pcr_oi_str = f"{pcr_oi:.2f}"
-            sentiment = "中性偏空（看跌占优，市场偏谨慎，但也可能包含机构对冲需求）"
+        if pcr_oi is None:
+            pcr_oi_str = "N/A (Call OI = 0)" if oi_complete else "N/A (incomplete OI)"
+            sentiment = "N/A (OI ratio unavailable)"
         else:
             pcr_oi_str = f"{pcr_oi:.2f}"
-            sentiment = "偏空/防御情绪（大量看跌期权，可能反映市场恐慌或机构系统性对冲需求，需结合Put分布行权价判断是保护性建仓还是方向性看跌）"
+            if pcr_oi < 0.7:
+                sentiment = "偏多情绪（看涨占主导，市场乐观）"
+            elif pcr_oi <= 1.0:
+                sentiment = "中性偏多（多空力量相对均衡，略偏看涨）"
+            elif pcr_oi <= 1.5:
+                sentiment = "中性偏空（看跌占优，市场偏谨慎，但也可能包含机构对冲需求）"
+            else:
+                sentiment = "偏空/防御情绪（大量看跌期权，可能包含机构对冲需求，需结合Put分布行权价判断是保护性建仓还是方向性看跌）"
 
-        pcr_vol_str = f"{pcr_vol:.2f}" if pcr_vol != float("inf") else "N/A (Call Volume = 0)"
+        if call_volume is None or put_volume is None:
+            pcr_vol_str = "N/A (incomplete volume)"
+        elif call_volume.sum() == 0:
+            pcr_vol_str = "N/A (Call Volume = 0)"
+        else:
+            pcr_vol_str = f"{put_volume.sum() / call_volume.sum():.2f}"
 
-        # --- Support Levels (Top Put OI) ---
-        puts_sorted = puts_df[puts_df["openInterest"].fillna(0) > 0].sort_values("openInterest", ascending=False).head(5)
-
-        # --- Resistance Levels (Top Call OI) ---
-        calls_sorted = calls_df[calls_df["openInterest"].fillna(0) > 0].sort_values("openInterest", ascending=False).head(5)
-
-        # --- Max Pain Calculation ---
-        all_strikes = sorted(set(calls_df["strike"].tolist() + puts_df["strike"].tolist()))
-        call_oi_map = dict(zip(calls_df["strike"], calls_df["openInterest"].fillna(0), strict=True))
-        put_oi_map = dict(zip(puts_df["strike"], puts_df["openInterest"].fillna(0), strict=True))
-
+        call_strikes = numeric_column(calls_df, "strike")
+        put_strikes = numeric_column(puts_df, "strike")
         max_pain_price = None
-        min_total_pain = float("inf")
-        for test_price in all_strikes:
-            total_pain = 0
-            # Pain for call holders: if test_price > strike, call is ITM, holder profits, writer loses
-            for strike, oi in call_oi_map.items():
-                if test_price > strike:
-                    total_pain += (test_price - strike) * oi
-            # Pain for put holders: if test_price < strike, put is ITM, holder profits, writer loses
-            for strike, oi in put_oi_map.items():
-                if test_price < strike:
-                    total_pain += (strike - test_price) * oi
-            if total_pain < min_total_pain:
-                min_total_pain = total_pain
-                max_pain_price = test_price
+        max_pain_interval = None
+        if positive_oi and call_strikes is not None and put_strikes is not None:
+            all_strikes = sorted({0.0, *call_strikes[call_oi > 0].tolist(), *put_strikes[put_oi > 0].tolist()})
+            payouts = [((price - call_strikes).clip(lower=0) * call_oi).sum() + ((put_strikes - price).clip(lower=0) * put_oi).sum() for price in all_strikes]
+            minimum = min(payouts)
+            minima = [price for price, payout in zip(all_strikes, payouts, strict=True) if isclose(payout, minimum, rel_tol=1e-12, abs_tol=1e-8)]
+            if total_call_oi == 0:
+                max_pain_interval = (minima[0], None)
+            elif len(minima) > 1:
+                max_pain_interval = (minima[0], minima[-1])
+            else:
+                max_pain_price = minima[0]
 
         # --- Build Result String ---
         result = f"# Options Chain Analysis for {ticker.upper()}\n"
         result += f"# Expiration Date: {nearest_exp}\n"
-        result += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        result += f"# Data queried at: {retrieved_at.isoformat()} (America/New_York)\n\n"
+        result += "- Forward-window reference: today's expiry is excluded; at most three future chains are checked.\n"
+        result += "- OI update time: unknown (Yahoo supplies no verified OI cutoff here). Missing/zero OI does not establish absence of market positions.\n"
+        result += "- Volume is a supplier snapshot, not verified complete current-session volume; OI is not real-time volume.\n"
+        result += "- Completeness checks cover returned rows only; full contract-universe coverage is unverified.\n"
+        result += "- This options snapshot and historical daily prices are not necessarily from the same instant.\n\n"
+        if not positive_oi:
+            result += "- Limited report: no complete positive OI chain found within the candidate limit; using the earliest nonempty future chain.\n\n"
+        if skipped:
+            result += "## Skipped / OI-rejected Expirations\n" + "\n".join(f"- {reason}" for reason in skipped) + "\n\n"
 
         result += "## Current Price Context\n"
         if current_price:
             result += f"- Current Price: ${current_price:.2f}\n"
-        result += f"- Nearest Expiration: {nearest_exp} ({days_to_exp} calendar days away)\n"
-        result += f"- Total Call Open Interest: {int(total_call_oi):,}\n"
-        result += f"- Total Put Open Interest: {int(total_put_oi):,}\n\n"
+        result += f"- Selected Expiration: {nearest_exp} ({days_to_exp} calendar days away)\n"
+        call_oi_text = f"{int(total_call_oi):,}" if total_call_oi is not None else "N/A (missing or invalid OI)"
+        put_oi_text = f"{int(total_put_oi):,}" if total_put_oi is not None else "N/A (missing or invalid OI)"
+        result += f"- Total Call Open Interest: {call_oi_text}\n"
+        result += f"- Total Put Open Interest: {put_oi_text}\n"
+        result += f"- OI completeness: Call {'complete' if call_oi is not None else 'incomplete'}, Put {'complete' if put_oi is not None else 'incomplete'}\n\n"
 
         result += "## Put/Call Ratio\n"
         result += f"- PCR (Open Interest): {pcr_oi_str}\n"
         result += f"- PCR (Volume): {pcr_vol_str}\n"
         result += f"- Sentiment: {sentiment}\n\n"
 
-        result += "## Support Levels (Top Put Open Interest)\n"
-        if not puts_sorted.empty:
+        for title, frame, oi, strikes in (
+            ("Support Levels (Top Put Open Interest)", puts_df, put_oi, put_strikes),
+            ("Resistance Levels (Top Call Open Interest)", calls_df, call_oi, call_strikes),
+        ):
+            result += f"## {title}\n"
+            if oi is None or strikes is None:
+                result += "- N/A (incomplete OI or strikes).\n\n"
+                continue
+            if oi.sum() == 0:
+                result += "- N/A (supplier reports zero OI).\n\n"
+                continue
+            levels = frame.assign(openInterest=oi, strike=strikes).loc[oi > 0].sort_values("openInterest", ascending=False).head(5)
             result += "| Rank | Strike | Open Interest | Implied Volatility |\n"
             result += "|------|--------|---------------|--------------------|\n"
-            for rank, (_, row) in enumerate(puts_sorted.iterrows(), 1):
+            for rank, (_, row) in enumerate(levels.iterrows(), 1):
                 iv = f"{row['impliedVolatility']:.1%}" if pd.notna(row.get("impliedVolatility")) else "N/A"
                 result += f"| {rank} | ${row['strike']:.2f} | {int(row['openInterest']):,} | {iv} |\n"
-        else:
-            result += "- No significant put open interest found.\n"
-        result += "\n"
-
-        result += "## Resistance Levels (Top Call Open Interest)\n"
-        if not calls_sorted.empty:
-            result += "| Rank | Strike | Open Interest | Implied Volatility |\n"
-            result += "|------|--------|---------------|--------------------|\n"
-            for rank, (_, row) in enumerate(calls_sorted.iterrows(), 1):
-                iv = f"{row['impliedVolatility']:.1%}" if pd.notna(row.get("impliedVolatility")) else "N/A"
-                result += f"| {rank} | ${row['strike']:.2f} | {int(row['openInterest']):,} | {iv} |\n"
-        else:
-            result += "- No significant call open interest found.\n"
-        result += "\n"
+            result += "- OI concentrations are reference levels, not guaranteed support/resistance.\n\n"
 
         if max_pain_price is not None:
             result += f"## Max Pain Price: ${max_pain_price:.2f}\n"
             if current_price:
                 diff_pct = ((max_pain_price - current_price) / current_price) * 100
                 result += f"- Distance from current price: {diff_pct:+.2f}%\n"
-            result += "- Max Pain is the price where most options expire worthless. It serves as a reference anchor for near-term options activity — prices may show increased stickiness near this level approaching expiration, but it is not a high-probability price predictor.\n"
+            result += "- Max Pain minimizes aggregate intrinsic option payout weighted by reported OI. It serves as a reference anchor for near-term options activity — prices may show increased stickiness near this level approaching expiration, but it is not a high-probability price predictor.\n"
+        elif max_pain_interval is not None:
+            low, high = max_pain_interval
+            upper = f"${high:.2f}" if high is not None else "unbounded"
+            result += "## Max Pain Price: N/A (non-unique minimum)\n"
+            result += f"- Max Pain Minimum Interval: ${low:.2f}–{upper}\n"
+            result += "- OI-weighted intrinsic payout has a flat minimum throughout this interval; no unique price or directional target is implied. It is not a high-probability price predictor.\n"
+        else:
+            result += "## Max Pain Price: N/A (incomplete OI/strikes or combined OI = 0)\n"
 
         return result
 
@@ -1069,7 +1075,7 @@ def get_volume_analysis(
                 obv_5d_change = obv_latest - obv_5d_ago
                 obv_direction = "上升" if obv_5d_change > 0 else ("下降" if obv_5d_change < 0 else "持平")
                 result += f"- OBV Current: {obv_latest:,}\n"
-                result += f"- OBV 5-Day Change: {obv_5d_change:+,}\n"
+                result += f"- OBV 5-Day Change: {obv_5d_change:+,} ({hist.index[-6]:%Y-%m-%d} to {hist.index[-1]:%Y-%m-%d}; 5 completed-session intervals)\n"
                 result += f"- OBV 5-Day Direction: {obv_direction}\n"
 
             # Price direction for cross-validation
@@ -1077,7 +1083,7 @@ def get_volume_analysis(
                 price_5d_change = close.iloc[-1] - close.iloc[-6]
                 price_direction = "上涨" if price_5d_change > 0 else ("下跌" if price_5d_change < 0 else "持平")
 
-                result += f"- Price 5-Day Direction: {price_direction} ({price_5d_change:+.2f})\n"
+                result += f"- Price 5-Day Direction: {price_direction} ({price_5d_change:+.2f}; {hist.index[-6]:%Y-%m-%d} to {hist.index[-1]:%Y-%m-%d})\n"
 
                 # Cross-validation
                 if price_5d_change > 0 and obv_5d_change > 0:
@@ -1102,7 +1108,7 @@ def get_volume_analysis(
             price_5d_pct = ((close.iloc[-1] / close.iloc[-6]) - 1) * 100
             vol_ratio_change = vol_5d_avg / vol_20d_avg if vol_20d_avg > 0 else 1
 
-            result += f"- 5-Day Price Change: {price_5d_pct:+.2f}%\n"
+            result += _format_session_return(close, 5, "5-Day Price Change")
             result += f"- 5D Avg Vol / 20D Avg Vol: {vol_ratio_change:.2f}x\n"
 
             if price_5d_pct < -1 and vol_ratio_change > 1.1:

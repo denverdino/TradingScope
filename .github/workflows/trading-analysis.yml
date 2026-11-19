@@ -29,7 +29,7 @@ jobs:
           tickers=(MSFT AMZN INTC NVDA GOOGL BABA TSM)
 
           ticker_list=$(IFS=,; echo "${tickers[*]}")
-          uv run python -m tradingscope.evaluate --tickers="$ticker_list" --email-to="${{ secrets.EMAIL_TO }}" --dry-run || echo "Evaluate stock analysis failed, continuing..."
+          uv run python -m tradingscope.evaluate --tickers="$ticker_list" --email-to="${{ secrets.EMAIL_TO }}" --dry-run
         env:
           DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
           DASHSCOPE_BASE_URL: ${{ secrets.DASHSCOPE_BASE_URL }}
@@ -46,6 +46,7 @@ jobs:
 
   analyze:
     needs: evaluate
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -67,7 +68,7 @@ jobs:
 
       - name: Run stock analysis
         run: |
-          uv run python -m tradingscope.main "${{ matrix.ticker }}" --email-to="${{ secrets.EMAIL_TO }}" || echo "Analyze stock ${{ matrix.ticker }} failed, continuing..."
+          uv run python -m tradingscope.main "${{ matrix.ticker }}" --email-to="${{ secrets.EMAIL_TO }}"
         env:
           DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
           DASHSCOPE_BASE_URL: ${{ secrets.DASHSCOPE_BASE_URL }}

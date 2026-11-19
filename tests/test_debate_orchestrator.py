@@ -234,5 +234,7 @@ async def test_risk_debate_closes_on_last_configured_round_with_bounded_manager_
         assert "不要求己方获胜" in debater.prompts[-1]
     manager_prompt = runner.run.await_args.args[2].get_text_content()
     assert "买入、卖出或持有" in manager_prompt
+    assert "从过去的错误中学习" in manager_prompt
+    assert "使用过去的经验教训来解决先前的误判" in manager_prompt
     assert "决策指导原则" not in manager_prompt
     assert "交付成果" not in manager_prompt

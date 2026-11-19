@@ -354,6 +354,38 @@ def test_trade_intent_exposes_six_distinct_execution_semantics() -> None:
     }
 
 
+def test_options_schema_keeps_technical_levels_out_of_options_fields() -> None:
+    schema = models.MarketAnalystOutput.model_json_schema()
+    fields = schema["$defs"]["OptionsAnalysis"]["properties"]
+    for name in ("support_levels", "resistance_levels"):
+        description = fields[name]["description"]
+        assert "期权 OI" in description
+        assert "空列表 []" in description
+        assert "不得填入技术面价位" in description
+    assert "非唯一" in fields["max_pain"]["description"]
+    assert "null" in fields["max_pain"]["description"]
+    assert "OI 更新时间" in fields["interpretation"]["description"]
+    assert "覆盖完整性" in fields["interpretation"]["description"]
+
+
+def test_market_output_preserves_usable_pcr_without_unavailable_option_levels() -> None:
+    data = _all_outputs()[0].model_dump(mode="json")
+    data["options_analysis"] = {
+        "put_call_ratio": 0.88,
+        "support_levels": [],
+        "resistance_levels": [],
+        "max_pain": None,
+        "interpretation": "OI 更新时间未知、覆盖完整性未验证；最小值非唯一，区间仅作参考；价位弃用，PCR 仅弱参考。",
+    }
+    output = models.MarketAnalystOutput.model_validate(data)
+    restored = models.MarketAnalystOutput.model_validate_json(output.model_dump_json())
+    assert restored.options_analysis.put_call_ratio == 0.88
+    assert restored.options_analysis.support_levels == []
+    assert restored.options_analysis.resistance_levels == []
+    assert restored.options_analysis.max_pain is None
+    assert restored.price_plan == output.price_plan
+
+
 def test_market_output_decodes_json_encoded_optional_objects() -> None:
     data = _all_outputs()[0].model_dump(mode="json")
     data["weekly_bollinger"] = json.dumps(

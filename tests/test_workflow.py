@@ -127,7 +127,11 @@ async def test_analyze_returns_fully_typed_result(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_debate_rounds_come_from_config() -> None:
+@pytest.mark.parametrize(
+    ("config", "expected_rounds"),
+    [(None, (2, 2)), ({"max_debate_rounds": 3, "max_risk_discuss_rounds": 4}, (3, 4))],
+)
+async def test_debate_rounds_come_from_config(config, expected_rounds) -> None:
     market, fundamentals, news, social, research, trader, portfolio = _all_outputs()
     runner = SimpleNamespace(run=AsyncMock(side_effect=[market, fundamentals, news, social, trader]))
     stack, _, _, research_factory, risk_factory, _ = _workflow_patches(
@@ -135,12 +139,13 @@ async def test_debate_rounds_come_from_config() -> None:
         SimpleNamespace(run_debate=AsyncMock(return_value=research)),
         SimpleNamespace(run_debate=AsyncMock(return_value=portfolio)),
     )
-    config = {"max_debate_rounds": 3, "max_risk_discuss_rounds": 4}
-    with stack, patch.object(workflow, "DEFAULT_CONFIG", config, create=True):
+    with stack:
+        if config is not None:
+            stack.enter_context(patch.object(workflow, "DEFAULT_CONFIG", config))
         await workflow.analyze("AAPL", "2026-07-14")
 
-    assert research_factory.call_args.kwargs["max_rounds"] == 3
-    assert risk_factory.call_args.kwargs["max_rounds"] == 4
+    assert research_factory.call_args.kwargs["max_rounds"] == expected_rounds[0]
+    assert risk_factory.call_args.kwargs["max_rounds"] == expected_rounds[1]
 
 
 @pytest.mark.asyncio

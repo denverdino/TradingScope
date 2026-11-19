@@ -127,11 +127,13 @@ class BollingerAnalysis(StrictModel):
 
 
 class OptionsAnalysis(StrictModel):
-    put_call_ratio: float | None = Field(default=None, ge=0)
-    support_levels: list[float]
-    resistance_levels: list[float]
-    max_pain: float | None = Field(default=None, gt=0)
-    interpretation: str = Field(min_length=1)
+    put_call_ratio: float | None = Field(default=None, ge=0, description="仅使用素材中有依据的 PCR，并在 interpretation 中标明 OI/成交量口径；不可用时 null。")
+    support_levels: list[float] = Field(description="仅填素材采用的期权 OI 支撑参考位；不可用或被弃用时空列表 []，不得填入技术面价位。")
+    resistance_levels: list[float] = Field(description="仅填素材采用的期权 OI 阻力参考位；不可用或被弃用时空列表 []，不得填入技术面价位。")
+    max_pain: float | None = Field(default=None, gt=0, description="仅填有效且唯一的 Max Pain；缺失、非唯一或被弃用时 null，区间只在 interpretation 说明。")
+    interpretation: str = Field(
+        min_length=1, description="保留选用到期日、OI 更新时间与覆盖完整性限制、PCR 口径和价位弃用原因；缺数与真实零分开，不将技术面价位当期权确认。"
+    )
 
 
 class FinancialMetric(StrictModel):

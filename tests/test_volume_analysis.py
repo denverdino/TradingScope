@@ -204,29 +204,23 @@ class TestVolumeAnalysisRouting:
 class TestMarketAnalystWithVolumeAnalysis:
     """Test cases for Market Analyst agent integration with volume analysis tool."""
 
-    @patch.dict(os.environ, {"DASHSCOPE_API_KEY": "test-key"})
-    def test_market_analyst_has_volume_tool_registered(self):
+    def test_market_analyst_has_volume_tool_registered(self, mock_context):
         """Test that the Market Analyst agent has get_volume_analysis registered."""
         from tradingscope.agents.analysts.market_analyst import create_market_analyst_agent
-        from tradingscope.agents.utils.context import AgentContext
 
-        context = AgentContext()
-        context.ticker = "AAPL"
+        mock_context.ticker = "AAPL"
 
-        agent = create_market_analyst_agent(context=context)
+        agent = create_market_analyst_agent(context=mock_context)
         tool_names = [t.name for t in agent.toolkit.tool_groups[0].tools]
         assert "get_volume_analysis" in tool_names
 
-    @patch.dict(os.environ, {"DASHSCOPE_API_KEY": "test-key"})
-    def test_market_analyst_prompt_includes_volume(self):
+    def test_market_analyst_prompt_includes_volume(self, mock_context):
         """Test that the system prompt includes volume analysis instructions."""
         from tradingscope.agents.analysts.market_analyst import create_market_analyst_agent
-        from tradingscope.agents.utils.context import AgentContext
 
-        context = AgentContext()
-        context.ticker = "AAPL"
+        mock_context.ticker = "AAPL"
 
-        agent = create_market_analyst_agent(context=context)
+        agent = create_market_analyst_agent(context=mock_context)
         assert "get_volume_analysis" in agent._system_prompt
         assert "成交量" in agent._system_prompt
         assert "OBV" in agent._system_prompt

@@ -15,6 +15,7 @@ from tradingscope.agents.output import AgentOutputBase
 
 from .agent_utils import call_agent_with_retry
 from .decision_validation import GeneratedOutputPolicyError, validate_generated_output
+from .local_audit import get_audit_recorder, redact
 
 OutputT = TypeVar("OutputT", bound=AgentOutputBase)
 logger = logging.getLogger(__name__)
@@ -63,12 +64,17 @@ class StructuredAgentRunner(Generic[OutputT]):
     ) -> OutputT:
         draft = await self._run_analysis(agent, prompt)
         draft_text = draft.get_text_content()
+        audit = get_audit_recorder()
+        if audit is not None:
+            audit.record("draft", agent=agent.name, phase="draft", attempt=0, text=draft_text)
         validation_feedback = ""
         last_errors: list[dict[str, object]] = []
         on_response = partial(self._usage_collector.record, agent_name=f"{agent.name}/structured_output") if self._usage_collector is not None else None
 
         for attempt in range(1, self._max_validation_attempts + 1):
             content = f"将以下分析素材整理为指定结构。不得添加素材中不存在的事实。\n\n分析素材：\n{draft_text}\n{validation_feedback}"
+            if audit is not None:
+                audit.record("structured_request", agent=agent.name, phase="structured", attempt=attempt, text=content, schema=output_model.model_json_schema())
             try:
                 try:
                     response = await self._formatter_model.generate_structured_output(
@@ -84,6 +90,9 @@ class StructuredAgentRunner(Generic[OutputT]):
                         # The cause already chains back to exc; `from exc` would create a cycle.
                         raise cause from None
                     raise RuntimeError(str(exc)) from exc
+                if audit is not None:
+                    date = response.content.get("analysis_date") if isinstance(response.content, dict) else None
+                    audit.record("structured_response", agent=agent.name, phase="structured", attempt=attempt, content=response.content, analysis_date=date)
                 output = output_model.model_validate(response.content)
                 validate_generated_output(output, reference_outputs)
                 return output
@@ -104,12 +113,14 @@ class StructuredAgentRunner(Generic[OutputT]):
                 lines = _format_validation_errors(last_errors)
                 validation_feedback = "\n上次未生成符合 schema 的结构化对象，请仅返回指定结构。"
 
+            if audit is not None:
+                audit.record("structured_error", agent=agent.name, phase="structured", attempt=attempt, errors=last_errors)
             logger.warning(
                 "[%s] structured validation attempt %d/%d failed: %s",
                 agent.name,
                 attempt,
                 self._max_validation_attempts,
-                "; ".join(lines),
+                redact("; ".join(lines)),
             )
 
         raise StructuredOutputValidationError(agent.name, last_errors)

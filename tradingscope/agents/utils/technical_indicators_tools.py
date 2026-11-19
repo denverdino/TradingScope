@@ -1,13 +1,12 @@
 import logging
-import os
 from typing import Annotated
 
 import pandas as pd
-import yfinance as yf
 from stockstats import wrap
 
 from tradingscope.dataflows.interface import route_to_vendor
-from tradingscope.dataflows.y_finance import _clean_dataframe, yf_retry
+from tradingscope.dataflows.stockstats_utils import load_yfinance_data
+from tradingscope.dataflows.y_finance import _clean_dataframe
 
 from .tool_response_helper import agentscope_tool
 
@@ -51,32 +50,7 @@ def get_weekly_bollinger_signal(
 
     config = get_config()
 
-    today_date = pd.Timestamp.today()
-    start_date = today_date - pd.DateOffset(years=2)
-    start_date_str = start_date.strftime("%Y-%m-%d")
-    end_date_str = today_date.strftime("%Y-%m-%d")
-
-    os.makedirs(config["data_cache_dir"], exist_ok=True)
-    data_file = os.path.join(
-        config["data_cache_dir"],
-        f"{symbol}-YFin-data-{start_date_str}-{end_date_str}.csv",
-    )
-
-    if os.path.exists(data_file):
-        data = pd.read_csv(data_file, on_bad_lines="skip")
-    else:
-        data = yf_retry(
-            lambda: yf.download(
-                symbol,
-                start=start_date_str,
-                end=end_date_str,
-                multi_level_index=False,
-                progress=False,
-                auto_adjust=True,
-            )
-        )
-        data = data.reset_index()
-        data.to_csv(data_file, index=False)
+    data = load_yfinance_data(symbol, 2, config["data_cache_dir"])
 
     data = _clean_dataframe(data)
 

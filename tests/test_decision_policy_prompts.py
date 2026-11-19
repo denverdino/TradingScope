@@ -301,6 +301,15 @@ def test_manager_drafts_require_material_without_mandating_a_report_template(mon
     assert "最近完成交易日：2026-07-24" in prompt
     assert "数据缺失与适用限制" in prompt
     assert "来源" in prompt and "反证" in prompt and "失效条件" in prompt
+    for required in (
+        "原始链接（如有）",
+        "数据日期",
+        "货币",
+        "价格无依据时留空（null）",
+        "核心理由最多3点",
+        "不得重抄共享报告",
+    ):
+        assert required in prompt
     for forbidden in ("您的回复必须以如下格式开头", "然后按以下格式提供详细分析", "不要回复'无法确定'"):
         assert forbidden not in prompt
 
@@ -381,3 +390,122 @@ def test_fundamentals_prompt_marks_unsupported_fields_missing_without_identical_
     assert "超时、限流或连接错误等临时错误可重试" in prompt
     for field in ("盈利超预期/不及预期", "PE(TTM) 相对过去 1 年均值", "下一财报日"):
         assert f"{field}：仅在工具返回相应数据时分析，否则标注数据缺失" in prompt
+
+
+def test_fundamentals_prompt_requires_period_evidence_before_generalizing_buybacks(monkeypatch):
+    from tradingscope.agents.analysts import fundamentals_analyst
+
+    prompt = _stock_agent_prompt(monkeypatch, fundamentals_analyst, "create_fundamentals_analyst_agent", ticker="MSFT")
+
+    for required in (
+        "MRQ（单季）、FY（全年）、TTM（滚动十二个月）必须区分，不得混用",
+        "回购、现金流等金额",
+        "每季度",
+        "持续",
+        "稳定",
+        "逐期核验各期数据",
+        "缺失期间不得概括",
+        "实际覆盖的期间与数值范围、例外",
+        "不得将最近一季外推为所有季度",
+    ):
+        assert required in prompt
+
+
+def test_news_prompt_separates_retrieval_freshness_from_publication_and_event_status(monkeypatch):
+    from tradingscope.agents.analysts import news_analyst
+
+    prompt = _stock_agent_prompt(monkeypatch, news_analyst, "create_news_analyst_agent")
+
+    for required in (
+        "供应商检索时间",
+        "文章发布时间",
+        "事件发生时间及当前状态",
+        "检索时间不能代替发布时间或证明事件仍在持续",
+        "最新可用公司新闻",
+        "该事件最新相关文章",
+        "分别注明标题、发布时间和来源",
+        "供应商返回的最新文章不等于全市场最新",
+        "没有恢复更新不等于事件仍在持续",
+        "缺少更新证据时写明“恢复情况未核实”",
+    ):
+        assert required in prompt
+
+
+def test_news_prompt_maps_each_claim_to_its_own_article_title_and_exact_url(monkeypatch):
+    from tradingscope.agents.analysts import news_analyst
+
+    prompt = _stock_agent_prompt(monkeypatch, news_analyst, "create_news_analyst_agent")
+
+    assert "每项事实或判断须就近引用对应文章的标题与原始URL" in prompt
+    assert "多条报道须逐条映射到各自的标题与链接" in prompt
+    assert "不得用另一篇报道的链接替换该项依据" in prompt
+    assert "不得改写原始URL或仅给来源主页" in prompt
+
+
+def test_market_prompt_aligns_return_and_obv_windows_without_changing_volume_average_samples(monkeypatch):
+    from tradingscope.agents.analysts import market_analyst
+
+    prompt = _stock_agent_prompt(monkeypatch, market_analyst, "create_market_analyst_agent")
+
+    for required in (
+        "N 个交易日收益率包含 N 个收盘到收盘区间，需要 N+1 个收盘价",
+        "(期末收盘价 / 起始收盘价 - 1) × 100%",
+        "跨工具收益率比较或价格与 OBV 背离判断",
+        "起止交易日期一致",
+        "窗口不一致或起止日期缺失时，标注不可直接比较",
+        "不得混合窗口得出相对强弱或背离结论",
+        "N 日均量仍使用 N 个交易日的成交量样本，不要求 N+1 个样本",
+    ):
+        assert required in prompt
+
+
+def test_market_prompt_leaves_missing_or_rejected_oi_levels_empty_without_technical_substitution(monkeypatch):
+    from tradingscope.agents.analysts import market_analyst
+
+    prompt = _stock_agent_prompt(monkeypatch, market_analyst, "create_market_analyst_agent")
+
+    for required in (
+        "OI 支撑/阻力位缺失或被拒绝采用时",
+        "options_analysis.support_levels",
+        "options_analysis.resistance_levels",
+        "对应字段必须为空数组 []",
+        "技术面推导的价位只能放在技术面的 price_plan 或 evidence",
+        "不得填入期权字段",
+        "仅在对应 OI 价位可用且被采用时填写，否则留空",
+    ):
+        assert required in prompt
+    assert "- **期权面支撑位**：$xxx（Put OI 集中区）" not in prompt
+    assert "- **期权面阻力位**：$xxx（Call OI 集中区）" not in prompt
+
+
+def test_market_prompt_reports_nonunique_max_pain_as_interval_with_nullable_single_price(monkeypatch):
+    from tradingscope.agents.analysts import market_analyst
+
+    prompt = _stock_agent_prompt(monkeypatch, market_analyst, "create_market_analyst_agent")
+
+    for required in (
+        "Max Pain 不可用、不唯一或被拒绝采用时，options_analysis.max_pain 必须为 null",
+        "不唯一时仅在解释中报告区间参考",
+        "不得任选一点作为单一方向性目标",
+        "**Max Pain 价格（可选）**",
+        "仅在可用、唯一且被采用时填写",
+    ):
+        assert required in prompt
+    assert "- **Max Pain 价格**：$xxx" not in prompt
+
+
+def test_market_prompt_preserves_valid_pcr_without_treating_oi_counts_as_verified_coverage(monkeypatch):
+    from tradingscope.agents.analysts import market_analyst
+
+    prompt = _stock_agent_prompt(monkeypatch, market_analyst, "create_market_analyst_agent")
+
+    for required in (
+        "OI 数值有效仅表示计数可用",
+        "不代表覆盖范围、更新时间或样本代表性已核实",
+        "执行价远离现价本身不说明合约无效",
+        "支撑/阻力位或 Max Pain 不可用时仍保留有效 PCR",
+        "更新时间或覆盖范围未知时",
+        "同时在 options_analysis.interpretation 与 limitations 中说明",
+        "不得据此作确定性方向判断",
+    ):
+        assert required in prompt

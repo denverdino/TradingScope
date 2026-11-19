@@ -15,6 +15,7 @@ from .alpha_vantage_common import AlphaVantageRateLimitError
 # Configuration and routing logic
 from .config import get_config
 from .dashscope import get_fundamentals_dashscope, get_global_news_dashscope, get_stock_news_dashscope
+from .finnhub_news import get_news as get_finnhub_news_online
 from .google import get_google_news
 from .local import (
     get_finnhub_company_insider_sentiment,
@@ -112,6 +113,7 @@ VENDOR_METHODS = {
     },
     # news_data
     "get_news": {
+        "finnhub": get_finnhub_news_online,
         "google": get_google_news,
         "alpha_vantage": get_alpha_vantage_news,
         "perplexity": get_stock_news_perplexity,

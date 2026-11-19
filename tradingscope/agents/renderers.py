@@ -250,6 +250,12 @@ def render_evidence_pack(output: AgentOutputBase) -> str:
 @render_evidence_pack.register
 def _(output: MarketAnalystOutput) -> str:
     facts = [f"{item.name}={item.value}（{DIRECTION_LABELS[item.signal]}）" for item in output.technical_indicators]
+    opposing_signal = {Direction.BULLISH: "bearish", Direction.BEARISH: "bullish"}.get(output.decision.direction)
+    counter_evidence = [
+        f"{item.name}={item.value}（{DIRECTION_LABELS[item.signal]}）：{item.interpretation}"
+        for item in output.technical_indicators
+        if item.signal == opposing_signal
+    ]
     if bollinger := output.weekly_bollinger:
         facts.append(f"周线布林=上轨 {bollinger.upper_band:.2f} / 中轨 {bollinger.middle_band:.2f} / 下轨 {bollinger.lower_band:.2f}（{bollinger.signal}）")
     if options := output.options_analysis:
@@ -258,7 +264,7 @@ def _(output: MarketAnalystOutput) -> str:
         "技术面",
         output,
         f"### 技术指标（信号强度：{SIGNAL_STRENGTH_LABELS[output.signal_strength]}）\n\n{_render_list(facts)}",
-        counter_evidence=[],
+        counter_evidence=counter_evidence,
     )
 
 

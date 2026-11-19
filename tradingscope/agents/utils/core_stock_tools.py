@@ -9,14 +9,14 @@ from .tool_response_helper import agentscope_tool
 def get_stock_data(
     symbol: Annotated[str, "ticker symbol of the company"],
     start_date: Annotated[str, "Start date in yyyy-mm-dd format"],
-    end_date: Annotated[str, "End date in yyyy-mm-dd format"],
+    end_date: Annotated[str, "Inclusive end date in yyyy-mm-dd format"],
 ) -> str:
     """
-    Retrieve stock price data (OHLCV) for a given ticker symbol.
+    Retrieve completed regular-session daily prices (OHLCV), including the end date.
     Args:
         symbol (str): Ticker symbol of the company, e.g. AAPL, TSM
         start_date (str): Start date in yyyy-mm-dd format
-        end_date (str): End date in yyyy-mm-dd format
+        end_date (str): Inclusive end date in yyyy-mm-dd format
     Returns:
         str: A formatted dataframe containing the stock price data for the specified ticker symbol in the specified date range.
     """
@@ -73,8 +73,9 @@ def get_options_analysis(
 ) -> str:
     """
     Retrieve options chain analysis for a given ticker symbol, including Put/Call ratio,
-    support/resistance levels from open interest, and max pain price for the nearest
-    expiration date. Primarily available for US-listed stocks.
+    open-interest concentration levels, and max pain for a selected future expiration.
+    Excludes today's expiry in New York; checks at most three future chains.
+    Missing OI remains unavailable, not zero. Primarily available for US-listed stocks.
     Args:
         symbol (str): Ticker symbol of the company, e.g. AAPL, TSM
     Returns:

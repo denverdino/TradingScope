@@ -164,6 +164,18 @@ def test_qwen4_enables_automatic_cache_without_overriding_caller_options() -> No
         assert call_api.await_args.kwargs["extra_body"]["prompt_cache_options"] == options
 
 
+def test_prompt_cache_ttl_comes_from_config() -> None:
+    model = _model(thinking_enable=False)
+    with (
+        patch.dict(DEFAULT_CONFIG, {"prompt_cache_ttl": {"other-model": "5m"}}),
+        patch.object(OpenAIResponseModel, "_call_api", new_callable=AsyncMock) as call_api,
+    ):
+        asyncio.run(model._call_api("other-model", []))
+        assert call_api.await_args.kwargs["extra_body"]["prompt_cache_options"] == {"mode": "implicit", "ttl": "5m"}
+        asyncio.run(model._call_api("qwen4-max", []))
+        assert "prompt_cache_options" not in call_api.await_args.kwargs["extra_body"]
+
+
 def test_model_surfaces_failed_stream_responses() -> None:
     model = _model(thinking_enable=False, stream=True)
 
