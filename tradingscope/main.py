@@ -1,15 +1,28 @@
 import argparse
 import asyncio
 import os
+from datetime import date
 
 import markdown
 from agentscope import logger
 
 from tradingscope.agents.renderers import render_full_report
+from tradingscope.agents.utils import context as context_module
 from tradingscope.agents.utils.tracing import setup_tracing, shutdown_tracing
 from tradingscope.agents.workflow import analyze
 from tradingscope.default_config import DEFAULT_CONFIG
 from tradingscope.utils.email_utils import send_html_email
+from tradingscope.utils.oss_structured_output_reader import latest_completed_session
+
+
+def _no_new_session(ticker: str) -> bool:
+    """Report whether a recent completed run already covered the last completed session."""
+    session = date.fromisoformat(context_module.get_last_completed_us_session())
+    previous = latest_completed_session(ticker, date.today(), DEFAULT_CONFIG["analysis_skip_lookback_days"])
+    if previous is not None and previous >= session:
+        logger.info("Skipping %s: last completed session %s was already analyzed; use --force to rerun", ticker, session)
+        return True
+    return False
 
 
 def _main() -> None:
@@ -22,12 +35,16 @@ def _main() -> None:
         "--output", choices=["markdown", "json", "both"], default="both", help="Output format: markdown (HTML only), json (JSON only), both (default)"
     )
     parser.add_argument("--version", action="version", version="%(prog)s 0.1.0")
+    parser.add_argument("--force", action="store_true", help="Analyze even when no newer completed session exists")
 
     # Parse arguments
     args = parser.parse_args()
 
     # Get ticker from command line argument or use default
     ticker = args.ticker
+
+    if not args.force and _no_new_session(ticker):
+        return
 
     result = asyncio.run(analyze(ticker))
     analysis_date = result.analysis_date.isoformat()

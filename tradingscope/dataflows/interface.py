@@ -31,6 +31,7 @@ from .local import (
 from .perplexity import get_fundamentals_perplexity, get_global_news_perplexity, get_stock_news_perplexity
 from .y_finance import get_balance_sheet as get_yfinance_balance_sheet
 from .y_finance import get_cashflow as get_yfinance_cashflow
+from .y_finance import get_earnings_calendar as get_yfinance_earnings_calendar
 from .y_finance import get_fundamentals as get_yfinance_fundamentals
 from .y_finance import get_income_statement as get_yfinance_income_statement
 from .y_finance import get_insider_transactions as get_yfinance_insider_transactions
@@ -50,7 +51,10 @@ TOOLS_CATEGORIES = {
         "description": "Market and sector context data",
         "tools": ["get_sector_performance", "get_market_indices", "get_options_analysis", "get_volume_analysis"],
     },
-    "fundamental_data": {"description": "Company fundamentals", "tools": ["get_fundamentals", "get_balance_sheet", "get_cashflow", "get_income_statement"]},
+    "fundamental_data": {
+        "description": "Company fundamentals",
+        "tools": ["get_fundamentals", "get_balance_sheet", "get_cashflow", "get_income_statement", "get_earnings_calendar"],
+    },
     "news_data": {
         "description": "News (public/insiders, original/processed)",
         "tools": [
@@ -110,6 +114,9 @@ VENDOR_METHODS = {
     "get_income_statement": {
         "alpha_vantage": get_alpha_vantage_income_statement,
         "yfinance": get_yfinance_income_statement,
+    },
+    "get_earnings_calendar": {
+        "yfinance": get_yfinance_earnings_calendar,
     },
     # news_data
     "get_news": {

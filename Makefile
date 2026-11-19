@@ -59,7 +59,7 @@ test-cov:
 # Post-market evaluation
 .PHONY: evaluate
 evaluate:
-	uv run python -m tradingscope.evaluate
+	uv run python -m tradingscope.evaluate --tickers "$(or $(TICKERS),MSFT,AMZN,INTC,NVDA,GOOGL,BABA,TSM)"
 
 # Clean build artifacts
 .PHONY: clean

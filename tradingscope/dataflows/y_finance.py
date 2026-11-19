@@ -1,6 +1,6 @@
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from math import isclose
 from typing import Annotated
 from zoneinfo import ZoneInfo
@@ -425,6 +425,86 @@ def _format_session_return(close: pd.Series, sessions: int, label: str) -> str:
     return f"- {label}: {value:+.2f}% ({start} to {end}; {sessions} completed-session intervals)\n"
 
 
+SECTOR_ETFS = {
+    "Technology": "XLK",
+    "Healthcare": "XLV",
+    "Financial Services": "XLF",
+    "Consumer Cyclical": "XLY",
+    "Consumer Defensive": "XLP",
+    "Industrials": "XLI",
+    "Energy": "XLE",
+    "Utilities": "XLU",
+    "Real Estate": "XLRE",
+    "Basic Materials": "XLB",
+    "Communication Services": "XLC",
+}
+
+# yfinance classifies BABA as "Consumer Cyclical", but as a Chinese ADR it
+# should not be compared against the US sector ETF (XLY).
+IGNORE_SECTOR_TICKERS = {"BABA"}
+MARKET_BENCHMARK = "SPY"
+
+
+def get_sector_benchmark_symbol(ticker: str) -> str:
+    """Return the ticker's sector ETF, or the broad-market fund when no sector mapping applies."""
+    if ticker.upper() in IGNORE_SECTOR_TICKERS:
+        return MARKET_BENCHMARK
+    info = yf_retry(lambda: yf.Ticker(ticker.upper()).info)
+    return SECTOR_ETFS.get(info.get("sector"), MARKET_BENCHMARK)
+
+
+def _earnings_dates_frame(ticker: str, limit: int) -> pd.DataFrame | None:
+    frame = yf_retry(lambda: yf.Ticker(ticker.upper()).get_earnings_dates(limit=limit))
+    if frame is None or frame.empty:
+        return None
+    return frame
+
+
+def _earnings_release_index(frame: pd.DataFrame) -> pd.DatetimeIndex:
+    index = frame.index
+    return index.tz_convert(ZoneInfo("America/New_York")) if index.tz is not None else index
+
+
+def fetch_earnings_dates(ticker: str, start: str, end: str) -> list[datetime] | None:
+    """Earnings release timestamps (New York time) in [start, end], or None when unavailable."""
+    start_date = date.fromisoformat(start)
+    quarters_back = max(0, (date.today() - start_date).days // 90) + 6
+    try:
+        frame = _earnings_dates_frame(ticker, limit=quarters_back)
+    except Exception as exc:
+        logger.warning("Earnings dates unavailable for %s: %s", ticker, exc)
+        return None
+    if frame is None:
+        return None
+    index = _earnings_release_index(frame)
+    end_date = date.fromisoformat(end)
+    if min(index.date) > start_date:
+        return None
+    return sorted({stamp.to_pydatetime() for stamp in index if start_date <= stamp.date() <= end_date})
+
+
+def get_earnings_calendar(
+    ticker: Annotated[str, "ticker symbol of the company"],
+    curr_date: Annotated[str, "current date you are trading at, yyyy-mm-dd"],
+) -> str:
+    """Report the next scheduled earnings release and the most recent ones."""
+    current = date.fromisoformat(curr_date)
+    frame = _earnings_dates_frame(ticker, limit=8)
+    if frame is None:
+        return f"No earnings calendar available for {ticker.upper()}"
+    index = _earnings_release_index(frame)
+    stamps = sorted(index)
+    upcoming = [stamp for stamp in stamps if stamp.date() >= current]
+    past = [stamp for stamp in stamps if stamp.date() < current][-4:]
+    lines = [f"# Earnings calendar for {ticker.upper()} (as of {curr_date}, New York time)"]
+    if upcoming:
+        lines.append(f"- Next earnings release: {upcoming[0].strftime('%Y-%m-%d %H:%M %Z')}")
+    else:
+        lines.append("- Next earnings release: not announced")
+    lines.extend(f"- Past release: {stamp.strftime('%Y-%m-%d %H:%M %Z')}" for stamp in reversed(past))
+    return "\n".join(lines) + "\n"
+
+
 def get_sector_performance(
     ticker: Annotated[str, "ticker symbol of the company"],
     look_back_days: Annotated[int, "how many days to look back"] = 30,
@@ -435,26 +515,6 @@ def get_sector_performance(
     helping analyze whether the stock is outperforming or underperforming its sector.
     """
     import pandas as pd
-
-    # Sector ETF mappings for US stocks
-    SECTOR_ETFS = {
-        "Technology": "XLK",
-        "Healthcare": "XLV",
-        "Financial Services": "XLF",
-        "Consumer Cyclical": "XLY",
-        "Consumer Defensive": "XLP",
-        "Industrials": "XLI",
-        "Energy": "XLE",
-        "Utilities": "XLU",
-        "Real Estate": "XLRE",
-        "Basic Materials": "XLB",
-        "Communication Services": "XLC",
-    }
-
-    # Tickers whose yfinance sector info is inaccurate and should be ignored.
-    # e.g. BABA is classified as "Consumer Cyclical" by yfinance, but as a
-    # Chinese ADR it should not be compared against the US sector ETF (XLY).
-    IGNORE_SECTOR_TICKERS = {"BABA"}
 
     try:
         ticker_obj = yf.Ticker(ticker.upper())

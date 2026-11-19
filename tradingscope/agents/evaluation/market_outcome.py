@@ -8,9 +8,14 @@ from dataclasses import dataclass
 from datetime import date
 from enum import StrEnum
 from io import StringIO
-from typing import Literal, Sequence
+from typing import Sequence
+
+from tradingscope.agents.output import TradeIntent
+from tradingscope.default_config import DEFAULT_CONFIG
 
 from .models import AnalysisRecord
+
+EVALUATION_CONFIG = DEFAULT_CONFIG["evaluation"]
 
 
 @dataclass(frozen=True)
@@ -90,37 +95,68 @@ def parse_market_bars(csv_text: str) -> list[MarketBar]:
     return sorted(bars, key=lambda bar: bar.session_date)
 
 
-def assess_trade(
-    record: AnalysisRecord,
-    bars: Sequence[MarketBar],
-    horizon_days: Literal[1, 3, 5],
-) -> TradeAssessment | None:
-    """Assess a record without network calls or inferred future prices."""
-    if type(horizon_days) is not int or horizon_days not in (1, 3, 5):
-        raise ValueError(f"Invalid evaluation horizon {horizon_days}; allowed horizons are 1, 3, 5.")
+def validate_horizon(horizon_days: object) -> int:
+    """Reject horizons that are not configured for evaluation."""
+    horizons = EVALUATION_CONFIG["horizons"]
+    if type(horizon_days) is not int or horizon_days not in horizons:
+        allowed = ", ".join(str(horizon) for horizon in horizons)
+        raise ValueError(f"Invalid evaluation horizon {horizon_days}; allowed horizons are {allowed}.")
+    return horizon_days
 
-    analysis_date = date.fromisoformat(record.analysis_date)
+
+@dataclass(frozen=True)
+class MarketWindow:
+    """Reference close, normal daily range, and the sessions inside one horizon."""
+
+    reference_bar: MarketBar
+    daily_atr_pct: float
+    horizon_bars: tuple[MarketBar, ...]
+
+    @property
+    def horizon_end(self) -> MarketBar:
+        return self.horizon_bars[-1]
+
+    def threshold(self) -> float:
+        return self.daily_atr_pct * math.sqrt(len(self.horizon_bars))
+
+
+def market_window(bars: Sequence[MarketBar], analysis_date: date, horizon_days: int) -> MarketWindow | None:
+    """Return the horizon window, or None until enough history and sessions exist."""
+    validate_horizon(horizon_days)
+    history_bars = EVALUATION_CONFIG["atr_history_bars"]
     ordered_bars = sorted(bars, key=lambda bar: bar.session_date)
     history = [bar for bar in ordered_bars if bar.session_date < analysis_date]
     evaluation_bars = [bar for bar in ordered_bars if bar.session_date >= analysis_date]
-    if len(history) < 15 or len(evaluation_bars) < horizon_days:
+    if len(history) < history_bars or len(evaluation_bars) < horizon_days:
         return None
-
     reference_bar = history[-1]
-    atr = _average_true_range(history[-15:])
-    atr_threshold = atr / reference_bar.close * math.sqrt(horizon_days)
-    horizon_bar = evaluation_bars[horizon_days - 1]
-    underlying_return = (horizon_bar.close - reference_bar.close) / reference_bar.close
-    status = _direction_status(record.direction, underlying_return, atr_threshold)
+    atr = _average_true_range(history[-history_bars:])
+    return MarketWindow(reference_bar, atr / reference_bar.close, tuple(evaluation_bars[:horizon_days]))
 
-    if record.trade_intent is None or record.intent_inferred:
-        return _direction_only_assessment(
-            horizon_days,
-            status,
-            underlying_return,
-            atr_threshold,
-            "No explicit historical trade intent; direction-only assessment.",
-        )
+
+def assess_trade(
+    record: AnalysisRecord,
+    bars: Sequence[MarketBar],
+    horizon_days: int,
+) -> TradeAssessment | None:
+    """Assess a record without network calls or inferred future prices."""
+    if record.trade_intent not in {intent.value for intent in TradeIntent}:
+        raise ValueError("evaluation requires an explicit supported trade intent")
+    window = market_window(bars, date.fromisoformat(record.analysis_date), horizon_days)
+    if window is None:
+        return None
+    return assess_trade_in_window(record, window)
+
+
+def assess_trade_in_window(record: AnalysisRecord, window: MarketWindow) -> TradeAssessment:
+    """Simulate a validated trade intent within an already prepared horizon."""
+    horizon_days = len(window.horizon_bars)
+    reference_bar = window.reference_bar
+    atr_threshold = window.threshold()
+    horizon_bar = window.horizon_end
+    underlying_return = (horizon_bar.close - reference_bar.close) / reference_bar.close
+    status = direction_status(record.direction, underlying_return, atr_threshold)
+
     if record.trade_intent == "hold":
         return _direction_only_assessment(
             horizon_days,
@@ -130,7 +166,7 @@ def assess_trade(
             "Hold intent produces no new execution simulation.",
         )
 
-    future_window = evaluation_bars[:horizon_days]
+    future_window = list(window.horizon_bars)
     if record.trade_intent in {"open_long", "open_short"} and record.time_stop_days is not None:
         fill_window = future_window[: record.time_stop_days]
     else:
@@ -173,6 +209,11 @@ def assess_trade(
             fill_index,
             fill_price,
         )
+        if exit_reason == "horizon":
+            limitations += (
+                "The session close values the still-open position; horizon is not an exit or forced liquidation. "
+                "The holding deadline remains independent of the one-session forecast.",
+            )
     elif record.trade_intent in {"reduce_long", "close_long"}:
         strategy_return = (fill_price - horizon_bar.close) / fill_price
         exit_reason = "execution"
@@ -195,14 +236,6 @@ def assess_trade(
     elif record.trade_intent == "cover_short":
         strategy_return = (horizon_bar.close - fill_price) / fill_price
         exit_reason = "execution"
-    else:
-        return _direction_only_assessment(
-            horizon_days,
-            status,
-            underlying_return,
-            atr_threshold,
-            f"Unsupported trade intent {record.trade_intent!r}; direction-only assessment.",
-        )
 
     return TradeAssessment(
         horizon_days=horizon_days,
@@ -269,6 +302,14 @@ def _simulate_open_trade(
     return _directional_return(is_long, fill_price, exit_price), exit_reason
 
 
+def _price_exit(record: AnalysisRecord, low: float, high: float, *, is_long: bool) -> tuple[float, str] | None:
+    if record.stop_loss is not None and (low <= record.stop_loss if is_long else high >= record.stop_loss):
+        return record.stop_loss, "stop_loss"
+    if record.target_price is not None and (high >= record.target_price if is_long else low <= record.target_price):
+        return record.target_price, "target"
+    return None
+
+
 def _simulate_position_exit(
     record: AnalysisRecord,
     future_bars: Sequence[MarketBar],
@@ -276,15 +317,19 @@ def _simulate_position_exit(
     *,
     is_long: bool,
 ) -> tuple[MarketBar, float, str]:
-    """Simulate price exits before the analysis-relative time stop, or value at horizon."""
+    """Simulate price exits before the analysis-relative time stop, or value at horizon.
+
+    After the fill session, an open beyond the stop or target exits at the open.
+    """
     for index in range(fill_index, len(future_bars)):
         bar = future_bars[index]
-        stop_hit = record.stop_loss is not None and (bar.low <= record.stop_loss if is_long else bar.high >= record.stop_loss)
-        target_hit = record.target_price is not None and (bar.high >= record.target_price if is_long else bar.low <= record.target_price)
-        if stop_hit:
-            return bar, record.stop_loss, "stop_loss"
-        if target_hit:
-            return bar, record.target_price, "target"
+        if index > fill_index:
+            gap_exit = _price_exit(record, bar.open, bar.open, is_long=is_long)
+            if gap_exit is not None:
+                return bar, bar.open, gap_exit[1]
+        price_exit = _price_exit(record, bar.low, bar.high, is_long=is_long)
+        if price_exit is not None:
+            return bar, *price_exit
         if record.time_stop_days is not None and index + 1 >= record.time_stop_days:
             return bar, bar.close, "time_stop"
 
@@ -319,19 +364,20 @@ def _average_true_range(history: Sequence[MarketBar]) -> float:
     return sum(true_ranges) / len(true_ranges)
 
 
-def _direction_status(direction: str, underlying_return: float, threshold: float) -> AssessmentStatus:
+def direction_status(direction: str, observed_return: float, threshold: float) -> AssessmentStatus:
+    """Judge a direction call against a return using the ATR band."""
     if direction == "bullish":
-        if underlying_return > threshold:
+        if observed_return > threshold:
             return AssessmentStatus.CORRECT
-        if underlying_return < -threshold:
+        if observed_return < -threshold:
             return AssessmentStatus.INCORRECT
         return AssessmentStatus.INCONCLUSIVE
     if direction == "bearish":
-        if underlying_return < -threshold:
+        if observed_return < -threshold:
             return AssessmentStatus.CORRECT
-        if underlying_return > threshold:
+        if observed_return > threshold:
             return AssessmentStatus.INCORRECT
         return AssessmentStatus.INCONCLUSIVE
-    if -threshold <= underlying_return <= threshold:
+    if -threshold <= observed_return <= threshold:
         return AssessmentStatus.CORRECT
     return AssessmentStatus.INCORRECT

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import date
 from functools import singledispatch
+from html import escape
 
 from .output import (
     AgentOutputBase,
@@ -45,7 +47,8 @@ def _render_header(title: str, output: AgentOutputBase) -> str:
         f"## {title}\n\n"
         f"- **股票代码**：{output.ticker}\n"
         f"- **分析日期**：{output.analysis_date.isoformat()}\n"
-        f"- **最近完成交易日**：{output.last_completed_session.isoformat()}"
+        f"- **最近完成交易日**：{output.last_completed_session.isoformat()}\n"
+        "- **预测期限**：下一交易日截至收盘（分析日期当日或之后的首个交易日）"
     )
 
 
@@ -104,7 +107,52 @@ def _join_sections(*sections: str) -> str:
 
 
 def _render_time_stop(time_stop_days: int | None) -> str:
-    return f"### 时间止损\n\n{time_stop_days} 个交易日" if time_stop_days is not None else ""
+    return f"### 时间止损\n\n{time_stop_days} 个交易日（独立持仓期限，不延长单日预测）" if time_stop_days is not None else ""
+
+
+def _counter_evidence(output: AgentOutputBase) -> list[str]:
+    if isinstance(output, MarketAnalystOutput):
+        opposing = {Direction.BULLISH: "bearish", Direction.BEARISH: "bullish"}.get(output.decision.direction)
+        return [
+            f"{item.name}={item.value}（{DIRECTION_LABELS[item.signal]}）：{item.interpretation}"
+            for item in output.technical_indicators
+            if item.signal == opposing
+        ]
+    if isinstance(output, (FundamentalsAnalystOutput, NewsAnalystOutput)):
+        return output.key_risks
+    if isinstance(output, ResearchManagerOutput):
+        return [*output.bull_viewpoints, *output.bear_viewpoints]
+    if isinstance(output, TraderOutput):
+        return output.risk_factors
+    if isinstance(output, PortfolioManagerOutput):
+        return [*output.aggressive_viewpoints, *output.conservative_viewpoints, *output.neutral_viewpoints]
+    return []
+
+
+def _render_execution(output: TraderOutput | PortfolioManagerOutput) -> str:
+    return _join_sections(
+        f"### 交易意图\n\n- **交易意图**：{TRADE_INTENT_LABELS[output.trade_intent.value]}" if output.trade_intent else "",
+        f"- **仓位建议**：{POSITION_LABELS[output.position_advice.value]}\n- **风险评分**：{output.risk_score:.2f}",
+        _render_time_stop(output.time_stop_days),
+        _render_price_plan(output.price_plan, output.decision.direction, output.trade_intent),
+    )
+
+
+def _render_stage(title: str, output: AgentOutputBase, *sections: str) -> str:
+    notes = list(dict.fromkeys([*_counter_evidence(output), *output.limitations]))
+    execution = (
+        _render_execution(output)
+        if isinstance(output, (TraderOutput, PortfolioManagerOutput))
+        else _render_price_plan(output.price_plan, output.decision.direction)
+    )
+    return _join_sections(
+        _render_header(title, output),
+        _render_decision(output),
+        f"### 关键证据与来源\n\n{escape(_render_evidence(output.evidence), quote=False)}" if output.evidence else "",
+        *sections,
+        f"### 反证与必要限制\n\n{_render_list(notes)}" if notes else "",
+        execution,
+    )
 
 
 @singledispatch
@@ -114,103 +162,54 @@ def render_markdown(output: AgentOutputBase) -> str:
 
 @render_markdown.register
 def _(output: MarketAnalystOutput) -> str:
-    indicators = [f"{item.name}={item.value}（{DIRECTION_LABELS[item.signal]}）：{item.interpretation}" for item in output.technical_indicators]
-    return _join_sections(
-        _render_header("技术面分析", output),
-        f"### 市场环境\n\n{output.market_environment}",
-        f"### 价格行为\n\n{output.price_action}",
-        f"### 成交量\n\n{output.volume_analysis}",
-        f"### 技术指标\n\n{_render_list(indicators)}",
-        _render_decision(output),
-        _render_price_plan(output.price_plan, output.decision.direction),
-    )
+    return _render_stage("技术面分析", output, f"- **信号强度**：{SIGNAL_STRENGTH_LABELS[output.signal_strength]}")
 
 
 @render_markdown.register
 def _(output: FundamentalsAnalystOutput) -> str:
-    metrics = [f"{item.name}（{item.period}）：{item.value}，{item.interpretation}" for item in output.financial_performance]
-    return _join_sections(
-        _render_header("基本面分析", output),
-        f"### 公司概览\n\n{output.company_overview}",
-        f"### 财务表现\n\n{_render_list(metrics)}",
-        f"### 盈利质量\n\n{output.earnings_quality}",
-        f"### 催化剂\n\n{_render_list(output.key_catalysts)}",
-        f"### 风险\n\n{_render_list(output.key_risks)}",
-        _render_decision(output),
-        _render_price_plan(output.price_plan, output.decision.direction),
-    )
+    return _render_stage("基本面分析", output, f"- **估值判断**：{VALUATION_LABELS[output.valuation_assessment]}")
 
 
 @render_markdown.register
 def _(output: NewsAnalystOutput) -> str:
-    events = [f"{item.title}（{item.source}）：{item.impact}" for item in output.key_events]
-    return _join_sections(
-        _render_header("新闻分析", output),
-        f"### 关键事件\n\n{_render_list(events)}",
-        f"### 宏观环境\n\n{output.macro_environment}",
-        f"### 公司影响\n\n{output.company_specific_impact}",
-        _render_decision(output),
-        _render_price_plan(output.price_plan, output.decision.direction),
-    )
+    return _render_stage("新闻分析", output, f"- **新闻情绪**：{SENTIMENT_LABELS[output.overall_sentiment]}")
 
 
 @render_markdown.register
 def _(output: SocialMediaAnalystOutput) -> str:
-    signals = [f"{item.platform}：{item.observation}" for item in output.platform_signals]
-    return _join_sections(
-        _render_header("社交媒体分析", output),
-        f"### 情绪评分\n\n{output.sentiment_score:.1f}/10",
-        f"### 平台信号\n\n{_render_list(signals)}",
-        f"### 关键话题\n\n{_render_list(output.key_topics)}",
+    return _render_stage(
+        "社交媒体分析",
+        output,
+        f"- **情绪评分**：{output.sentiment_score:.1f}/10（{SENTIMENT_LABELS[output.overall_sentiment]}）",
         f"### 数据质量\n\n{output.data_quality}",
-        _render_decision(output),
-        _render_price_plan(output.price_plan, output.decision.direction),
     )
 
 
 @render_markdown.register
 def _(output: ResearchManagerOutput) -> str:
-    scenarios = [f"{item.name}：{item.target_price:.2f}（{item.timeframe_days}天）" for item in output.price_scenarios]
-    return _join_sections(
-        _render_header("研究经理决策", output),
-        f"### 看涨观点\n\n{_render_list(output.bull_viewpoints)}",
-        f"### 看跌观点\n\n{_render_list(output.bear_viewpoints)}",
-        f"### 采纳理由\n\n{_render_list(output.adopted_reasoning)}",
-        f"### 价格情景\n\n{_render_list(scenarios)}",
-        _render_decision(output),
-        _render_price_plan(output.price_plan, output.decision.direction),
-    )
+    scenarios = [
+        f"{item.name}：{output.price_plan.currency} {item.target_price:.2f}（{item.timeframe_days} 个交易日；假设：{'；'.join(item.assumptions) or '无'}）"
+        for item in output.price_scenarios
+    ]
+    return _render_stage("研究经理决策", output, f"### 价格情景\n\n{_render_list(scenarios)}" if scenarios else "")
 
 
 @render_markdown.register
 def _(output: TraderOutput) -> str:
-    return _join_sections(
-        _render_header("交易计划", output),
-        f"### 仓位建议\n\n{POSITION_LABELS[output.position_advice.value]}",
-        f"### 交易意图\n\n- **交易意图**：{TRADE_INTENT_LABELS[output.trade_intent.value]}" if output.trade_intent else "",
-        f"### 入场条件\n\n{_render_list(output.entry_conditions)}",
-        f"### 执行步骤\n\n{_render_list(output.execution_steps)}",
-        f"### 风险因素\n\n{_render_list(output.risk_factors)}",
-        _render_time_stop(output.time_stop_days),
-        _render_decision(output),
-        _render_price_plan(output.price_plan, output.decision.direction, output.trade_intent),
+    return _render_stage(
+        "交易计划",
+        output,
+        f"### 入场条件\n\n{_render_list(output.entry_conditions)}" if output.entry_conditions else "",
+        f"### 执行步骤\n\n{_render_list(output.execution_steps)}" if output.execution_steps else "",
     )
 
 
 @render_markdown.register
 def _(output: PortfolioManagerOutput) -> str:
-    return _join_sections(
-        _render_header("最终投资组合决策", output),
-        f"### 交易意图\n\n- **交易意图**：{TRADE_INTENT_LABELS[output.trade_intent.value]}" if output.trade_intent else "",
-        _render_time_stop(output.time_stop_days),
-        _render_decision(output),
-        _render_price_plan(output.price_plan, output.decision.direction, output.trade_intent),
-        "### 备注",
-        f"#### 激进观点\n\n{_render_list(output.aggressive_viewpoints)}",
-        f"#### 保守观点\n\n{_render_list(output.conservative_viewpoints)}",
-        f"#### 中性观点\n\n{_render_list(output.neutral_viewpoints)}",
-        f"#### 采纳理由\n\n{_render_list(output.adopted_reasoning)}",
-        f"#### 风险控制\n\n{_render_list(output.risk_control_measures)}",
+    return _render_stage(
+        "最终投资组合决策",
+        output,
+        f"### 风险控制\n\n{_render_list(output.risk_control_measures)}" if output.risk_control_measures else "",
     )
 
 
@@ -233,6 +232,7 @@ def _render_pack(
     decision = output.decision
     return _join_sections(
         f"## {title}证据包（{output.ticker}｜分析日 {output.analysis_date.isoformat()}｜最近完成交易日 {output.last_completed_session.isoformat()}）",
+        "- **预测期限**：下一交易日截至收盘（分析日期当日或之后的首个交易日）",
         f"### 结论\n\n{DIRECTION_LABELS[decision.direction.value]}/{ACTION_LABELS[decision.action.value]}，置信度 {decision.confidence:.2f}：{decision.summary}",
         f"### 证据与来源\n\n{_render_evidence(output.evidence)}",
         *sections,
@@ -310,7 +310,8 @@ def _(output: SocialMediaAnalystOutput) -> str:
 @render_evidence_pack.register
 def _(output: ResearchManagerOutput) -> str:
     scenarios = [
-        f"{item.name}：{item.target_price:.2f}（{item.timeframe_days}天；假设：{'；'.join(item.assumptions) or '无'}）" for item in output.price_scenarios
+        f"{item.name}：{item.target_price:.2f}（{item.timeframe_days} 个交易日；假设：{'；'.join(item.assumptions) or '无'}）"
+        for item in output.price_scenarios
     ]
     return _render_pack(
         "研究经理",
@@ -326,7 +327,7 @@ def _(output: ResearchManagerOutput) -> str:
 @render_evidence_pack.register
 def _(output: TraderOutput) -> str:
     intent = TRADE_INTENT_LABELS[output.trade_intent.value] if output.trade_intent else "未注明"
-    time_stop = f"{output.time_stop_days} 个交易日" if output.time_stop_days is not None else "无"
+    time_stop = f"{output.time_stop_days} 个交易日（独立持仓期限，不延长单日预测）" if output.time_stop_days is not None else "无"
     return _render_pack(
         "交易员",
         output,
@@ -339,15 +340,83 @@ def _(output: TraderOutput) -> str:
     )
 
 
+def _table_cell(value: str) -> str:
+    return escape(value, quote=False).replace("|", "&#124;").replace("\r\n", "\n").replace("\n", "<br>")
+
+
 def render_full_report(result: AnalysisResult) -> str:
-    outputs = [
-        result.portfolio_manager,
-        result.trader,
-        result.research_manager,
-        result.analysts.market,
-        result.analysts.fundamentals,
-        result.analysts.news,
-        result.analysts.social_media,
+    portfolio = result.portfolio_manager
+    stages = [
+        ("最终投资组合决策", portfolio),
+        ("交易计划", result.trader),
+        ("研究经理决策", result.research_manager),
+        ("技术面分析", result.analysts.market),
+        ("基本面分析", result.analysts.fundamentals),
+        ("新闻分析", result.analysts.news),
+        ("社交媒体分析", result.analysts.social_media),
     ]
-    title = f"# 股票分析报告：{result.ticker}（{result.analysis_date.isoformat()}）"
-    return f"{title}\n\n" + "\n\n---\n\n".join(render_markdown(output) for output in outputs)
+    rows = ["| 阶段 | 方向 | 操作 | 置信度 | 交易意图 | 摘要 |", "| --- | --- | --- | --- | --- | --- |"]
+    evidence: dict[tuple[str, str, str, date | None], tuple[Evidence, list[str]]] = {}
+    notes: dict[str, list[str]] = {}
+    summaries: dict[str, str] = {portfolio.decision.summary: "最终投资组合决策"}
+    displayed = {
+        portfolio.decision.summary,
+        *portfolio.decision.reasoning,
+        *portfolio.risk_control_measures,
+        *portfolio.price_plan.invalidation_conditions,
+        *result.trader.entry_conditions,
+        *result.trader.execution_steps,
+    }
+    for title, output in stages:
+        intent = TRADE_INTENT_LABELS[output.trade_intent.value] if isinstance(output, (TraderOutput, PortfolioManagerOutput)) and output.trade_intent else "-"
+        if output is portfolio:
+            summary = "见最终决策"
+        elif output.decision.summary in summaries:
+            summary = f"同{summaries[output.decision.summary]}"
+        else:
+            summary = _table_cell(output.decision.summary)
+            summaries[output.decision.summary] = title
+        rows.append(
+            f"| {title} | {DIRECTION_LABELS[output.decision.direction.value]} | {ACTION_LABELS[output.decision.action.value]} | "
+            f"{output.decision.confidence:.2f} | {intent} | {summary} |"
+        )
+        for item in output.evidence:
+            key = (item.claim, item.supporting_data, item.source, item.as_of_date)
+            if key not in evidence:
+                evidence[key] = (item, [])
+            if title not in evidence[key][1]:
+                evidence[key][1].append(title)
+        details = [*_counter_evidence(output), *output.limitations, *output.price_plan.invalidation_conditions]
+        if output is not portfolio:
+            details.extend(output.decision.reasoning)
+        if isinstance(output, (ResearchManagerOutput, PortfolioManagerOutput)):
+            details.extend(output.adopted_reasoning)
+        for text in details:
+            if text not in displayed:
+                if text not in notes:
+                    notes[text] = []
+                if title not in notes[text]:
+                    notes[text].append(title)
+
+    sources = [f"{escape(_render_evidence([item]), quote=False)}（采用阶段：{'、'.join(titles)}）" for item, titles in evidence.values()]
+    constraints = [f"- {text}（{'、'.join(titles)}）" for text, titles in notes.items()]
+    scenarios = [
+        f"{item.name}：{result.research_manager.price_plan.currency} {item.target_price:.2f}"
+        f"（{item.timeframe_days} 个交易日；假设：{'；'.join(item.assumptions) or '无'}）"
+        for item in result.research_manager.price_scenarios
+    ]
+    return _join_sections(
+        f"# 股票分析报告：{result.ticker}（{result.analysis_date.isoformat()}）",
+        _render_header("最终投资组合决策", portfolio),
+        _render_decision(portfolio),
+        _render_execution(portfolio),
+        f"### 风险控制\n\n{_render_list(portfolio.risk_control_measures)}" if portfolio.risk_control_measures else "",
+        "## 交易员执行参考（以最终决策为准）" if result.trader.entry_conditions or result.trader.execution_steps else "",
+        f"### 入场条件\n\n{_render_list(result.trader.entry_conditions)}" if result.trader.entry_conditions else "",
+        f"### 执行步骤\n\n{_render_list(result.trader.execution_steps)}" if result.trader.execution_steps else "",
+        "## 阶段结论对照\n\n" + "\n".join(rows),
+        "## 关键依据与来源\n\n" + "\n".join(sources) if sources else "",
+        f"## 单日价格情景\n\n{_render_list(scenarios)}" if scenarios else "",
+        f"## 社交数据质量\n\n{result.analysts.social_media.data_quality}",
+        "## 分歧、限制与补充失效条件\n\n" + "\n".join(constraints) if constraints else "",
+    )

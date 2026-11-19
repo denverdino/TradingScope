@@ -2,11 +2,14 @@ name: Trading Analysis
 
 on:
   schedule:
-    # 8 AM Beijing time (0 AM UTC)
+    # 8 AM Beijing time (0 AM UTC), after the US close
     - cron: '0 0 * * *'
-    # 6 PM Beijing time (10 AM UTC)
-    - cron: '0 10 * * *'
   workflow_dispatch: # Allows manual triggering
+    inputs:
+      force:
+        description: Analyze even when no newer completed session exists
+        type: boolean
+        default: false
 
 jobs:
   evaluate:
@@ -29,7 +32,7 @@ jobs:
           tickers=(MSFT AMZN INTC NVDA GOOGL BABA TSM)
 
           ticker_list=$(IFS=,; echo "${tickers[*]}")
-          uv run python -m tradingscope.evaluate --tickers="$ticker_list" --email-to="${{ secrets.EMAIL_TO }}" --dry-run
+          uv run python -m tradingscope.evaluate --tickers="$ticker_list" --email-to="${{ secrets.EMAIL_TO }}"
         env:
           DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
           DASHSCOPE_BASE_URL: ${{ secrets.DASHSCOPE_BASE_URL }}
@@ -42,7 +45,6 @@ jobs:
           OSS_REGION: ${{ secrets.OSS_REGION }}
           OSS_BUCKET: ${{ secrets.OSS_BUCKET }}
           TZ: Asia/Shanghai
-          MEMORY_DEBUG: "1"
 
   analyze:
     needs: evaluate
@@ -68,7 +70,7 @@ jobs:
 
       - name: Run stock analysis
         run: |
-          uv run python -m tradingscope.main "${{ matrix.ticker }}" --email-to="${{ secrets.EMAIL_TO }}"
+          uv run python -m tradingscope.main "${{ matrix.ticker }}" --email-to="${{ secrets.EMAIL_TO }}" ${{ inputs.force && '--force' || '' }}
         env:
           DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
           DASHSCOPE_BASE_URL: ${{ secrets.DASHSCOPE_BASE_URL }}
@@ -81,4 +83,3 @@ jobs:
           OSS_REGION: ${{ secrets.OSS_REGION }}
           OSS_BUCKET: ${{ secrets.OSS_BUCKET }}
           TZ: Asia/Shanghai
-          MEMORY_DEBUG: "1"

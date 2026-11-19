@@ -18,6 +18,20 @@ DEFAULT_CONFIG = {
     "max_debate_rounds": 2,
     "max_risk_discuss_rounds": 2,
     "max_recur_limit": 100,
+    # Analysis is skipped unless a newer completed session exists within this many prior calendar days.
+    "analysis_skip_lookback_days": 7,
+    "evaluation": {
+        "horizons": (1,),
+        "lookback_calendar_days": 14,
+        "price_history_calendar_days": 35,
+        "price_future_calendar_days": 14,
+        "atr_history_bars": 15,
+        "shock_atr_multiple": 3.0,
+        "track_record_min_samples": 10,
+        # ISO date; evaluations of earlier analysis dates are excluded from the track record.
+        "track_record_start_date": None,
+        "confidence_buckets": (0.5, 0.7),
+    },
     "data_vendors": {
         "core_stock_apis": "yfinance",  # Options: yfinance, alpha_vantage, local
         "fundamental_data": "yfinance",  # Options: yfinance, alpha_vantage, local (dashscope: experimental, not yet wired)

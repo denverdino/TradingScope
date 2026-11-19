@@ -134,7 +134,7 @@ def _all_outputs() -> list:
             models.PriceScenario(
                 name="基准",
                 target_price=110.0,
-                timeframe_days=5,
+                timeframe_days=1,
                 assumptions=["市场稳定"],
             ),
         ],

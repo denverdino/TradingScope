@@ -10,6 +10,7 @@ from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.fundamental_data_tools import (
     get_balance_sheet,
     get_cashflow,
+    get_earnings_calendar,
     get_fundamentals,
     get_income_statement,
 )
@@ -49,6 +50,7 @@ def create_fundamentals_analyst_agent(
             FunctionTool(get_balance_sheet),
             FunctionTool(get_cashflow),
             FunctionTool(get_income_statement),
+            FunctionTool(get_earnings_calendar),
         ]
     )
 
@@ -84,7 +86,7 @@ def create_fundamentals_analyst_agent(
    - **注意：不要过度强调分析师长期目标价，这对短期交易参考价值有限**
 
 3) **短期催化剂与风险**
-   - 下一财报日：仅在工具返回相应数据时分析，否则标注数据缺失
+   - 下一财报日：仅在工具返回相应数据时分析，否则标注数据缺失；以 get_earnings_calendar 返回为准。保留未来 5 个交易日的财报筛查覆盖，落在该范围内时必须作为已知事件风险说明；优先评估下一实际交易日收盘前的发布及其预期变化对本次预测的影响，更晚事件仅作背景与独立持仓管理风险，不得扩展预测窗口
    - 近期是否有重大公告（回购、分红、拆股等）
    - 现金流状况是否健康
    - 短期债务压力
@@ -122,28 +124,10 @@ def create_fundamentals_analyst_agent(
 - 短期交易更应关注：当前估值水平、盈利趋势、近期催化剂
 
 # 分析素材要求
-请用中文覆盖以下要点，无需遵循固定展示格式：
-
-### 公司基本信息
-（名称、代码、行业、主要业务）
-
-### 最新财务表现（重点关注）
-- **最近季度（MRQ）业绩**：营收、净利润、同比/环比变化
-- **盈利趋势**：近 2-4 个季度的盈利变化方向
-- **盈利质量**：经营现金流 vs 净利润
-
-### 当前估值水平
-- PE(TTM)、PB 等核心估值指标
-- 与近期（1年内）历史估值对比
-- 当前估值是否合理（偏高/偏低/合理）
-
-### 短期关注点
-- **下一财报日**：工具返回时注明日期，否则标注数据缺失
-- **短期风险**：现金流压力、债务到期、业绩不确定性等
-
-
-### 数据来源说明
-列出关键数据来源与日期
+完成上述基本面分析后，只呈现影响结论、最强反证或持仓风险的财务与催化剂证据；不得按工具字段逐项展示，不使用固定报告模板。
+- 近 2-4 个季度的盈利变化方向和近期（1年内）估值对比仍须核验；仅在采用时保留相关期间、数值及比较依据。
+- 选中的财务证据就近标明来源、原始链接与数据日期，不再另列重复来源清单。
+- 下一财报日及其已知事件风险、影响判断的现金流或债务风险不能因证据条数而省略；缺失项与适用限制简短说明。
 
 # 绝对禁止
 - 禁止英文投资建议词（buy/hold/sell）

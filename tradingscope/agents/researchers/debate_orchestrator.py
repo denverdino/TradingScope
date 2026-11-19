@@ -9,6 +9,7 @@ from agentscope.message import UserMsg
 
 from tradingscope.agents.output import AgentOutputBase, ResearchManagerOutput
 from tradingscope.agents.utils.agent_utils import build_debate_round_prompt, call_agent_with_retry
+from tradingscope.agents.utils.decision_policy import CONCISE_ANALYSIS_OUTPUT_POLICY, NEXT_SESSION_FORECAST_CONTRACT
 
 
 class ResearchDebateOrchestrator:
@@ -45,13 +46,13 @@ class ResearchDebateOrchestrator:
         bull_content = build_debate_round_prompt(
             round_num,
             self.max_rounds,
-            opening="请看涨研究员陈述未来 1-5 个交易日的看涨观点，聚焦增长潜力、竞争优势和积极指标中最关键的证据。",
+            opening="请看涨研究员陈述下一实际交易日直至收盘的看涨观点，聚焦增长潜力、竞争优势和积极指标中最关键的证据。",
             rebuttal="请看涨研究员反驳看跌研究员已发表的观点，指出其数据偏差、逻辑漏洞或过度悲观的假设。",
         )
         bear_content = build_debate_round_prompt(
             round_num,
             self.max_rounds,
-            opening="请看跌研究员陈述未来 1-5 个交易日的看跌观点，聚焦风险因素、竞争劣势和负面指标中最关键的证据。",
+            opening="请看跌研究员陈述下一实际交易日直至收盘的看跌观点，聚焦风险因素、竞争劣势和负面指标中最关键的证据。",
             rebuttal="请看跌研究员反驳看涨研究员已发表的观点，指出其数据偏差、逻辑漏洞或过度乐观的假设。",
         )
 
@@ -97,8 +98,10 @@ class ResearchDebateOrchestrator:
 
         research_manager_prompt = UserMsg(
             name="DebateOrchestrator",
-            content="""作为投资决策经理，请基于以下辩论历史做出最终的投资决策：
-
+            content=f"""作为投资决策经理，请基于以下辩论历史做出最终的投资决策：
+{NEXT_SESSION_FORECAST_CONTRACT}
+{CONCISE_ANALYSIS_OUTPUT_POLICY}
+保守、基准、乐观三种价格情景全部 timeframe_days=1；没有价格依据时留空，不制定完整订单。
 请给出明确的买入、卖出或持有建议，并说明理由。
 请用中文撰写所有分析内容和建议，必须使用真实数据和事实提供决策支撑。
 """,

@@ -59,11 +59,11 @@ def test_scheduled_workflow_reports_failures_and_analyzes_unless_cancelled() -> 
     evaluate_command = _run_command(evaluate, "Evaluate stock analysis")
     analyze_command = _run_command(analyze, "Run stock analysis")
     assert "||" not in evaluate_command
-    assert "||" not in analyze_command
-    assert evaluate_command.splitlines()[-1] == (
-        'uv run python -m tradingscope.evaluate --tickers="$ticker_list" --email-to="${{ secrets.EMAIL_TO }}" --dry-run'
+    assert "|| true" not in analyze_command
+    assert evaluate_command.splitlines()[-1] == ('uv run python -m tradingscope.evaluate --tickers="$ticker_list" --email-to="${{ secrets.EMAIL_TO }}"')
+    assert analyze_command.strip() == (
+        "uv run python -m tradingscope.main \"${{ matrix.ticker }}\" --email-to=\"${{ secrets.EMAIL_TO }}\" ${{ inputs.force && '--force' || '' }}"
     )
-    assert analyze_command.strip() == 'uv run python -m tradingscope.main "${{ matrix.ticker }}" --email-to="${{ secrets.EMAIL_TO }}"'
     assert analyze["needs"] == "evaluate"
     assert analyze["if"] == "${{ !cancelled() }}"
     for job in (evaluate, analyze):
@@ -89,8 +89,16 @@ def test_workflow_runs_at_most_two_tickers_after_single_evaluation() -> None:
     assert 'ticker_list=$(IFS=,; echo "${tickers[*]}")' in evaluate_command
     assert 'tradingscope.main "${{ matrix.ticker }}"' in _run_command(analyze, "Run stock analysis")
     assert workflow.get("on", workflow.get(True)) == {
-        "schedule": [{"cron": "0 0 * * *"}, {"cron": "0 10 * * *"}],
-        "workflow_dispatch": None,
+        "schedule": [{"cron": "0 0 * * *"}],
+        "workflow_dispatch": {
+            "inputs": {
+                "force": {
+                    "description": "Analyze even when no newer completed session exists",
+                    "type": "boolean",
+                    "default": False,
+                },
+            },
+        },
     }
     expected_env = {
         "DASHSCOPE_API_KEY": "${{ secrets.DASHSCOPE_API_KEY }}",
@@ -104,7 +112,6 @@ def test_workflow_runs_at_most_two_tickers_after_single_evaluation() -> None:
         "OSS_REGION": "${{ secrets.OSS_REGION }}",
         "OSS_BUCKET": "${{ secrets.OSS_BUCKET }}",
         "TZ": "Asia/Shanghai",
-        "MEMORY_DEBUG": "1",
     }
     for job, step_name in ((evaluate, "Evaluate stock analysis"), (analyze, "Run stock analysis")):
         assert job["runs-on"] == "ubuntu-latest"

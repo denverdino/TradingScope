@@ -1,18 +1,20 @@
-"""Post-market evaluation module for TradingScope.
+"""Deterministic post-market evaluation for TradingScope.
 
-This module provides:
-- AnalysisRecord: Structured record of trading decisions
-- EvaluationResult: Structured result of a single evaluation
-- OSSAnalysisStore: OSS-backed discovery and fetching of JSON reports
-- AnalysisEvaluator: Scores analysis records against actual market data
-  and generates Lessons Learned for agent memory
+- EvaluationRecord: one completed run judged at one horizon
+- AnalysisEvaluator: finds pending runs and writes each record once
+- build_track_record: statistics over matured evaluations
 """
 
-from .models import AnalysisRecord, EvaluationResult
-from .oss_store import OSSAnalysisStore
+from .evaluator import AnalysisEvaluator, build_evaluation_record, current_records
+from .models import EvaluationRecord
+from .oss_store import default_evaluation_store
+from .track_record import build_track_record
 
 __all__ = [
-    "AnalysisRecord",
-    "EvaluationResult",
-    "OSSAnalysisStore",
+    "AnalysisEvaluator",
+    "EvaluationRecord",
+    "build_evaluation_record",
+    "build_track_record",
+    "current_records",
+    "default_evaluation_store",
 ]

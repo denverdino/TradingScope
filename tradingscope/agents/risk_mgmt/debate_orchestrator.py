@@ -9,6 +9,7 @@ from agentscope.message import UserMsg
 
 from tradingscope.agents.output import AgentOutputBase, PortfolioManagerOutput
 from tradingscope.agents.utils.agent_utils import build_debate_round_prompt, call_agent_with_retry
+from tradingscope.agents.utils.decision_policy import CONCISE_ANALYSIS_OUTPUT_POLICY, NEXT_SESSION_FORECAST_CONTRACT
 
 
 class RiskDebateOrchestrator:
@@ -52,19 +53,19 @@ class RiskDebateOrchestrator:
         aggressive_content = build_debate_round_prompt(
             round_num,
             self.max_rounds,
-            opening="请激进风险分析师评估交易计划，聚焦高回报潜力、增长机会和竞争优势中最关键的证据。",
+            opening="请激进风险分析师评估下一实际交易日直至收盘的交易计划，聚焦高回报潜力、增长机会和竞争优势中最关键的证据。",
             rebuttal="请激进风险分析师反驳保守和中性分析师已发表的观点，指出其过度规避风险或可能错失的机会。",
         )
         conservative_content = build_debate_round_prompt(
             round_num,
             self.max_rounds,
-            opening="请安全/保守风险分析师评估交易计划，聚焦潜在风险、波动性和下行威胁中最关键的证据。",
+            opening="请安全/保守风险分析师评估下一实际交易日直至收盘的交易计划，聚焦潜在风险、波动性和下行威胁中最关键的证据。",
             rebuttal="请安全/保守风险分析师反驳激进和中性分析师已发表的观点，指出其过度乐观或低估的下行风险。",
         )
         neutral_content = build_debate_round_prompt(
             round_num,
             self.max_rounds,
-            opening="请中性风险分析师评估交易计划，聚焦风险收益平衡和市场趋势中最关键的证据。",
+            opening="请中性风险分析师评估下一实际交易日直至收盘的交易计划，聚焦风险收益平衡和市场趋势中最关键的证据。",
             rebuttal="请中性风险分析师反驳激进和保守分析师已发表的观点，指出其过度冒险或过度谨慎之处。",
         )
 
@@ -117,9 +118,11 @@ class RiskDebateOrchestrator:
 
         portfolio_manager_prompt = UserMsg(
             name="DebateOrchestrator",
-            content="""请基于以上三位风险分析师的辩论，按系统指令给出最终风险调整决策素材：明确买入、卖出或持有。
+            content=f"""请基于以上三位风险分析师的辩论，按系统指令给出最终风险调整决策素材：明确买入、卖出或持有。
+{NEXT_SESSION_FORECAST_CONTRACT}
+{CONCISE_ANALYSIS_OUTPUT_POLICY}
+入场、目标和止损是目标交易日的执行与持仓管理参考；time_stop_days 是独立持仓管理期限，可以超过1个交易日，必填/留空适用性不变。仓位可以继续持有，收盘估值不代表强制平仓。
 只有在有具体论据强烈支持时才选择持有，而不是在所有方面都似乎有效时作为后备选择。请用中文撰写。
-**从过去的错误中学习**：使用过去的经验教训来解决先前的误判，改进您现在做出的决策，确保您不会做出错误的买入/卖出/持有决定而亏损。
 """,
         )
 

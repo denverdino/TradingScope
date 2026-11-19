@@ -24,7 +24,7 @@ from tradingscope.utils.oss_structured_output_uploader import (
 
 @pytest.fixture(autouse=True)
 def local_results_dir(tmp_path):
-    with patch(
+    with patch.dict(
         "tradingscope.utils.oss_structured_output_uploader.DEFAULT_CONFIG",
         {"results_dir": str(tmp_path)},
     ):
@@ -49,6 +49,34 @@ def analysis_result() -> AnalysisResult:
         trader=trader,
         portfolio_manager=portfolio,
     )
+
+
+@pytest.mark.asyncio
+async def test_structured_uploads_start_concurrently_and_preserve_result_order():
+    started = set()
+    all_started = asyncio.Event()
+
+    async def upload(_date, _ticker, name, _content):
+        started.add(name)
+        if len(started) == 2:
+            all_started.set()
+        await all_started.wait()
+        return name == "full_report"
+
+    with (
+        patch.object(structured_uploader, "_get_client", return_value=object()),
+        patch.object(structured_uploader, "upload_structured_output", side_effect=upload),
+    ):
+        results = await asyncio.wait_for(
+            structured_uploader.upload_structured_outputs(
+                "2026-07-14",
+                "AAPL",
+                {"full_report": "preview", "runs/run-1/full_report": "bundle", "empty": ""},
+            ),
+            timeout=1,
+        )
+    assert list(results) == ["full_report", "runs/run-1/full_report"]
+    assert results == {"full_report": True, "runs/run-1/full_report": False}
 
 
 @pytest.mark.asyncio
@@ -204,7 +232,13 @@ async def test_persistence_writes_manifest_last(analysis_result: AnalysisResult,
     assert list(upload_json.await_args_list[-1].args[2]) == ["manifest"]
     assert upload_json.await_count == 2
     manifest_path = tmp_path / "data" / "2026-07-14" / "AAPL" / "manifest.json"
-    assert json.loads(manifest_path.read_text())["status"] == "complete"
+    manifest = json.loads(manifest_path.read_text())
+    assert manifest["status"] == "complete"
+    assert manifest["schema_version"] == "3.1"
+    assert len(manifest["run_id"]) == 32
+    assert manifest["last_completed_session"] == "2026-07-13"
+    assert manifest["models"]["deep_think_llm"] == "qwen4-max"
+    assert "code_version" in manifest
 
 
 @pytest.mark.asyncio
@@ -215,7 +249,7 @@ async def test_node_persistence_writes_local_json_and_markdown_without_oss(
     output = analysis_result.analysts.market
 
     with (
-        patch(
+        patch.dict(
             "tradingscope.utils.oss_structured_output_uploader.DEFAULT_CONFIG",
             {"results_dir": str(tmp_path)},
         ),
@@ -243,7 +277,7 @@ async def test_node_persistence_uploads_json_and_markdown_when_oss_is_configured
     upload_markdown = AsyncMock(return_value={"trader": True})
 
     with (
-        patch(
+        patch.dict(
             "tradingscope.utils.oss_structured_output_uploader.DEFAULT_CONFIG",
             {"results_dir": str(tmp_path)},
         ),

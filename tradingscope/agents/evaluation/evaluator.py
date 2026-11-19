@@ -1,412 +1,277 @@
-"""Post-market analysis evaluator.
+"""Deterministic post-market evaluation of completed analysis runs.
 
-Scores previous analysis records against actual market data and
-generates Lessons Learned for the shared memory namespace.
+Every stage output of a completed run is judged at each configured horizon. Records are
+written once per run and horizon; no model is called.
 """
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-from typing import Any, List, Optional
+import logging
+from collections import defaultdict
+from datetime import date, datetime, time, timedelta, timezone
+from functools import partial
+from typing import Callable, Iterable, Protocol
+from zoneinfo import ZoneInfo
 
-from agentscope import logger
-from agentscope.agent import Agent
-from agentscope.message import UserMsg
-from agentscope.model import ChatModelBase
-
-from .market_outcome import (
-    AssessmentStatus,
-    TradeAssessment,
-    assess_trade,
-    parse_market_bars,
+from tradingscope.agents.output import PortfolioManagerOutput, TraderOutput
+from tradingscope.utils.oss_structured_output_reader import (
+    STAGE_NAMES,
+    CompletedRun,
+    CompletionManifest,
+    fetch_completed_manifest,
+    fetch_completed_run,
 )
-from .models import AnalysisRecord, EvaluationResult
-from .oss_store import OSSAnalysisStore
+
+from .market_outcome import EVALUATION_CONFIG, MarketBar, assess_trade_in_window, direction_status, market_window, parse_market_bars
+from .models import AnalysisRecord, EvaluationRecord, MarketOutcome, StageEvaluation, TradeOutcome
+from .oss_store import EvaluationStore, evaluation_key
+from .shocks import aligned_benchmark_bars, detect_shock_sessions, period_return, sample_class
+
+logger = logging.getLogger(__name__)
 
 
-def calculate_lesson_weight(
-    lesson_type: str,
-    error_weight_multiplier: float = 2.0,
-) -> float:
-    """Calculate memory weight for a lesson.
+class MarketData(Protocol):
+    def daily_bars(self, symbol: str, start: str, end: str) -> list[MarketBar]: ...
 
-    Error cases get higher weight to counter self-reinforcing bias.
+    def benchmark_symbol(self, ticker: str) -> str: ...
 
-    Args:
-        lesson_type: success/failure/partial
-        error_weight_multiplier: multiplier for error cases
-
-    Returns:
-        Weight between 0 and 1
-    """
-    if lesson_type == "failure":
-        base_weight = 0.8 * error_weight_multiplier
-    elif lesson_type == "partial":
-        base_weight = 0.6 * error_weight_multiplier
-    else:  # success
-        base_weight = 0.4
-
-    return min(1.0, max(0.1, base_weight))
+    def earnings_dates(self, ticker: str, start: str, end: str) -> list[datetime] | None: ...
 
 
-_LESSON_PROMPT = """你是一位客观的投资分析评测专家。请解释已经由程序计算出的交易评估结果，并生成经验教训。
+class VendorMarketData:
+    """Market data through the configured vendors; earnings and sectors come from yfinance."""
 
-## 分析记录
-- 股票: {ticker}
-- 分析日期: {analysis_date}
-- 预测方向: {direction}
-- 操作建议: {action}
-- 交易意图: {trade_intent}
-- 仓位建议: {position_advice}
-- 置信度: {confidence:.0%}
-- 执行价: {execution_price}
-- 目标价: {target_price}
-- 止损价: {stop_loss}
-- 核心理由: {reasoning}
+    def daily_bars(self, symbol: str, start: str, end: str) -> list[MarketBar]:
+        from tradingscope.dataflows.interface import route_to_vendor
 
-## 原始分析报告（摘要）
-{report_excerpt}
+        csv_text = route_to_vendor("get_stock_data", symbol, start, end)
+        if not csv_text or "Error" in str(csv_text):
+            raise ValueError(f"no market data for {symbol}")
+        return parse_market_bars(_strip_vendor_preamble(csv_text))
 
-## 客观评估结果
-- 评估周期: {horizon_days}个交易日
-- 客观状态: {status}
-- 是否模拟成交: {filled}
-- 模拟成交价: {fill_price}
-- 标的收益率: {underlying_return}
-- 策略收益率: {strategy_return}
-- 收益口径: {strategy_return_basis}
-- 剩余仓位模拟事件（horizon仅表示期末估值）: {residual_exit}
-- ATR有效波动边界: {atr_threshold}
-- 退出原因: {exit_reason}
-- 评估限制: {limitations}
+    def benchmark_symbol(self, ticker: str) -> str:
+        from tradingscope.dataflows.y_finance import get_sector_benchmark_symbol
 
-## 输出要求
-请用中文输出，严格控制在450字符以内。格式如下：
-[{ticker}|{analysis_date}|{horizon_days}日]
-评估结果: (解释客观评估状态及交易计划的执行情况，1-2句)
-经验教训: (核心经验教训，2-3句)
+        return get_sector_benchmark_symbol(ticker)
 
-不得改变上述客观状态。不得把原始分析未提及的信息包装成预测依据。
-必须区分方向判断与交易计划可执行性。状态为not_filled时只评价执行计划，不得评价为方向错误。
-correct只表示满足程序判定标准；若策略收益率为“-”，不得据此声称策略盈利、跑赢标的或整体计划有效。
-状态为inconclusive时，不得给出确定性的成功或失败结论，也不得使用“有效”“成功”“正确”“验证”等确定性表述；不得把方向判断、执行质量、风控组件或整体策略描述为已验证、有效、成功或正确。
-当是否成交为否且标的收益率为正时，不得使用“规避上涨”或“规避风险”，也不得声称未成交计划避免、降低、防范或保护了任何风险；不得据此得出风险已被规避的结论；应说明未产生新交易收益，并可解释未成交原因、机会成本及适用限制。
-trade_intent为hold时，hold不会模拟目标价、止损价或时间止损。仓位建议为none时只说明未执行新交易；仓位建议非none时还必须说明现有仓位及其风控执行未被本次评测模拟。
-评估限制不为“无”时，只评价已经模拟的部分，不得把部分结果扩展为完整交易计划或组合收益的结论。
-reduce_long的策略收益率仅衡量减仓部分卖出后的相对避险收益或机会成本，客观状态只评价该指标；不得将其称为完整持仓收益。
-剩余仓位退出日期和价格是OHLC模拟事件，不是实际成交；缺少数量、减仓比例和持仓成本时不得计算或推断完整持仓收益。
-标的收益率仅按其实际用途解释，不得仅因策略跑赢或落后标的而改变客观状态。
-经验教训只能来自原始分析和上述客观评估数据，不得编造新的市场事实、因果机制或已执行动作。
-不要使用Markdown格式，直接输出纯文本。"""
+    def earnings_dates(self, ticker: str, start: str, end: str) -> list[datetime] | None:
+        from tradingscope.dataflows.y_finance import fetch_earnings_dates
+
+        return fetch_earnings_dates(ticker, start, end)
+
+
+def trade_record(output: TraderOutput | PortfolioManagerOutput) -> AnalysisRecord:
+    """Build the simulation input from a stage output that carries a trade plan."""
+    if output.trade_intent is None:
+        raise ValueError("evaluation requires an explicit trade intent")
+    return AnalysisRecord(
+        analysis_date=output.analysis_date.isoformat(),
+        direction=output.decision.direction.value,
+        execution_price=output.price_plan.execution_price,
+        execution_price_low=output.price_plan.execution_price_low,
+        execution_price_high=output.price_plan.execution_price_high,
+        target_price=output.price_plan.target_price,
+        stop_loss=output.price_plan.stop_loss,
+        trade_intent=output.trade_intent.value,
+        position_advice=output.position_advice.value,
+        time_stop_days=output.time_stop_days,
+    )
+
+
+def build_evaluation_record(
+    run: CompletedRun,
+    bars: list[MarketBar],
+    benchmark_symbol: str,
+    benchmark_bars: list[MarketBar],
+    earnings_dates: list[datetime] | None,
+    horizon: int,
+    *,
+    evaluated_at: datetime,
+) -> EvaluationRecord | None:
+    """Judge every stage output of a run at one horizon, or None until data is sufficient."""
+    analysis_date = run.manifest.analysis_date
+    known_session = run.manifest.last_completed_session
+    if known_session >= analysis_date:
+        raise ValueError("analysis date must follow the last completed session; already-observed sessions cannot be scored")
+    window = market_window(bars, analysis_date, horizon)
+    if window is None:
+        return None
+    first_open = datetime.combine(window.horizon_bars[0].session_date, time(9, 30), tzinfo=ZoneInfo("America/New_York"))
+    if run.manifest.forecast_completed_at >= first_open:
+        raise ValueError("daily OHLC cannot score a forecast completed after its first session opened")
+    if window.horizon_end.session_date >= evaluated_at.astimezone(timezone.utc).date():
+        return None
+    benchmark = aligned_benchmark_bars(window, benchmark_bars)
+    if benchmark is None:
+        return None
+
+    threshold = window.threshold()
+    underlying_return = window.horizon_end.close / window.reference_bar.close - 1
+    benchmark_return = period_return(benchmark)
+    excess_return = underlying_return - benchmark_return
+    shocks = detect_shock_sessions(
+        window,
+        benchmark,
+        atr_multiple=EVALUATION_CONFIG["shock_atr_multiple"],
+        earnings_dates=earnings_dates,
+        ticker_sessions=[bar.session_date for bar in bars],
+    )
+
+    stages = []
+    for name in STAGE_NAMES:
+        output = run.outputs.get(name)
+        if output is None:
+            continue
+        direction = output.decision.direction.value
+        trade = None
+        if isinstance(output, (TraderOutput, PortfolioManagerOutput)):
+            assessment = assess_trade_in_window(trade_record(output), window)
+            trade = TradeOutcome(
+                trade_intent=output.trade_intent.value,
+                simulated=assessment.exit_reason is not None,
+                status=assessment.status.value,
+                filled=assessment.filled,
+                fill_price=assessment.fill_price,
+                exit_reason=assessment.exit_reason,
+                strategy_return=assessment.strategy_return,
+                strategy_return_basis=assessment.strategy_return_basis,
+                residual_exit_reason=assessment.residual_exit_reason,
+                residual_exit_date=assessment.residual_exit_date,
+                residual_exit_price=assessment.residual_exit_price,
+                limitations=list(assessment.limitations),
+            )
+        stages.append(
+            StageEvaluation(
+                stage=name,
+                direction=direction,
+                confidence=output.decision.confidence,
+                direction_status=direction_status(direction, underlying_return, threshold).value,
+                excess_direction_status=direction_status(direction, excess_return, threshold).value,
+                trade=trade,
+            )
+        )
+
+    return EvaluationRecord(
+        run_id=run.run_id,
+        code_version=run.manifest.code_version,
+        models=run.manifest.models,
+        ticker=run.manifest.ticker,
+        analysis_date=analysis_date,
+        horizon=horizon,
+        horizon_end_session=window.horizon_end.session_date,
+        evaluated_at=evaluated_at,
+        forecast_started_at=run.manifest.forecast_started_at,
+        forecast_completed_at=run.manifest.forecast_completed_at,
+        market=MarketOutcome(
+            reference_session=window.reference_bar.session_date,
+            reference_close=window.reference_bar.close,
+            daily_atr_pct=window.daily_atr_pct,
+            atr_threshold=threshold,
+            underlying_return=underlying_return,
+            benchmark_symbol=benchmark_symbol,
+            benchmark_return=benchmark_return,
+            excess_return=excess_return,
+            shock_sessions=shocks,
+            sample_class=sample_class(shocks),
+        ),
+        stages=stages,
+        source_outputs={name: output.model_dump(mode="json") for name, output in run.outputs.items()},
+    )
 
 
 class AnalysisEvaluator:
-    """Evaluates analysis records against actual post-market data.
-
-    Fetches real stock prices, scores the analysis accuracy, and uses
-    an LLM to generate structured Lessons Learned that are stored in
-    the shared lessons_learned memory namespace.
-    """
+    """Find completed runs with pending horizons, judge them, and store each record once."""
 
     def __init__(
         self,
-        model: ChatModelBase,
-        memory_manager: Optional[object] = None,
-        results_dir: Optional[str] = None,
+        store: EvaluationStore,
+        *,
+        market_data: MarketData | None = None,
+        fetch_run: Callable[[str, str], CompletedRun | None] | None = None,
+        results_dir: str | None = None,
         dry_run: bool = False,
-        middlewares: list[Any] | None = None,
-    ):
-        """Initialize AnalysisEvaluator.
-
-        Args:
-            model: AgentScope chat model instance for LLM calls.
-            memory_manager: FinancialMemoryManager for writing lessons.
-                            If None, lessons are generated but not stored.
-            results_dir: Directory for local tracking files.
-            dry_run: If True, skip all side effects (memory writes, record marking).
-            middlewares: AgentScope middleware applied to evaluation calls.
-        """
-        self._model = model
-        self._middlewares = middlewares
-        self._memory_manager = memory_manager
-        self._record_store = OSSAnalysisStore(results_dir=results_dir)
+        clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
+    ) -> None:
+        self._store = store
+        self._market_data = market_data or VendorMarketData()
+        self._fetch_run = fetch_run or partial(fetch_completed_run, results_dir=results_dir)
         self._dry_run = dry_run
-        self._get_stock_data = None
+        self._clock = clock
 
-    def _ensure_data_imports(self) -> bool:
-        """Lazily import data fetching functions."""
-        if self._get_stock_data is not None:
-            return True
-        try:
-            from tradingscope.dataflows.interface import route_to_vendor
+    def candidates(self, tickers: list[str], *, analysis_date: str | None) -> list[tuple[str, str]]:
+        today = datetime.now().date()
+        if analysis_date:
+            dates = [analysis_date]
+        else:
+            lookback = EVALUATION_CONFIG["lookback_calendar_days"]
+            dates = [(today - timedelta(days=offset)).isoformat() for offset in range(lookback, 0, -1)]
+        return [(value, ticker) for value in dates for ticker in tickers]
 
-            self._get_stock_data = lambda symbol, start, end: route_to_vendor("get_stock_data", symbol, start, end)
-            return True
-        except ImportError as e:
-            logger.warning("Failed to import data functions: %s", e)
-            return False
-
-    async def run_batch_evaluation(
-        self,
-        tickers: Optional[List[str]] = None,
-        date: Optional[str] = None,
-    ) -> List[EvaluationResult]:
-        """Evaluate all pending analysis records from OSS.
-
-        Args:
-            tickers: List of stock symbols to evaluate (optional)
-            date: Filter by analysis date (optional)
-
-        Returns:
-            List of EvaluationResult with ticker, evaluation and lesson fields
-        """
-        today = datetime.now().strftime("%Y-%m-%d")
-        pending = await self._record_store.list_pending(before_date=today, tickers=tickers, date=date)
-
-        logger.info("[Evaluator] Found %d pending records", len(pending))
-
-        results: List[EvaluationResult] = []
-        for record in pending:
+    def run(self, tickers: list[str], *, analysis_date: str | None = None) -> list[EvaluationRecord]:
+        records: list[EvaluationRecord] = []
+        for candidate_date, ticker in self.candidates(tickers, analysis_date=analysis_date):
             try:
-                record_results = await self.evaluate_single(record)
-                results.extend(record_results)
-            except Exception as e:
-                logger.warning(
-                    "[Evaluator] Error evaluating %s/%s: %s",
-                    record.ticker,
-                    record.analysis_date,
-                    e,
-                )
-
-        logger.info("[Evaluator] Generated %d results", len(results))
-        return results
-
-    async def evaluate_single(self, record: AnalysisRecord) -> List[EvaluationResult]:
-        """Evaluate a single analysis record.
-
-        Args:
-            record: AnalysisRecord to evaluate
-
-        Returns:
-            One result per mature, pending horizon; empty when data is unavailable.
-        """
-        if not self._ensure_data_imports():
-            return []
-
-        analysis_datetime = datetime.strptime(record.analysis_date, "%Y-%m-%d")
-        start_date = (analysis_datetime - timedelta(days=35)).strftime("%Y-%m-%d")
-        end_date = (analysis_datetime + timedelta(days=14)).strftime("%Y-%m-%d")
-
-        stock_data = self._get_stock_data(record.ticker, start_date, end_date)
-        if not stock_data or "Error" in str(stock_data):
-            logger.warning("[Evaluator] No stock data for %s", record.ticker)
-            return []
-
-        try:
-            bars = parse_market_bars(_strip_vendor_preamble(stock_data))
-        except ValueError as exc:
-            logger.warning("[Evaluator] Invalid stock data for %s: %s", record.ticker, exc)
-            return []
-
-        analysis_date = analysis_datetime.date()
-        history_count = sum(bar.session_date < analysis_date for bar in bars)
-        evaluation_session_count = sum(bar.session_date >= analysis_date for bar in bars)
-
-        results: List[EvaluationResult] = []
-        for horizon_days in (1, 3, 5):
-            if self._record_store.is_evaluated(record.ticker, record.analysis_date, horizon_days):
-                continue
-            try:
-                assessment = assess_trade(record, bars, horizon_days)
-                if assessment is None:
-                    logger.info(
-                        "[Evaluator] Skipping %s/%s/%s: insufficient market data "
-                        "(history=%s, required_history=15, evaluation_sessions=%s, required_sessions=%s)",
-                        record.ticker,
-                        record.analysis_date,
-                        horizon_days,
-                        history_count,
-                        evaluation_session_count,
-                        horizon_days,
-                    )
-                    continue
-                lesson_content = await self._generate_lesson(record, assessment)
-                lesson_type = _lesson_type_for_status(assessment.status)
-                weight = calculate_lesson_weight(lesson_type=lesson_type)
-                if lesson_content and self._memory_manager and not self._dry_run:
-                    lessons_mem = self._memory_manager.lessons_memory
-                    if lessons_mem:
-                        await lessons_mem.add_reflection_lesson(
-                            lesson_content=lesson_content,
-                            weight=weight,
-                            lesson_type=lesson_type,
-                        )
-                        logger.info(
-                            "[Evaluator] Stored lesson for %s/%s/%s (type=%s, weight=%.2f)",
-                            record.ticker,
-                            record.analysis_date,
-                            horizon_days,
-                            lesson_type,
-                            weight,
-                        )
-
-                if not self._dry_run:
-                    self._record_store.mark_evaluated(record.ticker, record.analysis_date, horizon_days)
-
-                if lesson_content:
-                    evaluation, lesson = _parse_evaluation_and_lesson(lesson_content)
-                else:
-                    evaluation = _format_objective_evaluation(assessment)
-                    lesson = ""
-                results.append(
-                    EvaluationResult(
-                        ticker=record.ticker,
-                        evaluation=evaluation,
-                        lesson=lesson,
-                        analysis_date=record.analysis_date,
-                        horizon_days=horizon_days,
-                        status=assessment.status.value,
-                        filled=assessment.filled,
-                        underlying_return=assessment.underlying_return,
-                        strategy_return=assessment.strategy_return,
-                        strategy_return_basis=assessment.strategy_return_basis,
-                        residual_exit_reason=assessment.residual_exit_reason,
-                        residual_exit_date=assessment.residual_exit_date,
-                        residual_exit_price=assessment.residual_exit_price,
-                        limitations=assessment.limitations,
-                    ),
-                )
+                records.extend(self._evaluate_candidate(candidate_date, ticker))
             except Exception as exc:
-                logger.warning(
-                    "[Evaluator] Error evaluating %s/%s/%s: %s",
-                    record.ticker,
-                    record.analysis_date,
-                    horizon_days,
-                    exc,
-                )
-        return results
+                logger.warning("[Evaluator] Error evaluating %s/%s: %s", ticker, candidate_date, exc)
+        logger.info("[Evaluator] Produced %d evaluation records", len(records))
+        return records
 
-    async def _generate_lesson(
-        self,
-        record: AnalysisRecord,
-        assessment: TradeAssessment,
-    ) -> Optional[str]:
-        """Generate a structured lesson using LLM."""
-        logger.info("[Evaluator] record: %s", record)
+    def _evaluate_candidate(self, analysis_date: str, ticker: str) -> list[EvaluationRecord]:
+        run = self._fetch_run(analysis_date, ticker)
+        if run is None:
+            return []
+        pending = [horizon for horizon in EVALUATION_CONFIG["horizons"] if not self._store.exists(evaluation_key(analysis_date, ticker, run.run_id, horizon))]
+        if not pending:
+            return []
 
-        prompt = _LESSON_PROMPT.format(
-            ticker=record.ticker,
-            analysis_date=record.analysis_date,
-            direction=record.direction,
-            action=record.action,
-            trade_intent=record.trade_intent or "-",
-            position_advice=record.position_advice or "-",
-            confidence=record.confidence,
-            execution_price=record.execution_price or "-",
-            target_price=record.target_price or "-",
-            stop_loss=record.stop_loss or "-",
-            reasoning=record.reasoning or "-",
-            report_excerpt=record.final_decision_summary or "-",
-            horizon_days=assessment.horizon_days,
-            status=assessment.status.value,
-            filled="是" if assessment.filled else "否",
-            fill_price=_format_price(assessment.fill_price),
-            underlying_return=f"{assessment.underlying_return:+.2%}",
-            strategy_return=_format_percent(assessment.strategy_return),
-            strategy_return_basis=assessment.strategy_return_basis or "-",
-            residual_exit=_format_residual_exit(assessment),
-            atr_threshold=f"{assessment.atr_threshold:.2%}",
-            exit_reason=assessment.exit_reason or "-",
-            limitations="；".join(assessment.limitations) or "无",
-        )
+        analysis_day = date.fromisoformat(analysis_date)
+        start = (analysis_day - timedelta(days=EVALUATION_CONFIG["price_history_calendar_days"])).isoformat()
+        end = (analysis_day + timedelta(days=EVALUATION_CONFIG["price_future_calendar_days"])).isoformat()
+        bars = self._market_data.daily_bars(ticker, start, end)
+        benchmark_symbol = self._market_data.benchmark_symbol(ticker)
+        benchmark_bars = self._market_data.daily_bars(benchmark_symbol, start, end)
+        earnings_dates = self._market_data.earnings_dates(ticker, start, end)
 
-        logger.info("[Evaluator] Prompt: %s", prompt)
-
-        try:
-            agent = Agent(
-                name="EvaluationAgent",
-                system_prompt="你是一位客观的投资分析评测专家。",
-                model=self._model,
-                middlewares=self._middlewares,
+        records = []
+        for horizon in pending:
+            record = build_evaluation_record(
+                run,
+                bars,
+                benchmark_symbol,
+                benchmark_bars,
+                earnings_dates,
+                horizon,
+                evaluated_at=self._clock(),
             )
-            response = await agent.reply(
-                UserMsg(name="evaluator", content=prompt),
-            )
-            text_content = response.get_text_content()
-            text = text_content.strip() if text_content else ""
-            return text or None
-        except Exception as e:
-            logger.warning("[Evaluator] LLM call failed: %s", e)
-            return None
+            if record is None:
+                logger.info("[Evaluator] %s/%s/h%s pending: insufficient ticker or benchmark data", ticker, analysis_date, horizon)
+                continue
+            if not self._dry_run:
+                self._store.write(record)
+            records.append(record)
+        return records
 
 
-def _lesson_type_for_status(status: AssessmentStatus) -> str:
-    if status is AssessmentStatus.CORRECT:
-        return "success"
-    if status is AssessmentStatus.INCORRECT:
-        return "failure"
-    return "partial"
-
-
-def _format_price(value: float | None) -> str:
-    return f"${value:.2f}" if value is not None else "-"
-
-
-def _format_percent(value: float | None) -> str:
-    return f"{value:+.2%}" if value is not None else "-"
-
-
-def _format_objective_evaluation(assessment: TradeAssessment) -> str:
-    """Format the computed market outcome when LLM enrichment is unavailable."""
-    filled = "是" if assessment.filled else "否"
-    return_label = "减仓部分相对表现" if assessment.strategy_return_basis == "exit_relative_performance" else "策略收益率"
-    fill_label = "是否模拟成交" if assessment.strategy_return_basis == "exit_relative_performance" else "是否成交"
-    evaluation = (
-        f"客观状态: {assessment.status.value}；{fill_label}: {filled}；"
-        f"标的收益率: {assessment.underlying_return:+.2%}；"
-        f"{return_label}: {_format_percent(assessment.strategy_return)}"
-    )
-    if assessment.strategy_return_basis == "exit_relative_performance":
-        evaluation += f"；剩余仓位模拟事件: {_format_residual_exit(assessment)}；评估限制: {'；'.join(assessment.limitations)}"
-    return evaluation
-
-
-def _format_residual_exit(assessment: TradeAssessment) -> str:
-    if assessment.residual_exit_reason is None:
-        return "-"
-    return f"{assessment.residual_exit_reason}, {assessment.residual_exit_date}, {_format_price(assessment.residual_exit_price)}"
+def current_records(
+    records: Iterable[EvaluationRecord],
+    fetch_manifest: Callable[[str, str], CompletionManifest | None] = fetch_completed_manifest,
+) -> list[EvaluationRecord]:
+    """Drop records of runs superseded by a later run of the same ticker and date."""
+    groups: dict[tuple[date, str], list[EvaluationRecord]] = defaultdict(list)
+    for record in records:
+        if record.horizon in EVALUATION_CONFIG["horizons"]:
+            groups[(record.analysis_date, record.ticker)].append(record)
+    kept = []
+    for (analysis_date, ticker), group in groups.items():
+        manifest = fetch_manifest(analysis_date.isoformat(), ticker)
+        if manifest is None:
+            continue
+        current = manifest.run_id
+        kept.extend(record for record in group if record.run_id == current)
+    return kept
 
 
 def _strip_vendor_preamble(csv_text: str) -> str:
     """Remove yfinance metadata lines before strict CSV parsing."""
     return "\n".join(line for line in csv_text.splitlines() if line.strip() and not line.lstrip().startswith("#"))
-
-
-def _parse_evaluation_and_lesson(lesson_content: str) -> tuple[str, str]:
-    """Parse LLM lesson text into (evaluation, lesson) parts.
-
-    Expects format:
-        [TICKER|DATE]
-        评估: ...
-        教训: ...
-
-    Returns a tuple of (evaluation, lesson). Falls back to (lesson_content, "")
-    if the expected format is not found.
-    """
-    import re
-
-    evaluation = ""
-    lesson = ""
-
-    eval_match = re.search(r"评估结果[:：]\s*(.+?)(?=经验教训[:：]|$)", lesson_content, re.DOTALL)
-    lesson_match = re.search(r"经验教训[:：]\s*(.+)", lesson_content, re.DOTALL)
-
-    if eval_match:
-        evaluation = eval_match.group(1).strip()
-    if lesson_match:
-        lesson = lesson_match.group(1).strip()
-
-    if not evaluation and not lesson:
-        evaluation = lesson_content.strip()
-
-    return evaluation, lesson

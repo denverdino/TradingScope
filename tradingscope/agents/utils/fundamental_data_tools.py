@@ -77,3 +77,19 @@ def get_income_statement(
         str: A formatted report containing income statement data
     """
     return route_to_vendor("get_income_statement", ticker, freq, curr_date)
+
+
+@agentscope_tool
+def get_earnings_calendar(
+    ticker: Annotated[str, "ticker symbol"],
+    curr_date: Annotated[str, "current date you are trading at, yyyy-mm-dd"],
+) -> str:
+    """
+    Retrieve the next scheduled earnings release and recent release dates.
+    Args:
+        ticker (str): Ticker symbol of the company
+        curr_date (str): Current date you are trading at, yyyy-mm-dd
+    Returns:
+        str: Upcoming and recent earnings release dates in New York time
+    """
+    return route_to_vendor("get_earnings_calendar", ticker, curr_date)

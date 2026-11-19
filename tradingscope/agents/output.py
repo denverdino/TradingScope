@@ -160,7 +160,7 @@ class PlatformSignal(StrictModel):
 class PriceScenario(StrictModel):
     name: str = Field(min_length=1)
     target_price: float = Field(gt=0)
-    timeframe_days: int = Field(ge=1)
+    timeframe_days: int = Field(ge=1, description="情景的交易日期限。新生成情景必须为 1，只预测下一交易日截至收盘的价格。")
     assumptions: list[str]
 
 
@@ -232,7 +232,13 @@ class SocialMediaAnalystOutput(AgentOutputBase):
     platform_signals: list[PlatformSignal]
     key_topics: list[str]
     sentiment_drivers: list[str]
-    data_quality: str = Field(min_length=1)
+    data_quality: str = Field(
+        min_length=1,
+        description="说明实际数据来源与质量；独立社交样本缺失只在本字段说明一次，新闻情绪代理身份与代表性边界一并放在此处，不再复制到 limitations。",
+    )
+    limitations: list[str] = Field(
+        description="不重复 data_quality 中的独立社交样本缺失或新闻情绪代理身份说明；仅保留其他限制，如数据滞后、事件结果未核验、缺少可比时间序列。若素材将采样缺失与其他限制合并表述，仅将采样缺失部分归入 data_quality，其余限制保留；没有其他限制时为空列表 []。",
+    )
     price_plan: PricePlan
 
 
@@ -250,7 +256,11 @@ class TraderOutput(AgentOutputBase):
     position_advice: PositionAdvice
     risk_score: float = Field(ge=0, le=1)
     trade_intent: TradeIntent | None = None
-    time_stop_days: int | None = Field(default=None, ge=1)
+    time_stop_days: int | None = Field(
+        default=None,
+        ge=1,
+        description="从分析日期对应首个交易日起计数的独立持仓管理期限，可大于 1；不延长下一交易日预测的有效期。纯退出或无仓位时留空。",
+    )
     entry_conditions: list[str]
     execution_steps: list[str]
     risk_factors: list[str]
@@ -265,7 +275,11 @@ class PortfolioManagerOutput(AgentOutputBase):
     position_advice: PositionAdvice
     risk_score: float = Field(ge=0, le=1)
     trade_intent: TradeIntent | None = None
-    time_stop_days: int | None = Field(default=None, ge=1)
+    time_stop_days: int | None = Field(
+        default=None,
+        ge=1,
+        description="从分析日期对应首个交易日起计数的独立持仓管理期限，可大于 1；不延长下一交易日预测的有效期。纯退出或无仓位时留空。",
+    )
     risk_control_measures: list[str]
     price_plan: PricePlan
 

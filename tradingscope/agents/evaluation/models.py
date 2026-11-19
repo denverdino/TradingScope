@@ -1,106 +1,138 @@
-"""Data models for the evaluation module.
-
-AnalysisRecord stores the key decision basis from each workflow run,
-used later by the evaluation process to score against actual market data.
-"""
+"""Persisted evaluation contracts and the trade-plan input to market simulation."""
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Any, Dict, Optional
+from datetime import date, datetime
+from enum import StrEnum
+from typing import Any, Literal
 
-logger = logging.getLogger(__name__)
+from pydantic import AwareDatetime, Field, field_validator, model_validator
 
+from tradingscope.agents.output import Direction, StrictModel, TradeIntent
+from tradingscope.utils.oss_structured_output_reader import is_safe_path_component
 
-@dataclass
-class EvaluationResult:
-    """Structured result of evaluating a single analysis record."""
-
-    ticker: str
-    evaluation: str  # 评估结论（方向是否正确、止损情况等）
-    lesson: str  # 经验教训
-    horizon_days: int = 1
-    status: str = "inconclusive"
-    filled: bool = False
-    underlying_return: Optional[float] = None
-    strategy_return: Optional[float] = None
-    analysis_date: str = ""
-    strategy_return_basis: Optional[str] = None
-    residual_exit_reason: Optional[str] = None
-    residual_exit_date: Optional[str] = None
-    residual_exit_price: Optional[float] = None
-    limitations: tuple[str, ...] = ()
+EVALUATION_SCHEMA_VERSION = "1.0"
 
 
 @dataclass
 class AnalysisRecord:
-    """Decision basis from a completed analysis, independent of evaluation status."""
+    """Decision and price plan of one stage output, as simulated by market_outcome."""
 
-    ticker: str
-    analysis_date: str  # YYYY-MM-DD
-    direction: str  # bullish/bearish/neutral
-    action: str  # buy/sell/hold
-    confidence: float  # 0-1
-    execution_price: Optional[float] = None
-    execution_price_low: Optional[float] = None
-    execution_price_high: Optional[float] = None
-    target_price: Optional[float] = None
-    stop_loss: Optional[float] = None
-    trade_intent: Optional[str] = None
-    position_advice: Optional[str] = None
-    time_stop_days: Optional[int] = None
-    intent_inferred: bool = False
-    reasoning: str = ""  # core reasoning (~100 chars)
-    final_decision_summary: str = ""  # LLM-summarized key decision factors
-    created_at: str = ""
+    analysis_date: str
+    direction: str
+    trade_intent: str
+    execution_price: float | None = None
+    execution_price_low: float | None = None
+    execution_price_high: float | None = None
+    target_price: float | None = None
+    stop_loss: float | None = None
+    position_advice: str | None = None
+    time_stop_days: int | None = None
 
-    def __post_init__(self) -> None:
-        if not self.created_at:
-            self.created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Serialize to dictionary for JSON storage."""
-        return {
-            "ticker": self.ticker,
-            "analysis_date": self.analysis_date,
-            "direction": self.direction,
-            "action": self.action,
-            "confidence": self.confidence,
-            "execution_price": self.execution_price,
-            "execution_price_low": self.execution_price_low,
-            "execution_price_high": self.execution_price_high,
-            "target_price": self.target_price,
-            "stop_loss": self.stop_loss,
-            "trade_intent": self.trade_intent,
-            "position_advice": self.position_advice,
-            "time_stop_days": self.time_stop_days,
-            "intent_inferred": self.intent_inferred,
-            "reasoning": self.reasoning,
-            "final_decision_summary": self.final_decision_summary,
-            "created_at": self.created_at,
-        }
+class ShockClass(StrEnum):
+    SCHEDULED = "scheduled"
+    UNSCHEDULED = "unscheduled"
+    UNKNOWN = "unknown"
 
+
+class SampleClass(StrEnum):
+    CLEAN = "clean"
+    SHOCK_EXCLUDED = "shock_excluded"
+
+
+class ShockSession(StrictModel):
+    session_date: date
+    excess_return: float
+    excess_gap: float
+    classification: ShockClass
+
+
+class MarketOutcome(StrictModel):
+    reference_session: date
+    reference_close: float = Field(gt=0)
+    daily_atr_pct: float = Field(ge=0)
+    atr_threshold: float = Field(ge=0)
+    underlying_return: float
+    benchmark_symbol: str = Field(min_length=1)
+    benchmark_return: float
+    excess_return: float
+    shock_sessions: list[ShockSession]
+    sample_class: SampleClass
+
+
+OutcomeStatus = Literal["correct", "incorrect", "inconclusive"]
+
+
+class TradeOutcome(StrictModel):
+    trade_intent: TradeIntent
+    simulated: bool
+    status: Literal["correct", "incorrect", "inconclusive", "not_filled"]
+    filled: bool
+    fill_price: float | None
+    exit_reason: str | None
+    strategy_return: float | None
+    strategy_return_basis: str | None
+    residual_exit_reason: str | None
+    residual_exit_date: str | None
+    residual_exit_price: float | None
+    limitations: list[str]
+
+
+def effective_return_basis(trade: TradeOutcome) -> str:
+    return trade.strategy_return_basis or (
+        "position_return" if trade.trade_intent in {TradeIntent.OPEN_LONG, TradeIntent.OPEN_SHORT} else "exit_relative_performance"
+    )
+
+
+class StageEvaluation(StrictModel):
+    stage: str = Field(min_length=1)
+    direction: Direction
+    confidence: float = Field(ge=0, le=1)
+    direction_status: OutcomeStatus
+    excess_direction_status: OutcomeStatus
+    trade: TradeOutcome | None = None
+
+
+class EvaluationRecord(StrictModel):
+    """One completed run judged at one horizon; written once and never modified."""
+
+    schema_version: Literal["1.0"] = EVALUATION_SCHEMA_VERSION
+    run_id: str = Field(min_length=1)
+    code_version: str | None
+    models: dict[str, str]
+    ticker: str = Field(min_length=1)
+    analysis_date: date
+    horizon: int = Field(ge=1)
+    horizon_end_session: date
+    evaluated_at: AwareDatetime
+    forecast_started_at: AwareDatetime
+    forecast_completed_at: AwareDatetime
+    market: MarketOutcome
+    stages: list[StageEvaluation] = Field(min_length=1)
+    source_outputs: dict[str, dict[str, Any]]
+
+    @field_validator("ticker", "run_id")
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "AnalysisRecord":
-        """Deserialize from dictionary."""
-        return cls(
-            ticker=data["ticker"],
-            analysis_date=data["analysis_date"],
-            direction=data["direction"],
-            action=data["action"],
-            confidence=data["confidence"],
-            execution_price=data.get("execution_price"),
-            execution_price_low=data.get("execution_price_low"),
-            execution_price_high=data.get("execution_price_high"),
-            target_price=data.get("target_price"),
-            stop_loss=data.get("stop_loss"),
-            trade_intent=data.get("trade_intent"),
-            position_advice=data.get("position_advice"),
-            time_stop_days=data.get("time_stop_days"),
-            intent_inferred=data.get("intent_inferred", False),
-            reasoning=data.get("reasoning", ""),
-            final_decision_summary=data.get("final_decision_summary", ""),
-            created_at=data.get("created_at", ""),
-        )
+    def safe_path_component(cls, value: str) -> str:
+        if not is_safe_path_component(value):
+            raise ValueError("identity must be a single safe path component")
+        return value
+
+    @model_validator(mode="after")
+    def consistent_sessions(self) -> EvaluationRecord:
+        if self.horizon_end_session < self.analysis_date:
+            raise ValueError("horizon must end on or after the analysis date")
+        if self.market.reference_session >= self.analysis_date:
+            raise ValueError("reference session must precede the analysis date")
+        names = [stage.stage for stage in self.stages]
+        if len(set(names)) != len(names) or set(names) != set(self.source_outputs):
+            raise ValueError("stage results must uniquely match source outputs")
+        return self
+
+    def stage(self, name: str) -> StageEvaluation | None:
+        return next((stage for stage in self.stages if stage.stage == name), None)
+
+    def evaluation_id(self, stage: str) -> str:
+        return f"{self.analysis_date.isoformat()}/{self.ticker}/{self.run_id}/h{self.horizon}/{stage}"

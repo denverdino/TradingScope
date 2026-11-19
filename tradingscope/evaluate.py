@@ -1,102 +1,77 @@
-"""CLI entry point for post-market analysis evaluation.
+"""CLI entry point for deterministic post-market evaluation.
 
 Usage:
-    python -m tradingscope.evaluate                              # evaluate all pending records
-    python -m tradingscope.evaluate --tickers MSFT,AAPL,TSLA     # evaluate specific tickers
-    python -m tradingscope.evaluate --date 2026-05-01            # evaluate specific date
-    python -m tradingscope.evaluate --dry-run                    # preview without side effects
+    python -m tradingscope.evaluate --tickers MSFT,AAPL              # pending runs from the previous 14 calendar dates
+    python -m tradingscope.evaluate --tickers AAPL --date 2026-05-01 # one analysis date
+    python -m tradingscope.evaluate --tickers AAPL --dry-run         # compute and print only
 """
 
 from __future__ import annotations
 
 import argparse
-import asyncio
-import logging
 import os
-from collections import defaultdict
-from datetime import datetime
+from datetime import date, datetime
+from functools import partial
 
 from agentscope import logger
 
 from tradingscope.agents.utils.tracing import setup_tracing, shutdown_tracing
+from tradingscope.default_config import DEFAULT_CONFIG
 
 
-def _configure_memory_debug() -> None:
-    """Enable DEBUG logging for memory API when MEMORY_DEBUG env var is set."""
-    if not os.getenv("MEMORY_DEBUG"):
-        return
-
-    handler = logging.StreamHandler()
-    handler.setFormatter(
-        logging.Formatter("%(asctime)s | %(name)s | %(levelname)s | %(message)s"),
-    )
-
-    for name in (
-        "agentscope_runtime.tools.modelstudio_memory",
-        "tradingscope.agents.utils.memory",
-        "tradingscope.agents.evaluation.evaluator",
-    ):
-        log = logging.getLogger(name)
-        log.setLevel(logging.DEBUG)
-        log.addHandler(handler)
-
-
-async def _run(
-    tickers: list[str] | None,
+def _run(
+    tickers: list[str],
     date: str | None,
     results_dir: str | None,
     dry_run: bool = False,
     email_to: list[str] | None = None,
 ) -> None:
-    from tradingscope.agents.evaluation.evaluator import AnalysisEvaluator
-    from tradingscope.agents.utils.context import AgentContext
-
-    context = AgentContext()
+    from tradingscope.agents.evaluation.evaluator import AnalysisEvaluator, current_records
+    from tradingscope.agents.evaluation.oss_store import default_evaluation_store
+    from tradingscope.agents.evaluation.report import record_headline, render_track_record_text
+    from tradingscope.agents.evaluation.track_record import build_track_record
 
     if dry_run:
-        logger.info("[DRY RUN] No lessons will be stored and no records will be marked as evaluated")
+        logger.info("[DRY RUN] Evaluation records are not written and no email is sent")
 
-    evaluator = AnalysisEvaluator(
-        model=context.non_thinking_model,
-        memory_manager=None,
-        results_dir=results_dir,
-        dry_run=dry_run,
-        middlewares=context.middlewares,
-    )
-    results = await evaluator.run_batch_evaluation(tickers=tickers, date=date)
-
-    if results:
-        logger.info("=== Evaluation Summary ===")
-        for i, result in enumerate(results, 1):
-            label = f"[{result.ticker}|{result.analysis_date}|{result.horizon_days}日|{result.status}]"
-            logger.info("Result %d %s:\n  评估: %s\n  教训: %s\n", i, label, result.evaluation, result.lesson)
-        logger.info("Total: %d results generated", len(results))
-
-        if email_to:
-            _send_evaluation_email(results, date, email_to)
-    else:
+    store = default_evaluation_store(results_dir)
+    records = AnalysisEvaluator(store, results_dir=results_dir, dry_run=dry_run).run(tickers, analysis_date=date)
+    if not records:
         logger.info("No mature evaluation results available")
+        return
+
+    for record in records:
+        logger.info(record_headline(record))
+
+    from tradingscope.utils.oss_structured_output_reader import fetch_completed_manifest
+
+    history = current_records(
+        store.list_records(tickers) + (records if dry_run else []),
+        fetch_manifest=partial(fetch_completed_manifest, results_dir=results_dir),
+    )
+    config = DEFAULT_CONFIG["evaluation"]
+    start_date = config["track_record_start_date"]
+    track_record = build_track_record(
+        history,
+        min_samples=config["track_record_min_samples"],
+        confidence_buckets=config["confidence_buckets"],
+        start_date=_parse_date(start_date) if start_date else None,
+    )
+    logger.info(render_track_record_text(track_record))
+    logger.info("Total: %d evaluation records", len(records))
+
+    if email_to and not dry_run:
+        _send_evaluation_email(records, track_record, date, email_to)
 
 
-def _send_evaluation_email(results: list, date: str | None, email_to: list[str]) -> None:
-    """Build and send evaluation report email grouped by ticker."""
-    ticker_results: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
-    for result in results:
-        ticker_results[result.ticker][result.analysis_date].append(result)
+def _parse_date(value: str) -> date:
+    return datetime.strptime(value, "%Y-%m-%d").date()
 
-    html_parts = []
-    for ticker, date_results in ticker_results.items():
-        html_parts.append(f"<h2>{ticker}</h2>")
-        for analysis_date, items in date_results.items():
-            html_parts.append(f"<h3>分析日期：{analysis_date}</h3>")
-            for item in items:
-                html_parts.append(f"<h4>[{item.horizon_days}日|{item.status}]</h4>")
-                if item.evaluation:
-                    html_parts.append(f"<p>评估： {item.evaluation}</p>")
-                if item.lesson:
-                    html_parts.append(f"<p>教训： {item.lesson}</p>")
-    html_content = "\n".join(html_parts)
 
+def _send_evaluation_email(records: list, track_record, date: str | None, email_to: list[str]) -> None:
+    from tradingscope.agents.evaluation.report import render_records_html, render_track_record_html
+
+    html_content = f"{render_records_html(records)}\n{render_track_record_html(track_record)}"
     eval_date = date or datetime.now().strftime("%Y-%m-%d")
     subject = f"Stock Evaluation ({eval_date})"
     sender_email = os.getenv("EMAIL_FROM")
@@ -113,8 +88,6 @@ def _send_evaluation_email(results: list, date: str | None, email_to: list[str])
 
 def _main() -> None:
     """Parse arguments and run the evaluation CLI."""
-    _configure_memory_debug()
-
     parser = argparse.ArgumentParser(
         description="TradingScope - Post-market analysis evaluation",
     )
@@ -126,18 +99,18 @@ def _main() -> None:
     parser.add_argument(
         "--date",
         default=None,
-        help="Analysis date to evaluate (YYYY-MM-DD). Default: pending reports from the previous 14 calendar dates.",
+        help="Analysis date to evaluate (YYYY-MM-DD). Default: pending runs from the previous 14 calendar dates.",
     )
     parser.add_argument(
         "--results-dir",
         default=None,
-        help="Results directory containing analysis_records/. Default: from config.",
+        help="Directory for local evaluation records when OSS is not configured. Default: from config.",
     )
     parser.add_argument(
         "--dry-run",
         action="store_true",
         default=False,
-        help="Preview evaluation without storing lessons or marking records.",
+        help="Compute and print evaluations without writing records or sending email.",
     )
     parser.add_argument(
         "--email-to",
@@ -148,7 +121,7 @@ def _main() -> None:
 
     tickers = [t.strip() for t in args.tickers.split(",") if t.strip()]
     email_to = [e.strip() for e in args.email_to.split(",") if e.strip()] if args.email_to else None
-    asyncio.run(_run(tickers=tickers, date=args.date, results_dir=args.results_dir, dry_run=args.dry_run, email_to=email_to))
+    _run(tickers=tickers, date=args.date, results_dir=args.results_dir, dry_run=args.dry_run, email_to=email_to)
 
 
 def main() -> None:

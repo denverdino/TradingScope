@@ -51,6 +51,35 @@ def test_each_output_renders_markdown(index: int, expected_heading: str) -> None
     assert f"**最近完成交易日**：{output.last_completed_session.isoformat()}" in markdown
     assert output.decision.summary in markdown
     assert "```json" not in markdown
+    assert "**预测期限**：下一交易日截至收盘" in markdown
+
+
+@pytest.mark.parametrize("index", range(7))
+def test_stage_report_keeps_sourced_numbers_and_starts_with_decision(index: int) -> None:
+    from tradingscope.agents.renderers import render_markdown
+
+    data = _all_outputs()[index].model_dump(mode="json")
+    data["evidence"] = [
+        {
+            "claim": "收盘价较前收盘上涨",
+            "supporting_data": "收盘价 103.25 USD，涨幅 3.25%，量比 0.78",
+            "source": "合成材料（https://www.anthropic.com/research/components-of-agent-memory）",
+            "as_of_date": "2026-07-13",
+        },
+    ]
+    data["limitations"] = ["报价延迟15分钟"]
+    output = type(_all_outputs()[index]).model_validate(data)
+    before = output.model_dump()
+
+    markdown = render_markdown(output)
+
+    assert markdown.index("### 决策") < markdown.index("### 关键证据与来源")
+    assert "103.25 USD，涨幅 3.25%，量比 0.78" in markdown
+    assert "合成材料（https://www.anthropic.com/research/components-of-agent-memory）" in markdown
+    assert "日期：2026-07-13" in markdown
+    assert "报价延迟15分钟" in markdown
+    assert output.price_plan.invalidation_conditions[0] in markdown
+    assert output.model_dump() == before
 
 
 @pytest.mark.parametrize("index", range(6))
@@ -62,6 +91,7 @@ def test_evidence_pack_keeps_sources_limitations_and_invalidation(index: int) ->
 
     evidence = output.evidence[0]
     assert output.decision.summary in pack
+    assert "**预测期限**：下一交易日截至收盘" in pack
     assert output.decision.reasoning[0] not in pack
     assert evidence.claim in pack
     assert evidence.supporting_data in pack
@@ -133,17 +163,23 @@ def test_evidence_pack_replaces_narrative_prose_with_compact_facts() -> None:
         assert prose not in pack
 
 
-def test_full_report_orders_stages() -> None:
+def test_full_report_leads_with_final_decision_then_compares_stages() -> None:
     from tradingscope.agents.renderers import render_full_report
 
     markdown = render_full_report(_analysis_result())
-    headings = ["最终投资组合决策", "交易计划", "研究经理决策", "技术面分析"]
+    headings = ["## 最终投资组合决策", "## 交易员执行参考", "## 阶段结论对照", "## 关键依据与来源"]
     positions = [markdown.index(heading) for heading in headings]
 
     assert positions == sorted(positions)
+    for title in ("交易计划", "研究经理决策", "技术面分析", "基本面分析", "新闻分析", "社交媒体分析"):
+        assert f"\n## {title}\n" not in markdown
+        assert f"| {title} |" in markdown
+    assert markdown.count("**预测期限**") == 1
+    assert markdown.count("**分析日期**") == 1
+    assert "以最终决策为准" in markdown
 
 
-def test_portfolio_report_shows_conclusion_before_notes() -> None:
+def test_portfolio_report_shows_decision_sources_and_risk_without_debate_appendix() -> None:
     from tradingscope.agents.renderers import render_markdown
 
     portfolio_data = _all_outputs()[6].model_dump(mode="json")
@@ -151,12 +187,161 @@ def test_portfolio_report_shows_conclusion_before_notes() -> None:
     portfolio = models.PortfolioManagerOutput.model_validate(portfolio_data)
 
     markdown = render_markdown(portfolio)
-    conclusion_headings = ["### 交易意图", "### 决策", "### 价格计划"]
-    note_headings = ["### 备注", "#### 激进观点", "#### 保守观点", "#### 中性观点", "#### 采纳理由", "#### 风险控制"]
-    positions = [markdown.index(heading) for heading in conclusion_headings + note_headings]
 
-    assert positions == sorted(positions)
-    assert "### 备注\n\n#### 激进观点" in markdown
+    assert markdown.index("### 决策") < markdown.index("### 关键证据与来源")
+    assert "**仓位建议**：不持仓" in markdown
+    assert "**风险评分**：0.50" in markdown
+    assert "### 风险控制" in markdown
+    assert "### 备注" not in markdown
+    assert "#### 激进观点" not in markdown
+    for item in ("可轻仓试探", "等待确认", "维持观察", "不追高"):
+        assert item in markdown
+
+
+def test_full_report_deduplicates_only_identical_evidence_without_losing_conflicts() -> None:
+    from datetime import date
+
+    from tradingscope.agents.renderers import render_full_report
+
+    result = _analysis_result()
+    shared = models.Evidence(
+        claim="合成价格证据",
+        supporting_data="收盘 103.25 USD，涨幅 3.25%，量比 0.78",
+        source="合成材料（https://www.anthropic.com/research/components-of-agent-memory）",
+        as_of_date=date(2026, 7, 13),
+    )
+    result.portfolio_manager.evidence = [shared]
+    result.trader.evidence = [shared.model_copy()]
+    result.analysts.market.evidence = [
+        shared.model_copy(),
+        shared.model_copy(update={"as_of_date": date(2026, 7, 10)}),
+        shared.model_copy(update={"supporting_data": "收盘 98.50 USD，跌幅 1.50%，量比 1.20"}),
+        shared.model_copy(update={"source": "另一独立来源"}),
+    ]
+    before = result.model_dump()
+
+    report = render_full_report(result)
+    sources = report.split("## 关键依据与来源\n\n", 1)[1].split("\n\n## ", 1)[0]
+
+    assert sources.count("合成价格证据：") == 4
+    assert "103.25 USD，涨幅 3.25%，量比 0.78" in sources
+    assert "98.50 USD，跌幅 1.50%，量比 1.20" in sources
+    assert shared.source in sources
+    assert "日期：2026-07-10" in sources and "日期：2026-07-13" in sources
+    assert "最终投资组合决策、交易计划、技术面分析" in sources
+    assert render_full_report(result) == report
+    assert result.model_dump() == before
+
+
+def test_full_report_references_identical_summaries_instead_of_repeating_them() -> None:
+    from tradingscope.agents.renderers import render_full_report
+
+    result = _analysis_result()
+    report = render_full_report(result)
+
+    assert report.count(result.portfolio_manager.decision.summary) == 1
+    assert "同最终投资组合决策" in report
+    result.analysts.news.decision.summary = "新闻提供独立结论"
+    result.analysts.social_media.decision.summary = "新闻提供独立结论"
+    report = render_full_report(result)
+    assert report.count("新闻提供独立结论") == 1
+    assert "同新闻分析" in report
+
+
+def test_full_report_omits_empty_execution_reference_section() -> None:
+    from tradingscope.agents.renderers import render_full_report
+
+    result = _analysis_result()
+    result.trader.entry_conditions = []
+    result.trader.execution_steps = []
+
+    assert "## 交易员执行参考" not in render_full_report(result)
+
+
+def test_full_report_preserves_all_safety_conditions_and_role_disagreements() -> None:
+    from tradingscope.agents.renderers import render_full_report
+
+    result = _analysis_result()
+    portfolio = result.portfolio_manager
+    portfolio.trade_intent = models.TradeIntent.REDUCE_LONG
+    portfolio.decision.direction = models.Direction.BULLISH
+    portfolio.decision.action = models.Action.SELL
+    portfolio.position_advice = models.PositionAdvice.LIGHT
+    portfolio.risk_score = 0.25
+    portfolio.time_stop_days = 5
+    portfolio.price_plan.execution_price = 100.25
+    portfolio.price_plan.execution_price_low = 99.50
+    portfolio.price_plan.execution_price_high = 101.00
+    portfolio.price_plan.target_price = 110.75
+    portfolio.price_plan.stop_loss = 95.25
+    portfolio.price_plan.invalidation_conditions = ["共同失效条件", *[f"PM安全条件{index}" for index in range(5)]]
+    portfolio.risk_control_measures = [f"风险控制步骤{index}" for index in range(4)]
+    result.trader.trade_intent = models.TradeIntent.OPEN_SHORT
+    result.trader.decision.direction = models.Direction.BEARISH
+    result.trader.decision.action = models.Action.SELL
+    result.trader.entry_conditions = [f"入场条件{index}" for index in range(4)]
+    result.trader.execution_steps = [f"执行步骤{index}" for index in range(4)]
+    result.analysts.news.price_plan.invalidation_conditions = ["共同失效条件", "新闻独有失效条件"]
+    result.analysts.news.limitations = ["新闻事件未核验"]
+    result.analysts.fundamentals.limitations = ["财报数据滞后"]
+    result.research_manager.bear_viewpoints = ["最强反证：估值高于历史中位数"]
+    result.analysts.market.evidence = [
+        models.Evidence(claim=f"独立证据{index}", supporting_data=f"指标值{index}.25", source=f"来源{index}", as_of_date=None) for index in range(5)
+    ]
+
+    report = render_full_report(result)
+
+    assert "**交易意图**：减多" in report
+    assert "**仓位建议**：轻仓" in report
+    assert "**风险评分**：0.25" in report
+    assert "5 个交易日（独立持仓期限" in report
+    assert "代表执行价**：USD 100.25" in report
+    assert "USD 99.50–101.00" in report
+    assert "目标价**：USD 110.75" in report
+    assert "止损价**：USD 95.25" in report
+    assert "| 最终投资组合决策 | 看涨 | 卖出 | 0.70 | 减多 |" in report
+    assert "| 交易计划 | 看跌 | 卖出 | 0.70 | 开空 |" in report
+    assert report.count("共同失效条件") == 1
+    assert "新闻独有失效条件（新闻分析）" in report
+    assert "新闻事件未核验（新闻分析）" in report
+    assert "财报数据滞后（基本面分析）" in report
+    assert "最强反证：估值高于历史中位数（研究经理决策）" in report
+    for text in [
+        *portfolio.price_plan.invalidation_conditions,
+        *portfolio.risk_control_measures,
+        *result.trader.entry_conditions,
+        *result.trader.execution_steps,
+    ]:
+        assert text in report
+    for evidence in result.analysts.market.evidence:
+        assert evidence.claim in report
+        assert evidence.supporting_data in report
+
+
+def test_stage_table_preserves_summary_line_breaks_without_breaking_columns() -> None:
+    from tradingscope.agents.renderers import render_full_report
+
+    result = _analysis_result()
+    result.analysts.news.decision.summary = "事件影响 | 正向\n反证仍成立 <script>alert(1)</script>"
+
+    report = render_full_report(result)
+
+    assert "事件影响 &#124; 正向<br>反证仍成立 &lt;script&gt;alert(1)&lt;/script&gt;" in report
+    assert "<script>alert(1)</script>" not in report
+
+
+def test_report_evidence_is_text_not_executable_html_and_handoff_stays_unchanged() -> None:
+    from tradingscope.agents.renderers import render_evidence_pack, render_full_report, render_markdown
+
+    result = _analysis_result()
+    item = result.analysts.news.evidence[0].model_copy(update={"source": "原始来源 <script>alert(1)</script>"})
+    result.analysts.news.evidence = [item]
+
+    for report in (render_markdown(result.analysts.news), render_full_report(result)):
+        assert "<script>alert(1)</script>" not in report
+        assert "&lt;script&gt;alert(1)&lt;/script&gt;" in report
+    assert item.source in render_evidence_pack(result.analysts.news)
+    assert result.analysts.news.evidence[0] == item
 
 
 def test_rendering_is_deterministic_and_does_not_mutate() -> None:

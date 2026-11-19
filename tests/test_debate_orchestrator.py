@@ -192,15 +192,38 @@ async def test_research_debate_closes_on_last_configured_round_without_extra_cal
         assert len(debater.prompts) == max_rounds
         for index, prompt in enumerate(debater.prompts):
             assert "最多2个关键论点" in prompt
+            assert "结论先行" in prompt
+            assert "原始URL不得改写" in prompt
+            assert "不限制执行步骤、风险控制和失效条件" in prompt
             assert "不得重抄共享报告" in prompt
             assert "只回应已收到的发言" in prompt
             assert "来源与数据时点" in prompt
+            assert "下一实际交易日" in prompt
+            assert "分析日期当日或之后的首个交易日" in prompt
+            assert "最近完成交易日收盘" in prompt and "目标交易日收盘" in prompt
+            assert "隔夜跳空" in prompt
+            assert "重新分析" in prompt
+            assert "1-5 个交易日" not in prompt
             assert ("最后一轮" in prompt) == (index == max_rounds - 1)
             if index:
                 assert "仅补充新增证据、观点修订和核心分歧" in prompt
         assert "最强反证" in debater.prompts[-1]
         assert "撤回或调整立场的条件" in debater.prompts[-1]
         assert "不要求己方获胜" in debater.prompts[-1]
+    manager_prompt = runner.run.await_args.args[2].get_text_content()
+    assert "结论先行" in manager_prompt
+    assert "最多3条独立关键证据" in manager_prompt
+    assert "下游只解释证据取舍与新增调整" in manager_prompt
+    assert "最强反证" in manager_prompt
+    assert "下一实际交易日" in manager_prompt
+    assert "分析日期当日或之后的首个交易日" in manager_prompt
+    assert "最近完成交易日收盘" in manager_prompt and "目标交易日收盘" in manager_prompt
+    assert "隔夜跳空" in manager_prompt
+    assert "重新分析" in manager_prompt
+    assert "timeframe_days=1" in manager_prompt
+    for scenario in ("保守", "基准", "乐观"):
+        assert scenario in manager_prompt
+    assert "5个交易日" not in manager_prompt
 
 
 @pytest.mark.asyncio
@@ -224,17 +247,38 @@ async def test_risk_debate_closes_on_last_configured_round_with_bounded_manager_
         assert len(debater.prompts) == max_rounds
         for index, prompt in enumerate(debater.prompts):
             assert "最多2个关键论点" in prompt
+            assert "结论先行" in prompt
+            assert "原始URL不得改写" in prompt
+            assert "不限制执行步骤、风险控制和失效条件" in prompt
             assert "不得重抄共享报告" in prompt
             assert "只回应已收到的发言" in prompt
             assert "来源与数据时点" in prompt
+            assert "下一实际交易日" in prompt
+            assert "分析日期当日或之后的首个交易日" in prompt
+            assert "最近完成交易日收盘" in prompt and "目标交易日收盘" in prompt
+            assert "隔夜跳空" in prompt
+            assert "重新分析" in prompt
+            assert "1-5 个交易日" not in prompt
             assert ("最后一轮" in prompt) == (index == max_rounds - 1)
             if index:
                 assert "仅补充新增证据、观点修订和核心分歧" in prompt
         assert "撤回或调整立场的条件" in debater.prompts[-1]
         assert "不要求己方获胜" in debater.prompts[-1]
     manager_prompt = runner.run.await_args.args[2].get_text_content()
+    assert "结论先行" in manager_prompt
+    assert "最多3条独立关键证据" in manager_prompt
+    assert "下游只解释证据取舍与新增调整" in manager_prompt
+    assert "最强反证" in manager_prompt
     assert "买入、卖出或持有" in manager_prompt
-    assert "从过去的错误中学习" in manager_prompt
-    assert "使用过去的经验教训来解决先前的误判" in manager_prompt
+    assert "下一实际交易日" in manager_prompt
+    assert "分析日期当日或之后的首个交易日" in manager_prompt
+    assert "最近完成交易日收盘" in manager_prompt and "目标交易日收盘" in manager_prompt
+    assert "隔夜跳空" in manager_prompt
+    assert "重新分析" in manager_prompt
+    assert "持仓管理期限" in manager_prompt and "独立" in manager_prompt
+    assert "不代表强制平仓" in manager_prompt
+    assert "time_stop_days=1" not in manager_prompt
+    assert "经验教训" not in manager_prompt
+    assert "过去的错误" not in manager_prompt
     assert "决策指导原则" not in manager_prompt
     assert "交付成果" not in manager_prompt

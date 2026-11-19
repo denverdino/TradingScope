@@ -1,181 +1,133 @@
-"""OSS-backed analysis store for the evaluation module.
+"""Write-once storage of evaluation records in OSS or a local directory.
 
-Discovers pending evaluations by listing portfolio_manager.json reports
-on OSS and tracks evaluated state in a local JSON file.
+Records live at ``tradingscope-evaluations/<analysis_date>/<ticker>/<run_id>/h<horizon>.json``.
+A record's existence marks that run and horizon as evaluated.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 import os
-from datetime import datetime, timedelta
-from typing import List, Optional, Set
+from datetime import date
+from pathlib import Path
+from typing import Iterable, Protocol
+from uuid import uuid4
 
-from tradingscope.agents.output import PortfolioManagerOutput
 from tradingscope.default_config import DEFAULT_CONFIG
-from tradingscope.utils.oss_structured_output_reader import async_fetch_completed_output
 
-from .models import AnalysisRecord
+from .models import EvaluationRecord
 
 logger = logging.getLogger(__name__)
-ALLOWED_EVALUATION_HORIZONS = (1, 3, 5)
+
+EVALUATION_KEY_PREFIX = "tradingscope-evaluations"
 
 
-def _validate_horizon_days(horizon_days: int) -> None:
-    """Reject evaluation horizons that are not supported by the workflow."""
-    if type(horizon_days) is not int or horizon_days not in ALLOWED_EVALUATION_HORIZONS:
-        raise ValueError(f"Invalid evaluation horizon {horizon_days}; allowed horizons are 1, 3, 5.")
+def evaluation_key(analysis_date: str, ticker: str, run_id: str, horizon: int) -> str:
+    from .market_outcome import validate_horizon
+
+    date.fromisoformat(analysis_date)
+    EvaluationRecord.safe_path_component(ticker)
+    EvaluationRecord.safe_path_component(run_id)
+    validate_horizon(horizon)
+    return f"{EVALUATION_KEY_PREFIX}/{analysis_date}/{ticker}/{run_id}/h{horizon}.json"
 
 
-def build_record_from_portfolio(portfolio: PortfolioManagerOutput) -> AnalysisRecord:
-    """Build an evaluation record from a validated portfolio decision."""
-    return AnalysisRecord(
-        ticker=portfolio.ticker,
-        analysis_date=portfolio.analysis_date.isoformat(),
-        direction=portfolio.decision.direction.value,
-        action=portfolio.decision.action.value,
-        confidence=portfolio.decision.confidence,
-        execution_price=portfolio.price_plan.execution_price,
-        execution_price_low=portfolio.price_plan.execution_price_low,
-        execution_price_high=portfolio.price_plan.execution_price_high,
-        target_price=portfolio.price_plan.target_price,
-        stop_loss=portfolio.price_plan.stop_loss,
-        trade_intent=(portfolio.trade_intent.value if portfolio.trade_intent is not None else None),
-        position_advice=portfolio.position_advice.value,
-        time_stop_days=portfolio.time_stop_days,
-        intent_inferred=portfolio.trade_intent is None,
-        reasoning="；".join(portfolio.decision.reasoning)[:100],
-        final_decision_summary="；".join(portfolio.adopted_reasoning)[:500],
-    )
+def record_key(record: EvaluationRecord) -> str:
+    return evaluation_key(record.analysis_date.isoformat(), record.ticker, record.run_id, record.horizon)
 
 
-class OSSAnalysisStore:
-    """Discover and fetch analysis records from OSS JSON reports.
+class EvaluationStore(Protocol):
+    def exists(self, key: str) -> bool: ...
 
-    Reads portfolio_manager.json (structured output) instead of parsing
-    markdown reports. Tracks evaluated state in a local JSON file.
-    """
+    def write(self, record: EvaluationRecord) -> None: ...
 
-    def __init__(self, results_dir: Optional[str] = None) -> None:
-        self._results_dir = results_dir or DEFAULT_CONFIG["results_dir"]
-        self._tracking_path = os.path.join(self._results_dir, "oss_evaluated.json")
+    def list_records(self, tickers: Iterable[str] | None = None) -> list[EvaluationRecord]: ...
 
-    async def list_pending(
-        self,
-        before_date: Optional[str] = None,
-        tickers: Optional[List[str]] = None,
-        date: Optional[str] = None,
-    ) -> List[AnalysisRecord]:
-        """List pending records from OSS that haven't been evaluated yet.
 
-        Args:
-            before_date: Only consider reports with analysis_date < this value.
-            tickers: List of stock symbols to evaluate (required).
-            date: Filter by specific analysis date.
+class LocalEvaluationStore:
+    """Filesystem store used when OSS is not configured and in offline tests."""
 
-        Returns:
-            List of AnalysisRecord objects built from OSS JSON reports.
-        """
-        if not before_date:
-            before_date = datetime.now().strftime("%Y-%m-%d")
+    def __init__(self, root: str | Path) -> None:
+        self._root = Path(root)
 
-        if not tickers:
-            logger.warning("[OSSStore] --tickers is required for evaluation")
-            return []
+    def _path(self, key: str) -> Path:
+        path = (self._root / key).resolve()
+        if not path.is_relative_to(self._root.resolve()):
+            raise ValueError("evaluation key must remain inside the store directory")
+        return path
 
-        candidates: list[tuple[str, str]] = []
-        for tkr in tickers:
-            if date:
-                candidates.append((date, tkr))
-            else:
-                candidates.extend(self._generate_date_candidates(before_date, tkr))
+    def exists(self, key: str) -> bool:
+        return self._path(key).exists()
 
-        pending = [
-            (analysis_date, ticker)
-            for analysis_date, ticker in candidates
-            if not all(self.is_evaluated(ticker, analysis_date, horizon_days) for horizon_days in (1, 3, 5))
-        ]
+    def write(self, record: EvaluationRecord) -> None:
+        path = self._path(record_key(record))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+        try:
+            with temporary.open("x", encoding="utf-8") as stream:
+                stream.write(record.model_dump_json(indent=2))
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.link(temporary, path)
+        finally:
+            temporary.unlink(missing_ok=True)
 
-        records: List[AnalysisRecord] = []
-        for analysis_date, tkr in pending:
-            data = await async_fetch_completed_output(analysis_date, tkr)
-            if not data:
-                logger.debug(
-                    "[OSSStore] No completed report found for %s/%s",
-                    tkr,
-                    analysis_date,
-                )
+    def list_records(self, tickers: Iterable[str] | None = None) -> list[EvaluationRecord]:
+        wanted = set(tickers) if tickers is not None else None
+        records = []
+        for path in sorted((self._root / EVALUATION_KEY_PREFIX).glob("*/*/*/h*.json")):
+            if wanted is not None and path.parent.parent.name not in wanted:
                 continue
-            portfolio = PortfolioManagerOutput.model_validate(data)
-            record = build_record_from_portfolio(portfolio)
-            records.append(record)
-
-        if records:
-            logger.info("[OSSStore] Found %d pending reports", len(records))
-
+            records.append(EvaluationRecord.model_validate_json(path.read_text(encoding="utf-8")))
         return records
 
-    def is_evaluated(self, ticker: str, date: str, horizon_days: int) -> bool:
-        """Return whether an evaluation horizon has been completed."""
-        _validate_horizon_days(horizon_days)
-        evaluated = self._load_evaluated_set()
-        horizon_key = f"{date}/{ticker}/{horizon_days}"
-        legacy_key = f"{date}/{ticker}"
-        return horizon_key in evaluated or (horizon_days == 1 and legacy_key in evaluated)
 
-    def mark_evaluated(self, ticker: str, date: str, horizon_days: int = 1) -> bool:
-        """Mark a report as evaluated.
+class OSSEvaluationStore:
+    """OSS store; writes forbid overwriting an existing record."""
 
-        Args:
-            ticker: Stock symbol
-            date: Trade date (YYYY-MM-DD)
-            horizon_days: Number of post-analysis trading sessions assessed.
+    def __init__(self, client, bucket_name: str) -> None:
+        self._client = client
+        self._bucket = bucket_name
 
-        Returns:
-            True if successfully updated.
-        """
-        _validate_horizon_days(horizon_days)
-        try:
-            evaluated = self._load_evaluated_set()
-            evaluated.add(f"{date}/{ticker}/{horizon_days}")
-            self._save_evaluated_set(evaluated)
-            logger.info(
-                "[OSSStore] Marked as evaluated: %s/%s/%s",
-                date,
-                ticker,
-                horizon_days,
+    def exists(self, key: str) -> bool:
+        return bool(self._client.is_object_exist(self._bucket, key))
+
+    def write(self, record: EvaluationRecord) -> None:
+        import alibabacloud_oss_v2 as oss
+
+        self._client.put_object(
+            oss.PutObjectRequest(
+                bucket=self._bucket,
+                key=record_key(record),
+                body=record.model_dump_json(indent=2).encode("utf-8"),
+                content_type="application/json; charset=utf-8",
+                forbid_overwrite=True,
             )
-            return True
-        except Exception as e:
-            logger.warning(
-                "[OSSStore] Failed to mark evaluated %s/%s/%s: %s",
-                date,
-                ticker,
-                horizon_days,
-                e,
-            )
-            return False
+        )
 
-    @staticmethod
-    def _generate_date_candidates(before_date: str, ticker: str) -> List[tuple]:
-        """Generate the fourteen calendar dates strictly before ``before_date``."""
-        cutoff = datetime.strptime(before_date, "%Y-%m-%d")
-        return [((cutoff - timedelta(days=offset)).strftime("%Y-%m-%d"), ticker) for offset in range(1, 15)]
+    def list_records(self, tickers: Iterable[str] | None = None) -> list[EvaluationRecord]:
+        import alibabacloud_oss_v2 as oss
 
-    def _load_evaluated_set(self) -> Set[str]:
-        """Load the set of evaluated report keys from local tracking file."""
-        if not os.path.exists(self._tracking_path):
-            return set()
-        try:
-            with open(self._tracking_path, encoding="utf-8") as f:
-                data = json.load(f)
-            return set(data) if isinstance(data, list) else set()
-        except Exception:
-            return set()
+        wanted = set(tickers) if tickers is not None else None
+        request = oss.ListObjectsV2Request(bucket=self._bucket, prefix=f"{EVALUATION_KEY_PREFIX}/")
+        records = []
+        for page in self._client.list_objects_v2_paginator().iter_page(request):
+            for item in page.contents or []:
+                parts = item.key.split("/")
+                if len(parts) != 5 or (wanted is not None and parts[2] not in wanted):
+                    continue
+                response = self._client.get_object(oss.GetObjectRequest(bucket=self._bucket, key=item.key))
+                records.append(EvaluationRecord.model_validate_json(response.body.content))
+        return records
 
-    def _save_evaluated_set(self, evaluated: Set[str]) -> None:
-        """Persist the evaluated set to the local tracking file."""
-        os.makedirs(os.path.dirname(self._tracking_path), exist_ok=True)
-        with open(self._tracking_path, "w", encoding="utf-8") as f:
-            json.dump(sorted(evaluated), f, ensure_ascii=False, indent=2)
+
+def default_evaluation_store(results_dir: str | None = None) -> EvaluationStore:
+    """Use OSS when configured, otherwise ``<results_dir>``."""
+    from tradingscope.utils.oss_structured_output_uploader import _get_bucket_name, _get_client
+
+    client = _get_client()
+    if client is not None:
+        return OSSEvaluationStore(client, _get_bucket_name())
+    root = results_dir or DEFAULT_CONFIG["results_dir"]
+    logger.info("[EvaluationStore] OSS not configured; using local evaluation records under %s", root)
+    return LocalEvaluationStore(root)

@@ -636,6 +636,47 @@ def test_hold_with_position_requires_time_stop() -> None:
         validate_generated_output(portfolio)
 
 
+@pytest.mark.parametrize("timeframe_days", [3, 5])
+def test_generated_research_scenarios_require_next_session(timeframe_days: int) -> None:
+    from tradingscope.agents.utils.decision_validation import GeneratedOutputPolicyError, validate_generated_output
+
+    data = _all_outputs()[4].model_dump(mode="json")
+    data["price_scenarios"][0]["timeframe_days"] = timeframe_days
+    research = models.ResearchManagerOutput.model_validate(data)
+
+    with pytest.raises(GeneratedOutputPolicyError) as exc_info:
+        validate_generated_output(research)
+
+    assert exc_info.value.errors == [
+        {"loc": ("price_scenarios", 0, "timeframe_days"), "msg": "new price scenarios must forecast exactly the next trading session"},
+    ]
+
+
+@pytest.mark.parametrize("time_stop_days", [3, 5])
+@pytest.mark.parametrize("output_index", [5, 6])
+def test_next_session_forecast_allows_independent_holding_deadline(output_index: int, time_stop_days: int) -> None:
+    from tradingscope.agents.utils.decision_validation import validate_generated_output
+
+    output = _with_decision(
+        _all_outputs()[output_index],
+        direction="bullish",
+        action="buy",
+        confidence=0.8,
+        price_plan={
+            "execution_price": 100.0,
+            "execution_price_low": 99.0,
+            "execution_price_high": 101.0,
+            "target_price": 110.0,
+            "stop_loss": 95.0,
+        },
+        position_advice="light",
+        time_stop_days=time_stop_days,
+    )
+
+    validate_generated_output(output)
+    assert output.time_stop_days == time_stop_days
+
+
 def test_valid_generated_plan_passes_policy_validation() -> None:
     from tradingscope.agents.utils.decision_validation import validate_generated_output
 

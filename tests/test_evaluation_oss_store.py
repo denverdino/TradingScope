@@ -1,153 +1,156 @@
-"""Tests for strict schema-v3 evaluation ingestion."""
+"""Offline tests for evaluation record stores and completed-run ingestion."""
 
-from unittest.mock import AsyncMock, patch
+from datetime import date
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 import pytest
-from pydantic import ValidationError
 
+from tests.support.evaluation import EVALUATED_AT, completed_run, evaluation_record, flat_future, market_bars
+from tests.test_main import _analysis_result
 from tests.test_output_models import _all_outputs
-from tradingscope.agents.evaluation.oss_store import (
-    OSSAnalysisStore,
-    build_record_from_portfolio,
-)
-from tradingscope.agents.output import PortfolioManagerOutput
+from tradingscope.agents.evaluation.evaluator import build_evaluation_record
+from tradingscope.agents.evaluation.oss_store import LocalEvaluationStore, OSSEvaluationStore, evaluation_key, record_key
+from tradingscope.utils.oss_structured_output_reader import fetch_completed_run, latest_completed_session
 
 
-def test_build_record_requires_valid_v3_portfolio() -> None:
-    data = _all_outputs()[-1].model_dump(mode="json")
-    data["trade_intent"] = "open_long"
-    data["position_advice"] = "medium"
-    data["time_stop_days"] = 3
-    data["price_plan"].update(
-        {
-            "execution_price": 101.0,
-            "execution_price_low": 100.0,
-            "execution_price_high": 102.0,
-        },
-    )
-    portfolio = PortfolioManagerOutput.model_validate(data)
-    record = build_record_from_portfolio(portfolio)
-
-    assert record.action == portfolio.decision.action.value
-    assert record.confidence == portfolio.decision.confidence
-    assert record.reasoning == "；".join(portfolio.decision.reasoning)[:100]
-    assert record.trade_intent == "open_long"
-    assert record.execution_price_low == 100.0
-    assert record.execution_price_high == 102.0
-    assert record.position_advice == "medium"
-    assert record.time_stop_days == 3
-    assert record.intent_inferred is False
-
-
-def test_build_record_marks_missing_portfolio_intent_as_inferred() -> None:
-    record = build_record_from_portfolio(_all_outputs()[-1])
-
-    assert record.trade_intent is None
-    assert record.intent_inferred is True
-
-
-def test_malformed_v3_portfolio_is_rejected() -> None:
-    with pytest.raises(ValidationError):
-        PortfolioManagerOutput.model_validate({"schema_version": "3.0"})
+def test_local_store_round_trip_and_write_once(tmp_path):
+    store = LocalEvaluationStore(tmp_path)
+    record = evaluation_record()
+    assert not store.exists(record_key(record))
+    store.write(record)
+    assert store.exists(record_key(record))
+    assert store.list_records() == [record]
+    assert store.list_records(["MSFT"]) == []
+    with pytest.raises(FileExistsError):
+        store.write(record)
 
 
 @pytest.mark.asyncio
-async def test_store_reads_only_manifest_completed_v3_output(tmp_path) -> None:
-    portfolio = _all_outputs()[-1]
-    fetch = AsyncMock(return_value=portfolio.model_dump(mode="json"))
+async def test_local_completed_run_can_be_evaluated_end_to_end(tmp_path):
+    from datetime import datetime, timezone
 
-    with patch(
-        "tradingscope.agents.evaluation.oss_store.async_fetch_completed_output",
-        fetch,
+    from tests.support.evaluation import ANALYSIS_DATE, FakeMarketData
+    from tradingscope.agents.evaluation.evaluator import AnalysisEvaluator
+    from tradingscope.utils import oss_structured_output_uploader as uploader
+
+    fixed = datetime(2026, 7, 14, 0, 5, tzinfo=timezone.utc)
+    with (
+        patch.dict(uploader.DEFAULT_CONFIG, {"results_dir": str(tmp_path)}),
+        patch.object(uploader, "_get_client", return_value=None),
+        patch.object(uploader, "datetime", wraps=datetime) as clock,
     ):
-        records = await OSSAnalysisStore(str(tmp_path)).list_pending(
-            tickers=["AAPL"],
-            date="2026-07-14",
-        )
-
-    fetch.assert_awaited_once_with("2026-07-14", "AAPL")
-    assert records[0].ticker == "AAPL"
-
-
-def test_horizon_state_distinguishes_each_horizon_and_preserves_legacy_day_one(tmp_path) -> None:
-    store = OSSAnalysisStore(str(tmp_path))
-
-    assert store.mark_evaluated("AAPL", "2026-07-20", 3)
-    assert store.is_evaluated("AAPL", "2026-07-20", 3)
-    assert not store.is_evaluated("AAPL", "2026-07-20", 5)
-
-    store._save_evaluated_set({"2026-07-20/AAPL"})
-
-    assert store.is_evaluated("AAPL", "2026-07-20", 1)
-    assert not store.is_evaluated("AAPL", "2026-07-20", 3)
+        clock.now.return_value = fixed
+        await uploader.persist_analysis_result(_analysis_result())
+        run = fetch_completed_run(ANALYSIS_DATE.isoformat(), "AAPL", results_dir=str(tmp_path))
+        assert len(run.outputs) == 7
+        data = FakeMarketData(market_bars(flat_future([105.0] * 5)))
+        evaluator = AnalysisEvaluator(LocalEvaluationStore(tmp_path), results_dir=str(tmp_path), market_data=data, clock=lambda: EVALUATED_AT)
+        records = evaluator.run(["AAPL"], analysis_date=ANALYSIS_DATE.isoformat())
+        assert [record.horizon for record in records] == [1]
+        assert evaluator.run(["AAPL"], analysis_date=ANALYSIS_DATE.isoformat()) == []
 
 
-@pytest.mark.parametrize("horizon_days", [0, 2, 4, -1, True, False, 1.0, 3.0, 5.0])
-def test_store_rejects_invalid_horizon_when_checking_evaluation_state(tmp_path, horizon_days) -> None:
-    store = OSSAnalysisStore(str(tmp_path))
-
-    with pytest.raises(ValueError, match=r"allowed horizons.*1, 3, 5"):
-        store.is_evaluated("AAPL", "2026-07-20", horizon_days)
-
-
-@pytest.mark.parametrize("horizon_days", [0, 2, 4, -1, True, False, 1.0, 3.0, 5.0])
-def test_store_rejects_invalid_horizon_without_writing_tracking_file(tmp_path, horizon_days) -> None:
-    store = OSSAnalysisStore(str(tmp_path))
-
-    with pytest.raises(ValueError, match=r"allowed horizons.*1, 3, 5"):
-        store.mark_evaluated("AAPL", "2026-07-20", horizon_days)
-
-    assert not (tmp_path / "oss_evaluated.json").exists()
+def test_mutable_aliases_cannot_contaminate_the_run_bundle():
+    manifest = completed_run().manifest.model_dump(mode="json")
+    bundle = _analysis_result().model_dump(mode="json")
+    alias = _all_outputs()[0].model_dump(mode="json")
+    alias["decision"]["summary"] = "different process"
+    data = {"manifest": manifest, "runs/run-1/full_report": bundle, "market_analyst": alias}
+    with patch("tradingscope.utils.oss_structured_output_reader.fetch_structured_output", side_effect=lambda _date, _ticker, agent: data.get(agent)):
+        run = fetch_completed_run("2026-07-14", "AAPL")
+    assert run.outputs["market_analyst"].decision.summary != "different process"
 
 
-@pytest.mark.asyncio
-async def test_store_skips_report_only_after_all_evaluation_horizons_complete(tmp_path) -> None:
-    store = OSSAnalysisStore(str(tmp_path))
-    for horizon_days in (1, 3, 5):
-        assert store.mark_evaluated("AAPL", "2026-07-14", horizon_days)
+def test_key_includes_run_id_and_horizon():
+    assert evaluation_key("2026-07-14", "AAPL", "uuid", 1) == "tradingscope-evaluations/2026-07-14/AAPL/uuid/h1.json"
+    for horizon in (3, 5):
+        with pytest.raises(ValueError, match="allowed horizons are 1"):
+            evaluation_key("2026-07-14", "AAPL", "uuid", horizon)
 
+
+def test_oss_store_forbids_overwrite_and_reads_records():
+    record = evaluation_record()
+    client = Mock()
+    client.is_object_exist.return_value = True
+    store = OSSEvaluationStore(client, "bucket")
+    store.write(record)
+    request = client.put_object.call_args.args[0]
+    assert request.forbid_overwrite is True
+    assert request.key == record_key(record)
+    assert store.exists(request.key)
+    client.list_objects_v2_paginator.return_value.iter_page.return_value = [SimpleNamespace(contents=[SimpleNamespace(key=request.key)])]
+    client.get_object.return_value = SimpleNamespace(body=SimpleNamespace(content=record.model_dump_json().encode()))
+    assert store.list_records(["AAPL"]) == [record]
+    assert store.list_records(["MSFT"]) == []
+
+
+def test_completed_run_reads_all_available_valid_stages():
+    manifest = completed_run().manifest.model_dump(mode="json")
+    outputs = _all_outputs()
+    data = {"manifest": manifest, "runs/run-1/full_report": _analysis_result().model_dump(mode="json")}
+    data.update({output.agent_name: output.model_dump(mode="json") for output in outputs})
+    with patch("tradingscope.utils.oss_structured_output_reader.fetch_structured_output", side_effect=lambda _date, _ticker, agent: data.get(agent)):
+        run = fetch_completed_run("2026-07-14", "AAPL")
+    assert len(run.outputs) == 7
+    assert run.run_id == "run-1"
+
+
+def test_changed_manifest_during_read_rejects_mixed_run():
+    initial = completed_run().manifest.model_dump(mode="json")
+    replacement = completed_run(run_id="replacement").manifest.model_dump(mode="json")
+    stages = {"runs/run-1/full_report": _analysis_result().model_dump(mode="json")}
+    manifests = iter([initial, replacement])
     with patch(
-        "tradingscope.agents.evaluation.oss_store.async_fetch_completed_output",
-        AsyncMock(),
-    ) as fetch:
-        records = await store.list_pending(tickers=["AAPL"], date="2026-07-14")
-
-    assert records == []
-    fetch.assert_not_awaited()
+        "tradingscope.utils.oss_structured_output_reader.fetch_structured_output",
+        side_effect=lambda _date, _ticker, agent: next(manifests) if agent == "manifest" else stages.get(agent),
+    ):
+        assert fetch_completed_run("2026-07-14", "AAPL") is None
 
 
-@pytest.mark.asyncio
-async def test_store_keeps_report_pending_when_only_one_horizon_is_complete(tmp_path) -> None:
-    portfolio = _all_outputs()[-1]
-    store = OSSAnalysisStore(str(tmp_path))
-    assert store.mark_evaluated("AAPL", "2026-07-14", 1)
-
+def test_current_manifest_requires_all_seven_valid_stages():
+    initial = completed_run().manifest.model_dump(mode="json")
+    stages = {"runs/run-1/full_report": _analysis_result().model_dump(mode="json")}
+    stages["runs/run-1/full_report"]["analysts"].pop("news")
     with patch(
-        "tradingscope.agents.evaluation.oss_store.async_fetch_completed_output",
-        AsyncMock(return_value=portfolio.model_dump(mode="json")),
+        "tradingscope.utils.oss_structured_output_reader.fetch_structured_output",
+        side_effect=lambda _date, _ticker, agent: initial if agent == "manifest" else stages.get(agent),
+    ):
+        assert fetch_completed_run("2026-07-14", "AAPL") is None
+
+
+def test_wrong_ticker_stage_is_not_associated_with_another_run():
+    initial = completed_run().manifest.model_dump(mode="json")
+    stages = {"runs/run-1/full_report": _analysis_result().model_dump(mode="json")}
+    stages["runs/run-1/full_report"]["analysts"]["news"]["ticker"] = "MSFT"
+    with patch(
+        "tradingscope.utils.oss_structured_output_reader.fetch_structured_output",
+        side_effect=lambda _date, _ticker, agent: initial if agent == "manifest" else stages.get(agent),
+    ):
+        assert fetch_completed_run("2026-07-14", "AAPL") is None
+
+
+def test_completed_run_requires_manifest_and_portfolio():
+    with patch("tradingscope.utils.oss_structured_output_reader.fetch_structured_output", return_value=None):
+        assert fetch_completed_run("2026-07-14", "AAPL") is None
+    manifest = completed_run().manifest.model_dump(mode="json")
+    with patch(
+        "tradingscope.utils.oss_structured_output_reader.fetch_structured_output",
+        side_effect=lambda _date, _ticker, agent: manifest if agent == "manifest" else None,
+    ):
+        assert fetch_completed_run("2026-07-14", "AAPL") is None
+
+
+def test_latest_session_ignores_old_schema_manifest():
+    manifest = {"schema_version": "3.0", "status": "complete", "ticker": "AAPL", "analysis_date": "2026-07-14"}
+    with patch("tradingscope.utils.oss_structured_output_reader.fetch_structured_output", return_value=manifest):
+        assert latest_completed_session("AAPL", date(2026, 7, 20), 7) is None
+
+
+def test_latest_session_checks_same_date_and_prior_days():
+    manifest = completed_run().manifest
+    with patch(
+        "tradingscope.utils.oss_structured_output_reader.fetch_completed_manifest", side_effect=lambda day, _ticker: manifest if day == "2026-07-14" else None
     ) as fetch:
-        records = await store.list_pending(tickers=["AAPL"], date="2026-07-14")
-
-    fetch.assert_awaited_once_with("2026-07-14", "AAPL")
-    assert [record.ticker for record in records] == ["AAPL"]
-
-
-def test_default_candidates_cover_the_prior_fourteen_calendar_dates() -> None:
-    candidates = OSSAnalysisStore._generate_date_candidates("2026-07-20", "AAPL")
-
-    assert candidates == [
-        ("2026-07-19", "AAPL"),
-        ("2026-07-18", "AAPL"),
-        ("2026-07-17", "AAPL"),
-        ("2026-07-16", "AAPL"),
-        ("2026-07-15", "AAPL"),
-        ("2026-07-14", "AAPL"),
-        ("2026-07-13", "AAPL"),
-        ("2026-07-12", "AAPL"),
-        ("2026-07-11", "AAPL"),
-        ("2026-07-10", "AAPL"),
-        ("2026-07-09", "AAPL"),
-        ("2026-07-08", "AAPL"),
-        ("2026-07-07", "AAPL"),
-        ("2026-07-06", "AAPL"),
-    ]
+        assert latest_completed_session("AAPL", date(2026, 7, 20), 7) == date(2026, 7, 13)
+    assert fetch.call_count == 8

@@ -11,8 +11,12 @@ The exchange symbol of the single stock an analysis is about.
 _Avoid_: Company of interest, company name, symbol
 
 **Analysis Date**:
-The calendar date an analysis is produced for; evaluation treats sessions on or after it as the future.
+The calendar date an analysis is produced for; its forecast session is the first session on or after this date.
 _Avoid_: Trade date, run date
+
+**Forecast Session**:
+The single session whose price performance a forecast predicts through its close. The forecast is completed before that session opens; weekends and holidays do not count as sessions.
+_Avoid_: Tomorrow, next calendar day, holding period
 
 **Last Completed Session**:
 The most recent trading session whose full daily data was available when the analysis was produced.
@@ -58,10 +62,14 @@ _Avoid_: Entry price (for exits), order price
 The lowest and highest prices at which the planned trade should be carried out.
 _Avoid_: Entry range (for exits)
 
+**Time Stop**:
+An independent position-management deadline measured in sessions from the forecast session. It may extend beyond the forecast session and applies only while a position remains.
+_Avoid_: Forecast expiry, evaluation horizon
+
 ### Evaluation
 
 **Horizon**:
-The number of sessions, starting with the first session on or after the analysis date, over which a stage output is judged.
+The period over which a stage output is judged, limited to the single forecast session through its close regardless of the position's holding period.
 _Avoid_: Holding period, window
 
 **Evaluation**:
@@ -104,8 +112,12 @@ _Avoid_: Entry triggered, execution (for the simulated event)
 The simulated price of a fill, taken from the overlap of the execution range and that session's high-low range.
 _Avoid_: Actual entry price, execution price (for the simulated value)
 
+**Closing Valuation**:
+Assessing an open position's performance at the forecast session's close without assuming that the position was exited.
+_Avoid_: Closing trade, liquidation, execution
+
 **Underlying Return**:
-The ticker's own price change from the session before the analysis date to the close of the last session in the evaluation horizon.
+The ticker's own price change from the close of the session preceding the forecast session to the forecast session's close, including the overnight gap.
 _Avoid_: Benchmark return, actual return, market return
 
 **Strategy Return**:

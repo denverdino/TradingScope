@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from datetime import date, timedelta
 
 import pytest
@@ -8,7 +7,9 @@ import pytest
 from tradingscope.agents.evaluation.market_outcome import (
     AssessmentStatus,
     MarketBar,
+    MarketWindow,
     assess_trade,
+    assess_trade_in_window,
     parse_market_bars,
 )
 from tradingscope.agents.evaluation.models import AnalysisRecord
@@ -16,11 +17,9 @@ from tradingscope.agents.evaluation.models import AnalysisRecord
 
 def _record(**overrides: object) -> AnalysisRecord:
     values: dict[str, object] = {
-        "ticker": "AAPL",
         "analysis_date": "2026-01-15",
         "direction": "bullish",
-        "action": "buy",
-        "confidence": 0.8,
+        "trade_intent": "hold",
     }
     values.update(overrides)
     return AnalysisRecord(**values)  # type: ignore[arg-type]
@@ -67,6 +66,13 @@ def _execution_bars(future_ohlc: list[tuple[float, float, float, float]]) -> lis
     bars = _constant_atr_bars(100.0, future_count=0)
     bars.extend(MarketBar(date(2026, 1, 15) + timedelta(days=index), *ohlc) for index, ohlc in enumerate(future_ohlc))
     return bars
+
+
+def _position_window(bars: list[MarketBar], horizon: int) -> MarketWindow:
+    """Use the known 2% daily ATR of the constant-price synthetic fixtures."""
+    horizon_bars = tuple(bars[15 : 15 + horizon])
+    assert len(horizon_bars) == horizon
+    return MarketWindow(reference_bar=bars[14], daily_atr_pct=0.02, horizon_bars=horizon_bars)
 
 
 @pytest.mark.parametrize("date_header", ["Timestamp", "trade_date"])
@@ -156,38 +162,48 @@ def test_preopen_record_uses_previous_close_and_current_session_as_horizon_one()
 
 
 def test_weekend_record_uses_friday_close_and_monday_as_horizon_one() -> None:
-    friday = date(2026, 1, 16)
+    friday = date(2026, 1, 23)
     history = [MarketBar(friday - timedelta(days=14 - index), 100.0, 101.0, 99.0, 100.0) for index in range(15)]
-    monday = MarketBar(date(2026, 1, 19), 100.0, 104.0, 99.0, 103.0)
+    monday = MarketBar(date(2026, 1, 26), 100.0, 104.0, 99.0, 103.0)
 
     assessment = assess_trade(
-        _record(analysis_date="2026-01-17"),
+        _record(analysis_date="2026-01-24"),
         [*history, monday],
         horizon_days=1,
     )
 
     assert assessment is not None
+    assert assessment.horizon_days == 1
     assert assessment.underlying_return == pytest.approx(0.03)
 
 
-def test_only_horizons_with_enough_evaluation_sessions_are_available() -> None:
-    bars = _constant_atr_bars(103.0, future_count=3)
+def test_holiday_weekend_record_uses_friday_close_and_tuesday_as_horizon_one() -> None:
+    friday = date(2026, 1, 16)
+    history = [MarketBar(friday - timedelta(days=14 - index), 100.0, 101.0, 99.0, 100.0) for index in range(15)]
+    # Monday, January 19 is the US market's Martin Luther King Jr. Day holiday.
+    tuesday = MarketBar(date(2026, 1, 20), 100.0, 104.0, 99.0, 103.0)
 
-    assert assess_trade(_record(), bars, horizon_days=1) is not None
-    assert assess_trade(_record(), bars, horizon_days=3) is not None
-    assert assess_trade(_record(), bars, horizon_days=5) is None
+    assessment = assess_trade(
+        _record(analysis_date="2026-01-17"),
+        [*history, tuesday],
+        horizon_days=1,
+    )
+
+    assert assessment is not None
+    assert assessment.horizon_days == 1
+    assert assessment.underlying_return == pytest.approx(0.03)
 
 
-def test_atr_threshold_scales_by_square_root_of_horizon() -> None:
-    csv_lines = _market_csv().splitlines()
-    bars = parse_market_bars("\n".join([csv_lines[-1], *csv_lines[:-1]]))
+def test_horizon_one_is_available_as_soon_as_first_evaluation_session_exists() -> None:
+    assert assess_trade(_record(), _constant_atr_bars(103.0, future_count=0), horizon_days=1) is None
+    assert assess_trade(_record(), _constant_atr_bars(103.0, future_count=1), horizon_days=1) is not None
 
-    one_day = assess_trade(_record(), bars, horizon_days=1)
-    three_day = assess_trade(_record(), bars, horizon_days=3)
 
-    assert one_day is not None
-    assert three_day is not None
-    assert three_day.atr_threshold == pytest.approx(one_day.atr_threshold * math.sqrt(3))
+def test_atr_threshold_is_daily_range_without_multi_session_scaling() -> None:
+    assessment = assess_trade(_record(), _constant_atr_bars(103.0), horizon_days=1)
+
+    assert assessment is not None
+    assert assessment.atr_threshold == pytest.approx(0.02)
 
 
 def test_atr_uses_previous_close_before_the_fourteen_range_window() -> None:
@@ -221,12 +237,81 @@ def test_atr_assessment_requires_previous_close_plus_fourteen_ranges() -> None:
 
 @pytest.mark.parametrize("invalid_horizon", [True, False, 1.0, 3.0, 5.0, 0, 2, 4, -1])
 def test_assess_trade_rejects_non_exact_supported_horizons(invalid_horizon: object) -> None:
-    with pytest.raises(ValueError, match="allowed horizons are 1, 3, 5"):
+    with pytest.raises(ValueError, match=r"allowed horizons are 1\."):
         assess_trade(
             _record(),
             _constant_atr_bars(103.0),
             horizon_days=invalid_horizon,  # type: ignore[arg-type]
         )
+
+
+@pytest.mark.parametrize("horizon", [3, 5])
+def test_assess_trade_rejects_multi_session_evaluation_horizons(horizon: int) -> None:
+    with pytest.raises(ValueError, match=r"allowed horizons are 1\."):
+        assess_trade(_record(), _constant_atr_bars(103.0), horizon_days=horizon)
+
+
+@pytest.mark.parametrize("trade_intent", ["hold", "open_long", "open_short", "reduce_long", "close_long", "cover_short"])
+def test_horizon_one_assessment_is_independent_of_later_bars(trade_intent: str) -> None:
+    record = _record(
+        direction="bearish" if trade_intent in {"open_short", "cover_short"} else "bullish",
+        trade_intent=trade_intent,
+        execution_price=100.0,
+        target_price=80.0 if trade_intent == "open_short" else 120.0,
+        stop_loss=120.0 if trade_intent == "open_short" else 80.0,
+        time_stop_days=5,
+        position_advice="light",
+    )
+    first_session_bars = _execution_bars([(100.0, 104.0, 98.0, 103.0)])
+    later_bars = [
+        MarketBar(date(2026, 1, 16), 130.0, 132.0, 129.0, 131.0),
+        MarketBar(date(2026, 1, 20), 70.0, 72.0, 69.0, 71.0),
+        MarketBar(date(2026, 1, 21), 100.0, 101.0, 99.0, 100.0),
+        MarketBar(date(2026, 1, 22), 100.0, 101.0, 99.0, 100.0),
+    ]
+
+    first_session = assess_trade(record, first_session_bars, horizon_days=1)
+    with_later_sessions = assess_trade(record, [*first_session_bars, *later_bars], horizon_days=1)
+
+    assert first_session is not None
+    assert first_session.horizon_days == 1
+    assert first_session.underlying_return == pytest.approx(0.03)
+    assert first_session.atr_threshold == pytest.approx(0.02)
+    assert with_later_sessions == first_session
+
+
+@pytest.mark.parametrize("time_stop_days", [3, 5])
+@pytest.mark.parametrize("trade_intent", ["open_long", "open_short", "reduce_long"])
+def test_horizon_one_values_overnight_holdings_without_forcing_time_stop(trade_intent: str, time_stop_days: int) -> None:
+    assessment = assess_trade(
+        _record(
+            direction="bearish" if trade_intent == "open_short" else "bullish",
+            trade_intent=trade_intent,
+            execution_price=100.0,
+            target_price=80.0 if trade_intent == "open_short" else 120.0,
+            stop_loss=120.0 if trade_intent == "open_short" else 80.0,
+            time_stop_days=time_stop_days,
+            position_advice="light",
+        ),
+        _execution_bars([(100.0, 104.0, 98.0, 103.0)]),
+        horizon_days=1,
+    )
+
+    assert assessment is not None
+    assert assessment.filled is True
+    assert assessment.horizon_days == 1
+    assert assessment.underlying_return == pytest.approx(0.03)
+    if trade_intent == "reduce_long":
+        assert assessment.exit_reason == "execution"
+        assert assessment.strategy_return == pytest.approx(-0.03)
+        assert assessment.residual_exit_reason == "horizon"
+        assert assessment.residual_exit_date == "2026-01-15"
+        assert assessment.residual_exit_price == 103.0
+        assert any("valuation, not an exit" in item for item in assessment.limitations)
+        assert any("beyond the evaluation horizon" in item for item in assessment.limitations)
+    else:
+        assert assessment.exit_reason == "horizon"
+        assert assessment.strategy_return == pytest.approx(-0.03 if trade_intent == "open_short" else 0.03)
 
 
 @pytest.mark.parametrize(
@@ -304,13 +389,13 @@ def test_neutral_direction_includes_both_atr_boundaries(
     [
         _constant_atr_bars(103.0)[1:],
         _constant_atr_bars(103.0)[:14],
-        _constant_atr_bars(103.0, future_count=2),
+        _constant_atr_bars(103.0, future_count=0),
     ],
 )
-def test_direction_assessment_requires_base_history_and_requested_horizon(
+def test_direction_assessment_requires_base_history_and_next_session(
     bars: list[MarketBar],
 ) -> None:
-    assert assess_trade(_record(), bars, horizon_days=3) is None
+    assert assess_trade(_record(), bars, horizon_days=1) is None
 
 
 @pytest.mark.parametrize(
@@ -363,7 +448,7 @@ def test_open_trade_uses_first_fill_and_clamps_representative_price(
     bars: list[MarketBar],
     expected_entry: float,
 ) -> None:
-    assessment = assess_trade(record, bars, horizon_days=3)
+    assessment = assess_trade_in_window(record, _position_window(bars, horizon=3))
 
     assert assessment is not None
     assert assessment.filled is True
@@ -373,7 +458,7 @@ def test_open_trade_uses_first_fill_and_clamps_representative_price(
 @pytest.mark.parametrize("trade_intent", ["open_long", "open_short"])
 def test_open_trade_range_never_touched_is_not_filled(trade_intent: str) -> None:
     is_long = trade_intent == "open_long"
-    assessment = assess_trade(
+    assessment = assess_trade_in_window(
         _record(
             direction="bullish" if is_long else "bearish",
             trade_intent=trade_intent,
@@ -384,8 +469,7 @@ def test_open_trade_range_never_touched_is_not_filled(trade_intent: str) -> None
             stop_loss=80.0 if is_long else 110.0,
             time_stop_days=3,
         ),
-        _execution_bars([(100.0, 102.0, 98.0, 100.0)] * 3),
-        horizon_days=3,
+        _position_window(_execution_bars([(100.0, 102.0, 98.0, 100.0)] * 3), horizon=3),
     )
 
     assert assessment is not None
@@ -397,7 +481,7 @@ def test_open_trade_range_never_touched_is_not_filled(trade_intent: str) -> None
 
 
 def test_open_trade_does_not_fill_after_time_stop_deadline() -> None:
-    assessment = assess_trade(
+    assessment = assess_trade_in_window(
         _record(
             trade_intent="open_long",
             execution_price=100.0,
@@ -407,14 +491,16 @@ def test_open_trade_does_not_fill_after_time_stop_deadline() -> None:
             stop_loss=80.0,
             time_stop_days=2,
         ),
-        _execution_bars(
-            [
-                (103.0, 104.0, 102.0, 103.0),
-                (102.0, 103.0, 101.5, 102.0),
-                (100.0, 101.0, 99.0, 100.0),
-            ]
+        _position_window(
+            _execution_bars(
+                [
+                    (103.0, 104.0, 102.0, 103.0),
+                    (102.0, 103.0, 101.5, 102.0),
+                    (100.0, 101.0, 99.0, 100.0),
+                ]
+            ),
+            horizon=3,
         ),
-        horizon_days=3,
     )
 
     assert assessment is not None
@@ -496,8 +582,61 @@ def test_open_short_target_stop_and_same_day_stop_precedence(
     assert assessment.status is expected_status
 
 
+@pytest.mark.parametrize(
+    ("intent", "target", "stop", "gap_bar", "expected_reason", "expected_return"),
+    [
+        ("open_long", 103.0, 97.0, (90.0, 92.0, 88.0, 91.0), "stop_loss", -0.10),
+        ("open_long", 103.0, 97.0, (108.0, 110.0, 107.0, 109.0), "target", 0.08),
+        ("open_short", 97.0, 103.0, (110.0, 112.0, 108.0, 111.0), "stop_loss", -0.10),
+        ("open_short", 97.0, 103.0, (92.0, 93.0, 90.0, 91.0), "target", 0.08),
+    ],
+)
+def test_gap_through_exit_level_fills_at_the_open(
+    intent: str,
+    target: float,
+    stop: float,
+    gap_bar: tuple[float, float, float, float],
+    expected_reason: str,
+    expected_return: float,
+) -> None:
+    assessment = assess_trade_in_window(
+        _record(
+            direction="bullish" if intent == "open_long" else "bearish",
+            trade_intent=intent,
+            execution_price=100.0,
+            target_price=target,
+            stop_loss=stop,
+        ),
+        _position_window(_execution_bars([(100.0, 101.0, 99.0, 100.0), gap_bar, gap_bar]), horizon=3),
+    )
+
+    assert assessment is not None
+    assert assessment.exit_reason == expected_reason
+    assert assessment.strategy_return == pytest.approx(expected_return)
+
+
+def test_residual_long_stop_gap_exits_at_the_open() -> None:
+    assessment = assess_trade_in_window(
+        _record(
+            trade_intent="reduce_long",
+            execution_price=100.0,
+            stop_loss=97.0,
+            position_advice="light",
+            time_stop_days=3,
+        ),
+        _position_window(
+            _execution_bars([(100.0, 101.0, 99.0, 100.0), (90.0, 92.0, 88.0, 91.0), (91.0, 92.0, 90.0, 91.0)]),
+            horizon=3,
+        ),
+    )
+
+    assert assessment is not None
+    assert assessment.residual_exit_reason == "stop_loss"
+    assert assessment.residual_exit_price == pytest.approx(90.0)
+
+
 def test_open_trade_time_stop_uses_configured_future_session_close() -> None:
-    assessment = assess_trade(
+    assessment = assess_trade_in_window(
         _record(
             trade_intent="open_long",
             execution_price=100.0,
@@ -507,16 +646,18 @@ def test_open_trade_time_stop_uses_configured_future_session_close() -> None:
             stop_loss=80.0,
             time_stop_days=3,
         ),
-        _execution_bars(
-            [
-                (100.0, 101.0, 99.0, 100.0),
-                (101.0, 103.0, 100.0, 102.0),
-                (102.0, 106.0, 101.0, 105.0),
-                (105.0, 111.0, 104.0, 110.0),
-                (110.0, 116.0, 109.0, 115.0),
-            ]
+        _position_window(
+            _execution_bars(
+                [
+                    (100.0, 101.0, 99.0, 100.0),
+                    (101.0, 103.0, 100.0, 102.0),
+                    (102.0, 106.0, 101.0, 105.0),
+                    (105.0, 111.0, 104.0, 110.0),
+                    (110.0, 116.0, 109.0, 115.0),
+                ]
+            ),
+            horizon=5,
         ),
-        horizon_days=5,
     )
 
     assert assessment is not None
@@ -558,7 +699,7 @@ def test_long_exit_measures_avoided_loss_or_opportunity_cost(
 
 
 def test_reduce_long_can_fill_after_residual_position_time_stop() -> None:
-    assessment = assess_trade(
+    assessment = assess_trade_in_window(
         _record(
             trade_intent="reduce_long",
             position_advice="light",
@@ -567,16 +708,18 @@ def test_reduce_long_can_fill_after_residual_position_time_stop() -> None:
             execution_price_high=106.0,
             time_stop_days=3,
         ),
-        _execution_bars(
-            [
-                (100.0, 101.0, 99.0, 100.0),
-                (100.0, 101.0, 99.0, 100.0),
-                (100.0, 101.0, 99.0, 100.0),
-                (104.0, 106.0, 103.0, 105.0),
-                (90.0, 91.0, 89.0, 90.0),
-            ]
+        _position_window(
+            _execution_bars(
+                [
+                    (100.0, 101.0, 99.0, 100.0),
+                    (100.0, 101.0, 99.0, 100.0),
+                    (100.0, 101.0, 99.0, 100.0),
+                    (104.0, 106.0, 103.0, 105.0),
+                    (90.0, 91.0, 89.0, 90.0),
+                ]
+            ),
+            horizon=5,
         ),
-        horizon_days=5,
     )
 
     assert assessment is not None
@@ -592,20 +735,19 @@ def test_reduce_long_can_fill_after_residual_position_time_stop() -> None:
     ("horizon", "reason", "exit_date", "exit_price", "relative_return"),
     [
         (1, "horizon", "2026-01-15", 98.0, 0.02),
-        (3, "time_stop", "2026-01-19", 94.0, 0.06),
-        (5, "time_stop", "2026-01-19", 94.0, 0.20),
+        (3, "time_stop", "2026-01-20", 94.0, 0.06),
+        (5, "time_stop", "2026-01-20", 94.0, 0.20),
     ],
 )
 def test_reduce_long_separates_residual_exit_from_sold_portion_performance(
     horizon: int, reason: str, exit_date: str, exit_price: float, relative_return: float
 ) -> None:
     bars = _execution_bars([(100.0, 101.0, 97.0, 98.0), (98.0, 99.0, 95.0, 96.0), (96.0, 97.0, 93.0, 94.0), (94.0, 95.0, 89.0, 90.0), (90.0, 91.0, 79.0, 80.0)])
-    # Observed trading sessions cross a weekend; days without bars do not count.
-    bars[-3:] = [MarketBar(date(2026, 1, day), bar.open, bar.high, bar.low, bar.close) for day, bar in zip((19, 20, 21), bars[-3:], strict=True)]
-    assessment = assess_trade(
+    # Observed sessions cross a weekend and the January 19 US market holiday.
+    bars[-3:] = [MarketBar(date(2026, 1, day), bar.open, bar.high, bar.low, bar.close) for day, bar in zip((20, 21, 22), bars[-3:], strict=True)]
+    assessment = assess_trade_in_window(
         _record(trade_intent="reduce_long", position_advice="light", execution_price=100.0, time_stop_days=3),
-        bars,
-        horizon_days=horizon,  # type: ignore[arg-type]
+        _position_window(bars, horizon=horizon),
     )
 
     assert assessment is not None
@@ -624,10 +766,9 @@ def test_reduce_long_separates_residual_exit_from_sold_portion_performance(
 @pytest.mark.parametrize("time_stop_days", [1, 3, 5])
 def test_reduce_long_time_stop_uses_deadline_not_fill_day(time_stop_days: int) -> None:
     bars = _execution_bars([(100.0, 101.0, 99.0, 100.0)] * (time_stop_days - 1) + [(105.0, 107.0, 104.0, 106.0)] * (6 - time_stop_days))
-    assessment = assess_trade(
+    assessment = assess_trade_in_window(
         _record(trade_intent="reduce_long", execution_price=105.0, time_stop_days=time_stop_days),
-        bars,
-        horizon_days=5,
+        _position_window(bars, horizon=5),
     )
 
     assert assessment is not None
@@ -639,10 +780,9 @@ def test_reduce_long_time_stop_uses_deadline_not_fill_day(time_stop_days: int) -
 @pytest.mark.parametrize("horizon", [1, 3, 5])
 @pytest.mark.parametrize("execution_price", [None, 120.0])
 def test_unfilled_reduction_does_not_create_a_residual_position_exit(horizon: int, execution_price: float | None) -> None:
-    assessment = assess_trade(
+    assessment = assess_trade_in_window(
         _record(trade_intent="reduce_long", execution_price=execution_price, time_stop_days=1),
-        _execution_bars([(100.0, 101.0, 99.0, 100.0)] * 5),
-        horizon_days=horizon,  # type: ignore[arg-type]
+        _position_window(_execution_bars([(100.0, 101.0, 99.0, 100.0)] * 5), horizon=horizon),
     )
 
     assert assessment is not None
@@ -659,10 +799,9 @@ def test_unfilled_reduction_does_not_create_a_residual_position_exit(horizon: in
     [(110.0, 99.0, "target", 110.0), (101.0, 90.0, "stop_loss", 90.0), (110.0, 90.0, "stop_loss", 90.0)],
 )
 def test_residual_price_exit_precedes_time_stop(high: float, low: float, reason: str, price: float) -> None:
-    assessment = assess_trade(
+    assessment = assess_trade_in_window(
         _record(trade_intent="reduce_long", execution_price=100.0, target_price=110.0, stop_loss=90.0, time_stop_days=1),
-        _execution_bars([(100.0, high, low, 100.0)] * 5),
-        horizon_days=5,
+        _position_window(_execution_bars([(100.0, high, low, 100.0)] * 5), horizon=5),
     )
 
     assert assessment is not None
@@ -675,10 +814,9 @@ def test_residual_price_exit_precedes_time_stop(high: float, low: float, reason:
 
 @pytest.mark.parametrize("position_advice", [None, "none"])
 def test_reduce_long_without_time_stop_does_not_invent_residual_event(position_advice: str | None) -> None:
-    assessment = assess_trade(
+    assessment = assess_trade_in_window(
         _record(trade_intent="reduce_long", execution_price=100.0, position_advice=position_advice),
-        _constant_atr_bars(100.0),
-        horizon_days=5,
+        _position_window(_constant_atr_bars(100.0), horizon=5),
     )
 
     assert assessment is not None
@@ -727,17 +865,10 @@ def test_cover_short_measures_avoided_loss_or_opportunity_cost(
     assert assessment.status is expected_status
 
 
-def test_historical_missing_or_inferred_intent_never_fakes_strategy_return() -> None:
-    for record in (
-        _record(),
-        _record(trade_intent="open_long", intent_inferred=True),
-    ):
-        assessment = assess_trade(record, _constant_atr_bars(103.0), horizon_days=1)
-
-        assert assessment is not None
-        assert assessment.strategy_return is None
-        assert assessment.filled is False
-        assert assessment.limitations
+@pytest.mark.parametrize("intent", [None, "buy", "unknown"])
+def test_missing_or_unsupported_intent_is_rejected(intent):
+    with pytest.raises(ValueError, match="explicit supported trade intent"):
+        assess_trade(_record(trade_intent=intent), _constant_atr_bars(103.0), horizon_days=1)
 
 
 def test_hold_is_direction_only_and_does_not_fake_zero_return() -> None:

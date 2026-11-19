@@ -17,11 +17,15 @@ from agentscope.event import (
 from agentscope.message import Msg
 from agentscope.permission import PermissionMode
 
+from .decision_policy import CONCISE_ANALYSIS_OUTPUT_POLICY, NEXT_SESSION_FORECAST_CONTRACT
 from .local_audit import get_audit_recorder, redact
 
 COMPLIANCE_PROMPT = "你必须严格遵守内容安全与合规要求，不得生成任何涉黄、涉暴、涉政、违法、仇恨、歧视等内容。"
 
-ANALYST_DRAFT_OUTPUT_REQUIREMENTS = """分析素材必须覆盖：
+ANALYST_DRAFT_OUTPUT_REQUIREMENTS = f"""{CONCISE_ANALYSIS_OUTPUT_POLICY}
+分析素材必须覆盖：
+- {NEXT_SESSION_FORECAST_CONTRACT}
+- 入场、目标和止损仅作下一实际交易日的执行与持仓管理参考，不得当作多日预测；持仓可延续，不要求目标交易日收盘平仓。
 - 唯一方向判断（看涨/看跌/中性）、唯一操作建议（买入/持有/卖出）、置信度（0-1）及核心理由，方向与操作不得矛盾。
 - 每条关键证据的来源、原始链接（如有）、数据日期，区分事实与推断；保留最强反证。
 - 有依据的价格及计价货币、适用条件和失效条件；价格无依据时留空（null），不得为补齐结构而编造。
@@ -29,6 +33,7 @@ ANALYST_DRAFT_OUTPUT_REQUIREMENTS = """分析素材必须覆盖：
 只输出中文分析素材，不要输出 JSON、JSON 代码块或固定 Markdown 报告模板；下一阶段根据严格 schema 生成正式结果。"""
 
 DEBATE_OUTPUT_RULES = (
+    f"{NEXT_SESSION_FORECAST_CONTRACT}\n{CONCISE_ANALYSIS_OUTPUT_POLICY}\n"
     "发言要求：最多2个关键论点，每个论点注明来源与数据时点；不得重抄共享报告，只引用支撑论点所需的关键数据；"
     "只回应已收到的发言，不预设他人尚未提出的观点；他人证据成立时可以承认并修正己方判断。"
 )

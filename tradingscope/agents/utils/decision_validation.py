@@ -10,6 +10,7 @@ from tradingscope.agents.output import (
     Direction,
     PortfolioManagerOutput,
     PositionAdvice,
+    ResearchManagerOutput,
     TradeIntent,
     TraderOutput,
 )
@@ -26,7 +27,7 @@ class GeneratedOutputPolicyError(ValueError):
         super().__init__(details)
 
 
-def _error(location: tuple[str, ...], message: str) -> PolicyError:
+def _error(location: tuple[str | int, ...], message: str) -> PolicyError:
     return {"loc": location, "msg": message}
 
 
@@ -135,6 +136,10 @@ def validate_generated_output(
     """Validate policies that apply to new workflow output, not stored JSON."""
 
     errors: list[PolicyError] = []
+    if isinstance(output, ResearchManagerOutput):
+        for index, scenario in enumerate(output.price_scenarios):
+            if scenario.timeframe_days != 1:
+                errors.append(_error(("price_scenarios", index, "timeframe_days"), "new price scenarios must forecast exactly the next trading session"))
     if isinstance(output, (TraderOutput, PortfolioManagerOutput)):
         errors.extend(_validate_execution_plan(output))
 

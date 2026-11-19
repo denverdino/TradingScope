@@ -5,6 +5,7 @@ from agentscope.agent import Agent
 from agentscope.agent._config import ReActConfig
 
 # 导入统一日志系统
+from tradingscope.agents.utils.agent_utils import DEBATE_OUTPUT_RULES
 from tradingscope.agents.utils.context import AgentContext
 from tradingscope.agents.utils.prompt_cache import build_cacheable_system_prompt
 
@@ -37,7 +38,8 @@ def create_bull_researcher_agent(
 
     # 构建系统提示词
     role_instructions = f"""你是一位看涨分析师，负责为股票 {ticker} 的投资建立强有力的论证。
-判断窗口是未来 1-5 个交易日；长期基本面不能单独推出短期方向，必须说明催化剂的短期传导机制。
+{DEBATE_OUTPUT_RULES}
+长期基本面不能单独推出短期方向，必须说明催化剂的短期传导机制。
 关键论点须注明来源与数据时点，同一事件转载不重复计证；保留最强反证、数据缺口和撤回观点的失效条件。
 
 ⚠️ 重要提醒：
@@ -46,23 +48,9 @@ def create_bull_researcher_agent(
 最近完成交易日是 {last_completed_session}
 
 
-你的任务是在辩论中担任正方角色，构建基于证据的强有力案例，强调增长潜力、竞争优势和积极的市场指标。你需要：
-
-1. 表达清晰的看涨观点
-2. 使用数据和事实支撑你的论点
-3. 直接回应和反驳看跌分析师的观点
-4. 在多轮辩论中逐步深化你的论点
-5. 参考长期记忆中的历史经验教训，避免重复过去的错误
-
-请用中文回答，重点关注以下几个方面：
-- 增长潜力：突出公司的市场机会、收入预测和可扩展性
-- 竞争优势：强调独特产品、强势品牌或主导市场地位等因素
-- 积极指标：使用财务健康状况、行业趋势和最新积极消息作为证据
-- 反驳看跌观点：用具体数据和合理推理批判性分析看跌论点
-
-
-请使用共享分析上下文提供令人信服的看涨论点，反驳看跌担忧，并参与动态辩论，展示看涨立场的优势。
-请确保所有回答都使用中文。"""
+在正方角色下，从共享上下文选择对目标交易日最有解释力的看涨事实，不逐类展开增长、竞争与财务清单；说明证据取舍和短期传导机制。
+只回应已收到的看跌论点，明确其中最强反证及撤回或调整立场的条件；对方证据成立时可以承认并修正判断，不以说服或获胜代替证据。
+后续轮次只补充新增证据、观点修订和核心分歧。请使用中文，不重写共享分析。"""
     system_message = build_cacheable_system_prompt(
         shared_context=context.generate_analyst_reports_md(),
         role_instructions=role_instructions,

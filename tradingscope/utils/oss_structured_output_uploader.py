@@ -12,11 +12,16 @@ Environment variables:
 import asyncio
 import json
 import logging
+import os
+import subprocess
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict
+from uuid import uuid4
 
 from tradingscope.agents.output import AgentOutputBase, AnalysisResult
 from tradingscope.agents.renderers import render_full_report, render_markdown
@@ -35,6 +40,7 @@ class _PersistenceLock:
 
 
 _persistence_locks: dict[tuple[str, str], _PersistenceLock] = {}
+_analysis_started_at: ContextVar[datetime | None] = ContextVar("analysis_started_at", default=None)
 
 
 def _get_client():
@@ -78,6 +84,7 @@ def _upload_structured_output(analysis_date: str, ticker: str, agent_name: str, 
                 key=key,
                 body=content.encode("utf-8"),
                 content_type="application/json; charset=utf-8",
+                forbid_overwrite=agent_name.startswith("runs/"),
             )
         )
         logger.info(f"[OSSStructuredUploader] Uploaded: oss://{bucket_name}/{key}")
@@ -109,11 +116,16 @@ async def upload_structured_outputs(analysis_date: str, ticker: str, outputs: Di
     if _get_client() is None:
         return dict.fromkeys(outputs, False)
 
-    tasks = {name: upload_structured_output(analysis_date, ticker, name, content) for name, content in outputs.items() if content}
-    results = {}
-    for name, task in tasks.items():
-        results[name] = await task
-    return results
+    tasks = {name: asyncio.create_task(upload_structured_output(analysis_date, ticker, name, content)) for name, content in outputs.items() if content}
+    try:
+        results = await asyncio.gather(*tasks.values())
+        return dict(zip(tasks, results, strict=True))
+    except BaseException:
+        for task in tasks.values():
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks.values(), return_exceptions=True)
+        raise
 
 
 def _local_output_dir(analysis_date: str, ticker: str) -> Path:
@@ -126,7 +138,13 @@ def _write_local_artifacts(analysis_date: str, ticker: str, outputs: Dict[str, s
     output_dir = _local_output_dir(analysis_date, ticker)
     output_dir.mkdir(parents=True, exist_ok=True)
     for filename, content in outputs.items():
-        (output_dir / filename).write_text(content, encoding="utf-8")
+        path = output_dir / filename
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if filename.startswith("runs/"):
+            with path.open("x", encoding="utf-8") as stream:
+                stream.write(content)
+        else:
+            path.write_text(content, encoding="utf-8")
 
 
 def _delete_oss_manifest(client, bucket_name: str, analysis_date: str, ticker: str) -> None:
@@ -196,8 +214,12 @@ async def analysis_persistence_session(analysis_date: str, ticker: str) -> Async
     state.users += 1
     try:
         async with state.lock:
-            await prepare_analysis_persistence(analysis_date, ticker)
-            yield
+            token = _analysis_started_at.set(datetime.now(timezone.utc))
+            try:
+                await prepare_analysis_persistence(analysis_date, ticker)
+                yield
+            finally:
+                _analysis_started_at.reset(token)
     finally:
         state.users -= 1
         if state.users == 0:
@@ -242,6 +264,24 @@ async def persist_node_output(
         raise RuntimeError(f"failed to persist required artifacts: {', '.join(failed)}")
 
 
+def _code_version() -> str | None:
+    """Identify the code that produced a run: CI commit, local HEAD, or unknown."""
+    if sha := os.getenv("GITHUB_SHA"):
+        return sha
+    try:
+        completed = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            cwd=Path(__file__).resolve().parent,
+            check=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return completed.stdout.strip() or None
+
+
 async def persist_analysis_result(result: AnalysisResult) -> None:
     """Persist the completed report and write its manifest last.
 
@@ -252,21 +292,33 @@ async def persist_analysis_result(result: AnalysisResult) -> None:
     analysis_date = result.analysis_date.isoformat()
     full_report_json = result.model_dump_json(indent=2)
     full_report_markdown = render_full_report(result)
+    run_id = uuid4().hex
+    run_report = f"runs/{run_id}/full_report"
     _write_local_artifacts(
         analysis_date,
         result.ticker,
         {
             "full_report.json": full_report_json,
             "full_report.md": full_report_markdown,
+            f"{run_report}.json": full_report_json,
         },
     )
 
     manifest = json.dumps(
         {
-            "schema_version": "3.0",
+            "schema_version": "3.1",
             "status": "complete",
             "ticker": result.ticker,
             "analysis_date": analysis_date,
+            "run_id": run_id,
+            "forecast_started_at": (_analysis_started_at.get() or datetime.now(timezone.utc)).isoformat(),
+            "forecast_completed_at": datetime.now(timezone.utc).isoformat(),
+            "code_version": await _run_blocking_oss_operation(_code_version),
+            "models": {
+                "deep_think_llm": DEFAULT_CONFIG["deep_think_llm"],
+                "quick_think_llm": DEFAULT_CONFIG["quick_think_llm"],
+            },
+            "last_completed_session": result.last_completed_session.isoformat(),
         },
         ensure_ascii=False,
         indent=2,
@@ -280,7 +332,7 @@ async def persist_analysis_result(result: AnalysisResult) -> None:
     json_results, markdown_results = await _upload_json_and_markdown(
         analysis_date,
         result.ticker,
-        {"full_report": full_report_json},
+        {"full_report": full_report_json, run_report: full_report_json},
         {"full_report": full_report_markdown},
     )
     failed = []
@@ -288,6 +340,8 @@ async def persist_analysis_result(result: AnalysisResult) -> None:
         failed.append("full_report.json")
     if not markdown_results.get("full_report", False):
         failed.append("full_report.md")
+    if not json_results.get(run_report, False):
+        failed.append(f"{run_report}.json")
     if failed:
         raise RuntimeError(f"failed to persist required artifacts: {', '.join(failed)}")
 

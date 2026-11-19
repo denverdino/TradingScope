@@ -1,181 +1,89 @@
-"""Tests for the post-market evaluation CLI."""
+"""Tests for the deterministic evaluation CLI."""
 
-import asyncio
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import Mock, patch
 
+import pytest
 
-def _progressive_results() -> list:
-    from tradingscope.agents.evaluation.models import EvaluationResult
-
-    return [
-        EvaluationResult(
-            ticker="AAPL",
-            evaluation="one-day evaluation",
-            lesson="one-day lesson",
-            analysis_date="2025-01-20",
-            horizon_days=1,
-            status="correct",
-        ),
-        EvaluationResult(
-            ticker="AAPL",
-            evaluation="three-day evaluation",
-            lesson="three-day lesson",
-            analysis_date="2025-01-20",
-            horizon_days=3,
-            status="inconclusive",
-        ),
-        EvaluationResult(
-            ticker="AAPL",
-            evaluation="next-day evaluation",
-            lesson="next-day lesson",
-            analysis_date="2025-01-21",
-            horizon_days=1,
-            status="inconclusive",
-        ),
-    ]
+from tests.support.evaluation import evaluation_record
+from tradingscope import evaluate as evaluate_module
+from tradingscope.agents.evaluation.track_record import build_track_record
 
 
-def test_main_owns_tracing_lifecycle() -> None:
-    from tradingscope import evaluate as evaluate_module
+def _records():
+    return [evaluation_record()]
 
+
+def test_main_owns_tracing_lifecycle():
     provider = object()
-    setup_tracing = Mock(return_value=provider)
-    shutdown_tracing = Mock()
-    process = Mock()
     with (
-        patch.object(evaluate_module, "setup_tracing", setup_tracing),
-        patch.object(evaluate_module, "shutdown_tracing", shutdown_tracing),
-        patch.object(evaluate_module, "_main", process),
+        patch.object(evaluate_module, "setup_tracing", return_value=provider) as setup,
+        patch.object(evaluate_module, "shutdown_tracing") as shutdown,
+        patch.object(evaluate_module, "_main") as process,
     ):
         evaluate_module.main()
-
+    setup.assert_called_once_with("tradingscope-evaluation")
+    shutdown.assert_called_once_with(provider)
     process.assert_called_once_with()
-    setup_tracing.assert_called_once_with("tradingscope-evaluation")
-    shutdown_tracing.assert_called_once_with(provider)
 
 
-def test_run_passes_context_middlewares_to_evaluator() -> None:
-    from tradingscope import evaluate as evaluate_module
-
-    context = SimpleNamespace(non_thinking_model=object(), middlewares=[object()])
+def test_cli_no_model_context_is_created():
+    store = Mock()
     evaluator = Mock()
-    evaluator.run_batch_evaluation = AsyncMock(return_value=[])
-    evaluator_class = Mock(return_value=evaluator)
-
+    evaluator.run.return_value = []
     with (
-        patch(
-            "tradingscope.agents.utils.context.AgentContext",
-            return_value=context,
-        ),
-        patch(
-            "tradingscope.agents.evaluation.evaluator.AnalysisEvaluator",
-            evaluator_class,
-        ),
+        patch("tradingscope.agents.evaluation.oss_store.default_evaluation_store", return_value=store),
+        patch("tradingscope.agents.evaluation.evaluator.AnalysisEvaluator", return_value=evaluator) as factory,
+        patch("tradingscope.agents.utils.context.AgentContext") as context,
     ):
-        asyncio.run(
-            evaluate_module._run(
-                tickers=["AAPL"],
-                date=None,
-                results_dir=None,
-            ),
-        )
-
-    evaluator_class.assert_called_once_with(
-        model=context.non_thinking_model,
-        memory_manager=None,
-        results_dir=None,
-        dry_run=False,
-        middlewares=context.middlewares,
-    )
-    assert evaluator_class.call_args.kwargs["middlewares"] is context.middlewares
+        evaluate_module._run(["AAPL"], None, None)
+    context.assert_not_called()
+    factory.assert_called_once_with(store, results_dir=None, dry_run=False)
+    evaluator.run.assert_called_once_with(["AAPL"], analysis_date=None)
 
 
-def test_run_reports_when_no_mature_results_are_available() -> None:
-    from tradingscope import evaluate as evaluate_module
-
-    context = SimpleNamespace(non_thinking_model=object(), middlewares=[])
+def test_no_mature_results_are_reported():
     evaluator = Mock()
-    evaluator.run_batch_evaluation = AsyncMock(return_value=[])
-    logger = Mock()
-
+    evaluator.run.return_value = []
     with (
-        patch(
-            "tradingscope.agents.utils.context.AgentContext",
-            return_value=context,
-        ),
-        patch(
-            "tradingscope.agents.evaluation.evaluator.AnalysisEvaluator",
-            return_value=evaluator,
-        ),
-        patch.object(evaluate_module, "logger", logger),
+        patch("tradingscope.agents.evaluation.oss_store.default_evaluation_store"),
+        patch("tradingscope.agents.evaluation.evaluator.AnalysisEvaluator", return_value=evaluator),
+        patch.object(evaluate_module, "logger") as logger,
     ):
-        asyncio.run(
-            evaluate_module._run(
-                tickers=["AAPL"],
-                date=None,
-                results_dir=None,
-            ),
-        )
-
+        evaluate_module._run(["AAPL"], None, None)
     logger.info.assert_any_call("No mature evaluation results available")
 
 
-def test_run_labels_progressive_results_with_analysis_date_horizon_and_status() -> None:
-    from tradingscope import evaluate as evaluate_module
-
-    context = SimpleNamespace(non_thinking_model=object(), middlewares=[])
+def test_dry_run_with_email_requested_never_sends_email():
     evaluator = Mock()
-    evaluator.run_batch_evaluation = AsyncMock(return_value=_progressive_results())
-    logger = Mock()
-
+    evaluator.run.return_value = _records()
+    store = Mock()
+    store.list_records.return_value = []
     with (
-        patch(
-            "tradingscope.agents.utils.context.AgentContext",
-            return_value=context,
-        ),
-        patch(
-            "tradingscope.agents.evaluation.evaluator.AnalysisEvaluator",
-            return_value=evaluator,
-        ),
-        patch.object(evaluate_module, "logger", logger),
+        patch("tradingscope.agents.evaluation.oss_store.default_evaluation_store", return_value=store),
+        patch("tradingscope.agents.evaluation.evaluator.AnalysisEvaluator", return_value=evaluator),
+        patch.object(evaluate_module, "_send_evaluation_email") as email,
     ):
-        asyncio.run(
-            evaluate_module._run(
-                tickers=["AAPL"],
-                date=None,
-                results_dir=None,
-            ),
-        )
-
-    rendered_logs = "\n".join(str(call) for call in logger.info.call_args_list)
-    assert "[AAPL|2025-01-20|1日|correct]" in rendered_logs
-    assert "[AAPL|2025-01-20|3日|inconclusive]" in rendered_logs
-    assert "[AAPL|2025-01-21|1日|inconclusive]" in rendered_logs
+        evaluate_module._run(["AAPL"], None, None, dry_run=True, email_to=["recipient@example.com"])
+    email.assert_not_called()
 
 
-def test_evaluation_email_groups_progressive_results_by_analysis_date() -> None:
-    from tradingscope import evaluate as evaluate_module
-
-    send_html_email = Mock()
+def test_email_contains_only_deterministic_results():
+    records = _records()
+    track = build_track_record(records, min_samples=10, confidence_buckets=(0.5, 0.7))
     with (
-        patch.dict(
-            "os.environ",
-            {"EMAIL_FROM": "sender@example.com", "EMAIL_PASSWORD": "secret"},
-        ),
-        patch(
-            "tradingscope.utils.email_utils.send_html_email",
-            send_html_email,
-        ),
+        patch.dict("os.environ", {"EMAIL_FROM": "sender@example.com", "EMAIL_PASSWORD": "test-secret"}),
+        patch("tradingscope.utils.email_utils.send_html_email") as send,
     ):
-        evaluate_module._send_evaluation_email(
-            _progressive_results(),
-            "2025-01-21",
-            ["recipient@example.com"],
-        )
+        evaluate_module._send_evaluation_email(records, track, "2026-07-25", ["recipient@example.com"])
+    html = send.call_args.args[1]
+    assert html.count("<h3>分析日期：2026-07-14</h3>") == 1
+    assert "[1交易日|clean]" in html
+    assert "市场分析师" in html
+    assert "投资组合经理" in html
+    assert "Track Record" in html
+    assert "教训" not in html
 
-    html_content = send_html_email.call_args.args[1]
-    assert html_content.count("<h3>分析日期：2025-01-20</h3>") == 1
-    assert html_content.count("<h3>分析日期：2025-01-21</h3>") == 1
-    assert "<h4>[1日|correct]</h4>" in html_content
-    assert "<h4>[3日|inconclusive]</h4>" in html_content
+
+def test_backfill_option_is_no_longer_supported():
+    with patch("sys.argv", ["evaluate", "--tickers", "AAPL", "--date", "2026-07-14", "--backfill"]), pytest.raises(SystemExit):
+        evaluate_module._main()

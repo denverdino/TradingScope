@@ -5,11 +5,13 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from tests.test_output_models import _all_outputs
-from tradingscope.agents.output import AnalysisResult, AnalystOutputs
+from tradingscope.agents.output import AnalysisResult, AnalystOutputs, TradeIntent
 
 
 def _analysis_result() -> AnalysisResult:
     market, fundamentals, news, social, research, trader, portfolio = _all_outputs()
+    trader.trade_intent = TradeIntent.HOLD
+    portfolio.trade_intent = TradeIntent.HOLD
     return AnalysisResult(
         schema_version="3.0",
         ticker="AAPL",
@@ -51,7 +53,7 @@ def test_main_serializes_result_and_renders_markdown(tmp_path) -> None:
     with (
         patch.object(main_module, "analyze", new=AsyncMock(return_value=result)),
         patch.object(main_module, "DEFAULT_CONFIG", {"results_dir": str(tmp_path)}),
-        patch("sys.argv", ["tradingscope", "AAPL", "--output", "both"]),
+        patch("sys.argv", ["tradingscope", "AAPL", "--output", "both", "--force"]),
     ):
         main_module.main()
 
@@ -61,6 +63,11 @@ def test_main_serializes_result_and_renders_markdown(tmp_path) -> None:
     assert next(tmp_path.rglob("portfolio_manager.json")).exists()
     html = next(tmp_path.rglob("AAPL_report_*.html")).read_text()
     assert "最终投资组合决策" in html
+    assert "阶段结论对照" in html
+    assert "关键依据与来源" in html
+    assert "<table>" in html
+    assert "<h2>技术面分析</h2>" not in html
+    assert "<h2>新闻分析</h2>" not in html
 
 
 def test_main_owns_tracing_lifecycle() -> None:
@@ -80,6 +87,47 @@ def test_main_owns_tracing_lifecycle() -> None:
     process.assert_called_once_with()
     setup_tracing.assert_called_once_with("tradingscope-main")
     shutdown_tracing.assert_called_once_with(provider)
+
+
+@pytest.mark.parametrize("previous", ["2026-07-13", "2026-07-14"])
+def test_skip_when_recent_run_already_covers_completed_session(previous):
+    from datetime import date
+
+    from tradingscope import main as main_module
+
+    with (
+        patch.object(main_module.context_module, "get_last_completed_us_session", return_value="2026-07-13"),
+        patch.object(main_module, "latest_completed_session", return_value=date.fromisoformat(previous)),
+    ):
+        assert main_module._no_new_session("AAPL")
+
+
+@pytest.mark.parametrize("previous", [None, "2026-07-10"])
+def test_new_session_or_missing_manifest_does_not_skip(previous):
+    from datetime import date
+
+    from tradingscope import main as main_module
+
+    previous_date = date.fromisoformat(previous) if previous else None
+    with (
+        patch.object(main_module.context_module, "get_last_completed_us_session", return_value="2026-07-13"),
+        patch.object(main_module, "latest_completed_session", return_value=previous_date),
+    ):
+        assert not main_module._no_new_session("AAPL")
+
+
+def test_skip_does_not_call_agent_or_send_email():
+    from tradingscope import main as main_module
+
+    with (
+        patch.object(main_module, "_no_new_session", return_value=True),
+        patch.object(main_module, "analyze", new=AsyncMock()) as analyze,
+        patch.object(main_module, "send_html_email") as email,
+        patch("sys.argv", ["tradingscope", "AAPL", "--email-to", "test@example.com"]),
+    ):
+        main_module._main()
+    analyze.assert_not_called()
+    email.assert_not_called()
 
 
 def test_main_shuts_down_tracing_when_processing_fails() -> None:

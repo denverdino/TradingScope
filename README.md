@@ -26,7 +26,7 @@ make format-check  # Check formatting
 make imports       # Sort imports with Ruff
 make test          # Run all pytest tests
 make test-cov      # Run tests with coverage
-make evaluate      # Run post-market evaluation (requires --tickers)
+make evaluate      # Evaluate the seven scheduled tickers; override with TICKERS=AAPL,MSFT
 ```
 
 ### Running the Analysis
@@ -71,7 +71,7 @@ make evaluate      # Run post-market evaluation (requires --tickers)
 
 ### Post-market Evaluation
 
-Evaluation compares a completed portfolio decision with market closes, then asks the non-thinking Qwen model to produce a concise Chinese evaluation and lesson:
+Each analysis forecasts only the next actual trading session through its close: the first session on or after the analysis date, skipping weekends and holidays. Evaluation deterministically scores all seven stages at that single-session horizon, using the previous completed close as the return baseline, including overnight gaps. It does not call an LLM:
 
 ```bash
 # Evaluate pending analyses from the previous 14 calendar dates for selected tickers
@@ -80,16 +80,20 @@ uv run python -m tradingscope.evaluate --tickers AAPL,MSFT
 # Evaluate a specific analysis date
 uv run python -m tradingscope.evaluate --tickers AAPL --date 2026-07-15
 
-# Preview without recording the report as evaluated
+# Compute and print only: no record writes and no email
 uv run python -m tradingscope.evaluate --tickers AAPL --dry-run
 
 # Send the generated evaluation summary
 uv run python -m tradingscope.evaluate --tickers AAPL --email-to team@example.com
 ```
 
-The installed `tradingscope-evaluate` command provides the same interface. `make evaluate` invokes the module directly, so pass arguments with `uv run python -m tradingscope.evaluate ...` when ticker selection is required.
+The installed `tradingscope-evaluate` command provides the same interface. `make evaluate` defaults to MSFT, AMZN, INTC, NVDA, GOOGL, BABA and TSM; `make evaluate TICKERS=AAPL,MSFT` selects different tickers.
 
-Evaluation requires DashScope, access to the selected market-data vendor, and configured OSS storage. It reads completed schema-v3 results from `tradingscope/<date>/<ticker>/portfolio_manager.json` through `fetch_completed_output()` or `async_fetch_completed_output()`, gated by a valid `manifest.json`; historical v2 results are migrated at read time. The schema uses `analysis_date`, `last_completed_session`, and `execution_price` / `execution_price_low` / `execution_price_high`. Evaluation calculates the underlying return from the session before the analysis date to the close of each mature 1-, 3-, or 5-session horizon, assesses simulated fills and exits, and logs the generated result. Successfully processed records are tracked locally in `<results_dir>/oss_evaluated.json`; set `TRADINGAGENTS_RESULTS_DIR` or use `--results-dir` to change that location. `--dry-run` skips this tracking update.
+Evaluation requires OSS read access and market-data access, but no DashScope credentials. Evaluation accepts only schema-3.1 completion manifests and their immutable full-report bundles. The current analysis output schema remains 3.0. Older manifests, renamed historical fields, incomplete bundles and missing trade intents are rejected, not upgraded or inferred. Each run's single-session evaluation is written once as `tradingscope-evaluations/<analysis_date>/<ticker>/<run_id>/h1.json`, including copies of the source stage outputs. With OSS configured, records are stored there; without OSS, both analysis sources and evaluation records are read/written under `--results-dir`, using either a specified analysis date or the recent pending window. Existing records prevent duplicate market-data requests and writes. Schema-3.1 manifests carry a run ID, code version, model names, last completed session and forecast start/completion timestamps. Completed reads use the immutable `tradingscope/<analysis_date>/<ticker>/runs/<run_id>/full_report.json` bundle, never the mutable per-node previews, so overlapping processes cannot mix stage outputs. A same-date rerun gets separate evaluations; only the latest complete run is evaluated and counted toward Track Record. Superseded records remain archived and are not re-evaluated. Archived 3- and 5-session evaluations are excluded from every Track Record statistic, not converted into single-session results. Old data is not backfilled or included in Track Record; `--backfill` has been removed. Existing historical files are not deleted.
+
+Direction Skill uses excess return over the ticker's sector ETF (SPY if unmapped), with an ATR band for inconclusive moves. Sessions with benchmark-relative daily moves or opening gaps above three daily ATR percentages are labelled as shocks. Unscheduled or unclassified shocks are excluded from Direction Skill, but remain in Risk Control. Historical earnings release timestamps identify the reaction session: premarket releases apply to that session, post-close releases to the next session. Intraday or missing release timing is treated as unknown, not as an excuse. Historical calendars alone do not prove that the schedule was known at analysis time. All stages receive direction scores; only Trader and Portfolio Manager receive execution simulations. Daily-bar evaluation rejects forecasts made for an already-completed session or completed after their first future session opened; both forecast timestamps are required. Intraday simulations retain stop-before-target precedence when daily OHLC cannot establish event order. An open position not exited during the forecast session is valued at its close; `horizon` is a valuation, not forced liquidation. The same distinction applies to residual positions after a reduction. `time_stop_days` remains an independent holding deadline and may exceed one session; pure exits and flat plans keep it empty. Holding may continue, but a later-session forecast requires fresh analysis. Return statistics are separated by trade intent and return basis, and residual-position stop events and simulation limitations remain visible. Track Record uses only single-session evaluations and separates ticker/global groups, roles, confidence buckets and analyst/PM agreement; ratios are hidden below ten samples. Thresholds and the reset date live in `DEFAULT_CONFIG["evaluation"]`. No lessons are generated or injected yet.
+
+The scheduled workflow runs once at 08:00 Beijing time, after the US close. The analysis CLI skips a ticker when a recent complete run already covered its last completed session, avoiding weekend/holiday duplicates. Use `--force`, or the manual workflow's `force` input, to rerun deliberately.
 
 ### OpenTelemetry Tracing
 
